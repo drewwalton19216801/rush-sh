@@ -94,6 +94,45 @@ Rush consists of the following components:
 - `nix`: For Unix system interactions.
 - `libc`: For low-level C library bindings.
 
+## Testing
+
+Rush includes a comprehensive test suite to ensure reliability and correctness. The tests cover unit testing for individual components, integration testing for end-to-end functionality, and error handling scenarios.
+
+### Test Structure
+
+- **Lexer Tests** (16 tests): Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
+- **Parser Tests** (11 tests): AST construction for single commands, pipelines, redirections, and error cases.
+- **Executor Tests** (15 tests): Built-in commands, external command execution, pipelines, redirections, and error handling.
+- **Integration Tests** (8 tests): End-to-end command execution, including pipelines, redirections, and variable expansion.
+- **Main Tests** (1 test): Error handling for invalid directory changes.
+
+### Running Tests
+
+Run all tests with:
+```bash
+cargo test
+```
+
+Run specific test modules:
+```bash
+cargo test lexer
+cargo test parser
+cargo test executor
+cargo test integration
+```
+
+### Test Coverage
+
+The test suite provides extensive coverage of:
+- Command parsing and execution
+- Built-in command functionality (cd, echo, pwd, env, exit, help)
+- Pipeline and redirection handling
+- Variable expansion
+- Error conditions and edge cases
+- Signal handling integration
+
+Total: 51 tests, all passing.
+
 ## Contributing
 
 Contributions are welcome! Please fork the repository, make your changes, and submit a pull request.

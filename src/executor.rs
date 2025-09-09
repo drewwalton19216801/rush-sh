@@ -286,3 +286,229 @@ fn execute_pipeline(commands: &[ShellCommand]) -> i32 {
 
     exit_code
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+    use std::env;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn test_is_builtin() {
+        assert!(is_builtin("cd"));
+        assert!(is_builtin("echo"));
+        assert!(is_builtin("pwd"));
+        assert!(is_builtin("env"));
+        assert!(is_builtin("exit"));
+        assert!(is_builtin("help"));
+        assert!(!is_builtin("ls"));
+        assert!(!is_builtin("grep"));
+    }
+
+    #[test]
+    fn test_execute_builtin_echo() {
+        let cmd = ShellCommand {
+            args: vec!["echo".to_string(), "hello".to_string(), "world".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+    }
+
+    // Actually, to test output, need to pass a custom output_writer
+    // But execute_builtin creates its own output_writer based on cmd.output etc.
+    // For testing, can create a cmd with output None, but capture stdout? Hard.
+    // Perhaps modify execute_builtin to take output_writer as param, but for now, test logic.
+
+    #[test]
+    fn test_execute_builtin_cd() {
+        let original_dir = env::current_dir().unwrap();
+        let temp_dir = "/tmp"; // Assume exists
+        let cmd = ShellCommand {
+            args: vec!["cd".to_string(), temp_dir.to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+        assert_eq!(env::current_dir().unwrap(), Path::new(temp_dir));
+        // Restore
+        env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_execute_builtin_cd_home() {
+        let original_dir = env::current_dir().unwrap();
+        let cmd = ShellCommand {
+            args: vec!["cd".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+        let home = env::var("HOME").unwrap_or("/".to_string());
+        assert_eq!(env::current_dir().unwrap(), Path::new(&home));
+        // Restore
+        env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_execute_builtin_pwd() {
+        let cmd = ShellCommand {
+            args: vec!["pwd".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+        // Output to stdout, can't easily test
+    }
+
+    #[test]
+    fn test_execute_builtin_env() {
+        let cmd = ShellCommand {
+            args: vec!["env".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_exit() {
+        let cmd = ShellCommand {
+            args: vec!["exit".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_help() {
+        let cmd = ShellCommand {
+            args: vec!["help".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_unknown() {
+        let cmd = ShellCommand {
+            args: vec!["unknown".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_cd_nonexistent() {
+        let original_dir = env::current_dir().unwrap();
+        let cmd = ShellCommand {
+            args: vec!["cd".to_string(), "/nonexistent/directory".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd);
+        assert_eq!(exit_code, 1);
+        // Should not have changed dir
+        assert_eq!(env::current_dir().unwrap(), original_dir);
+    }
+
+    #[test]
+    fn test_execute_single_command_builtin() {
+        let cmd = ShellCommand {
+            args: vec!["echo".to_string(), "test".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_single_command(&cmd);
+        assert_eq!(exit_code, 0);
+    }
+
+    // For external commands, test with a command that exists
+    #[test]
+    fn test_execute_single_command_external() {
+        let cmd = ShellCommand {
+            args: vec!["true".to_string()], // Assume true exists
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_single_command(&cmd);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_single_command_external_nonexistent() {
+        let cmd = ShellCommand {
+            args: vec!["nonexistent_command".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_single_command(&cmd);
+        assert_eq!(exit_code, 1); // Command not found
+    }
+
+    #[test]
+    fn test_execute_pipeline() {
+        let commands = vec![
+            ShellCommand {
+                args: vec!["echo".to_string(), "hello".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            },
+            ShellCommand {
+                args: vec!["cat".to_string()], // cat reads from stdin
+                input: None,
+                output: None,
+                append: None,
+            }
+        ];
+        let exit_code = execute_pipeline(&commands);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_empty_pipeline() {
+        let commands = vec![];
+        let exit_code = execute(Ast::Pipeline(commands));
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_single_command() {
+        let ast = Ast::Pipeline(vec![
+            ShellCommand {
+                args: vec!["true".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }
+        ]);
+        let exit_code = execute(ast);
+        assert_eq!(exit_code, 0);
+    }
+}

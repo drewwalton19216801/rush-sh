@@ -132,3 +132,95 @@ fn execute_line(line: &str) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn test_integration_true() {
+        let line = "true";
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_false() {
+        let line = "false";
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_integration_echo() {
+        let line = "echo hello world";
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_pipeline() {
+        let line = "echo hello | cat";
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_redirection_output() {
+        let temp_file = "/tmp/rush_test_output.txt";
+        let line = &format!("echo test > {}", temp_file);
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+        assert!(Path::new(temp_file).exists());
+        let content = fs::read_to_string(temp_file).unwrap();
+        assert_eq!(content.trim(), "test");
+        fs::remove_file(temp_file).unwrap();
+    }
+
+    #[test]
+    fn test_integration_redirection_input() {
+        let temp_file = "/tmp/rush_test_input.txt";
+        fs::write(temp_file, "input content").unwrap();
+        let line = &format!("cat < {}", temp_file);
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+        fs::remove_file(temp_file).unwrap();
+    }
+
+    #[test]
+    fn test_integration_variable_expansion() {
+        std::env::set_var("TEST_INTEGRATION_VAR", "expanded");
+        let line = "echo $TEST_INTEGRATION_VAR";
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+        std::env::remove_var("TEST_INTEGRATION_VAR");
+    }
+
+    #[test]
+    fn test_integration_builtin_cd() {
+        let original_dir = std::env::current_dir().unwrap();
+        let line = "cd /tmp";
+        let tokens = lexer::lex(line).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast);
+        assert_eq!(exit_code, 0);
+        assert_eq!(std::env::current_dir().unwrap(), Path::new("/tmp"));
+        std::env::set_current_dir(original_dir).unwrap();
+    }
+}
