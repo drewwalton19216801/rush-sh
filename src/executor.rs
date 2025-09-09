@@ -290,9 +290,7 @@ fn execute_pipeline(commands: &[ShellCommand]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
     use std::env;
-    use std::fs;
     use std::path::Path;
 
     #[test]
