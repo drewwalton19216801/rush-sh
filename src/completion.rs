@@ -15,15 +15,7 @@ impl RushCompleter {
     }
 
     fn get_builtin_commands() -> Vec<String> {
-        vec![
-            "cd".to_string(),
-            "echo".to_string(),
-            "pwd".to_string(),
-            "env".to_string(),
-            "exit".to_string(),
-            "help".to_string(),
-            "source".to_string(),
-        ]
+        crate::builtins::get_builtin_commands()
     }
 
     fn get_path_executables() -> Vec<String> {
