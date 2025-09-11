@@ -10,7 +10,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Environment Variables**: Support for `$VAR` and `${VAR}` expansion.
 - **Control Structures**:
   - `if` statements: `if condition; then commands; elif condition; then commands; else commands; fi`
-  - `case` statements: `case word in pattern) commands ;; esac`
+  - `case` statements with glob pattern matching: `case word in pattern1|pattern2) commands ;; *.txt) commands ;; *) default ;; esac`
 - **Built-in Commands**:
   - `cd`: Change directory
   - `exit`: Exit the shell
@@ -26,6 +26,28 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - **Home Directory Expansion**: Completion for `~/` and `~/Documents/` paths
 - **Signal Handling**: Graceful handling of SIGINT (Ctrl+C) and SIGTERM.
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
+
+## Latest Updates
+
+### Case Statements with Glob Pattern Matching
+
+Rush now supports advanced case statements with full glob pattern matching capabilities:
+
+- **Glob Patterns**: Use wildcards like `*` (any characters), `?` (single character), and `[abc]` (character classes)
+- **Multiple Patterns**: Combine patterns with `|` (e.g., `*.txt|*.md`)
+- **POSIX Compliance**: Full support for standard case statement syntax
+- **Performance**: Efficient pattern matching using the `glob` crate
+
+Example usage:
+```bash
+case $filename in
+    *.txt|*.md) echo "Text file" ;;
+    *.jpg|*.png) echo "Image file" ;;
+    file?) echo "Single character file" ;;
+    [abc]*) echo "Starts with a, b, or c" ;;
+    *) echo "Other file type" ;;
+esac
+```
 
 ## Installation
 
@@ -107,10 +129,15 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Execute a script: `source script.sh`
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
 - Execute elif example script: `source examples/elif_example.sh`
+- Execute case example script: `source examples/case_example.sh`
 - Use control structures:
   - If statement: `if true; then echo yes; else echo no; fi`
   - If-elif-else statement: `if false; then echo no; elif true; then echo yes; else echo maybe; fi`
-  - Case statement: `case hello in hello) echo match ;; *) echo no match ;; esac`
+  - Case statement with glob patterns:
+    - Simple match: `case hello in hello) echo match ;; *) echo no match ;; esac`
+    - Glob patterns: `case file.txt in *.txt) echo "Text file" ;; *.jpg) echo "Image" ;; *) echo "Other" ;; esac`
+    - Multiple patterns: `case file in *.txt|*.md) echo "Document" ;; *.exe|*.bin) echo "Executable" ;; *) echo "Other" ;; esac`
+    - Character classes: `case letter in [abc]) echo "A, B, or C" ;; *) echo "Other letter" ;; esac`
 - Tab completion:
   - Complete commands: `cd` → `cd `, `e` → `echo `, `env `, `exit `
   - Complete files: `cat f` → `cat file.txt `
@@ -123,8 +150,8 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 Rush consists of the following components:
 
 - **Lexer**: Tokenizes input into commands, operators, and variables.
-- **Parser**: Builds an Abstract Syntax Tree (AST) from tokens.
-- **Executor**: Executes the AST, handling pipes, redirections, and built-ins.
+- **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures like case statements with glob patterns.
+- **Executor**: Executes the AST, handling pipes, redirections, built-ins, and glob pattern matching in case statements.
 - **Built-in Commands**: Optimized detection and execution of built-in commands using a centralized constant array for improved maintainability and performance.
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
 - **Shell State**: Manages environment variables and current directory.
@@ -135,6 +162,7 @@ Rush consists of the following components:
 - `signal-hook`: For robust signal handling.
 - `nix`: For Unix system interactions.
 - `libc`: For low-level C library bindings.
+- `glob`: For pattern matching in case statements.
 
 ## Testing
 
@@ -143,10 +171,10 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 ### Test Structure
 
 - **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
-- **Parser Tests** AST construction for single commands, pipelines, redirections, if-elif-else statements, and error cases.
-- **Executor Tests** Built-in commands, external command execution, pipelines, redirections, and error handling.
+- **Parser Tests** AST construction for single commands, pipelines, redirections, if-elif-else statements, case statements with glob patterns, and error cases.
+- **Executor Tests** Built-in commands, external command execution, pipelines, redirections, case statement execution with glob matching, and error handling.
 - **Completion Tests** Tab-completion for commands, files, directories, path traversal, and edge cases.
-- **Integration Tests** End-to-end command execution, including pipelines, redirections, and variable expansion.
+- **Integration Tests** End-to-end command execution, including pipelines, redirections, variable expansion, and case statements.
 - **Main Tests** Error handling for invalid directory changes.
 
 ### Running Tests
@@ -173,7 +201,7 @@ The test suite provides extensive coverage of:
 - Command parsing and execution
 - Built-in command functionality (cd, echo, pwd, env, exit, help, source)
 - Pipeline and redirection handling
-- Control structures (if-elif-else statements)
+- Control structures (if-elif-else statements, case statements with glob patterns)
 - Variable expansion
 - Tab-completion for commands, files, and directories
 - Path traversal and directory completion
