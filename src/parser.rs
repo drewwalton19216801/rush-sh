@@ -3,9 +3,9 @@ use super::lexer::Token;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ast {
     Pipeline(Vec<ShellCommand>),
+    Sequence(Vec<Ast>),
     If {
-        condition: Box<Ast>,
-        then_branch: Box<Ast>,
+        branches: Vec<(Box<Ast>, Box<Ast>)>, // (condition, then_branch)
         else_branch: Option<Box<Ast>>,
     },
     Case {
@@ -24,7 +24,7 @@ pub struct ShellCommand {
 }
 
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
-    parse_slice(&tokens)
+    parse_commands_sequentially(&tokens)
 }
 
 fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
@@ -44,6 +44,84 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
 
     // Otherwise, parse as pipeline
     parse_pipeline(tokens)
+}
+
+fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
+    let mut i = 0;
+    let mut commands = Vec::new();
+
+    while i < tokens.len() {
+        // Skip whitespace and comments
+        while i < tokens.len() {
+            match &tokens[i] {
+                Token::Newline => {
+                    i += 1;
+                }
+                Token::Word(word) if word.starts_with('#') => {
+                    // Skip comment line
+                    while i < tokens.len() && tokens[i] != Token::Newline {
+                        i += 1;
+                    }
+                    if i < tokens.len() {
+                        i += 1; // Skip the newline
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        if i >= tokens.len() {
+            break;
+        }
+
+        // Find the end of this command
+        let start = i;
+
+        // Special handling for compound commands
+        if tokens[i] == Token::If {
+            // For if statements, find the matching fi
+            let mut depth = 0;
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::If => depth += 1,
+                    Token::Fi => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1; // Include the fi
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+        } else {
+            // For simple commands, stop at newline or semicolon
+            while i < tokens.len() && tokens[i] != Token::Newline && tokens[i] != Token::Semicolon {
+                i += 1;
+            }
+        }
+
+        let command_tokens = &tokens[start..i];
+        if !command_tokens.is_empty() {
+            let ast = parse_slice(command_tokens)?;
+            commands.push(ast);
+        }
+
+        if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+            i += 1;
+        }
+    }
+
+    if commands.is_empty() {
+        return Err("No commands found".to_string());
+    }
+
+    if commands.len() == 1 {
+        Ok(commands.into_iter().next().unwrap())
+    } else {
+        Ok(Ast::Sequence(commands))
+    }
 }
 
 fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
@@ -100,6 +178,11 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             Token::RightParen => {
                 return Err("Unexpected ) in pipeline".to_string());
             }
+            Token::Newline => {
+                // Newlines are handled at the sequence level, skip them in pipelines
+                i += 1;
+                continue;
+            }
             _ => {
                 return Err(format!("Unexpected token in pipeline: {:?}", token));
             }
@@ -119,52 +202,77 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
 }
 
 fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
-    // Simple if: if condition ; then commands ; else commands ; fi
     let mut i = 1; // Skip 'if'
+    let mut branches = Vec::new();
 
-    // Parse condition until ;
-    let mut cond_tokens = Vec::new();
-    while i < tokens.len() && tokens[i] != Token::Semicolon {
-        cond_tokens.push(tokens[i].clone());
-        i += 1;
-    }
-    if i >= tokens.len() || tokens[i] != Token::Semicolon {
-        return Err("Expected ; after if condition".to_string());
-    }
-    i += 1; // Skip ;
+    loop {
+        // Parse condition until ; or newline
+        let mut cond_tokens = Vec::new();
+        while i < tokens.len() && tokens[i] != Token::Semicolon && tokens[i] != Token::Newline {
+            cond_tokens.push(tokens[i].clone());
+            i += 1;
+        }
+        if i >= tokens.len() || (tokens[i] != Token::Semicolon && tokens[i] != Token::Newline) {
+            return Err("Expected ; after if/elif condition".to_string());
+        }
+        i += 1; // Skip ; or newline
 
-    if i >= tokens.len() || tokens[i] != Token::Then {
-        return Err("Expected then after if condition".to_string());
-    }
-    i += 1; // Skip then
+        if i >= tokens.len() || tokens[i] != Token::Then {
+            return Err("Expected then after if/elif condition".to_string());
+        }
+        i += 1; // Skip then
 
-    // Parse then branch until ; or else or fi
-    let mut then_tokens = Vec::new();
-    while i < tokens.len()
-        && tokens[i] != Token::Semicolon
-        && tokens[i] != Token::Else
-        && tokens[i] != Token::Fi
-    {
-        then_tokens.push(tokens[i].clone());
-        i += 1;
-    }
+        // Skip any newlines after then
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
+        // Parse then branch until ; or newline or else or elif or fi
+        let mut then_tokens = Vec::new();
+        while i < tokens.len()
+            && tokens[i] != Token::Semicolon
+            && tokens[i] != Token::Newline
+            && tokens[i] != Token::Else
+            && tokens[i] != Token::Elif
+            && tokens[i] != Token::Fi
+        {
+            then_tokens.push(tokens[i].clone());
+            i += 1;
+        }
+        // Skip any newlines after the then branch
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
 
-    let then_ast = parse_slice(&then_tokens)?;
+        let then_ast = parse_slice(&then_tokens)?;
+        let condition = parse_slice(&cond_tokens)?;
+        branches.push((Box::new(condition), Box::new(then_ast)));
 
-    // Skip the ; after then branch if present
-    if i < tokens.len() && tokens[i] == Token::Semicolon {
-        i += 1;
+        // Skip the ; or newline after then branch if present
+        if i < tokens.len() && (tokens[i] == Token::Semicolon || tokens[i] == Token::Newline) {
+            i += 1;
+        }
+
+        // Check next
+        if i < tokens.len() && tokens[i] == Token::Elif {
+            i += 1; // Skip elif, continue loop
+        } else {
+            break;
+        }
     }
 
     let else_ast = if i < tokens.len() && tokens[i] == Token::Else {
         i += 1; // Skip else
+        // Skip any newlines after else
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
         let mut else_tokens = Vec::new();
-        while i < tokens.len() && tokens[i] != Token::Semicolon && tokens[i] != Token::Fi {
+        while i < tokens.len() && tokens[i] != Token::Semicolon && tokens[i] != Token::Newline && tokens[i] != Token::Fi {
             else_tokens.push(tokens[i].clone());
             i += 1;
         }
-        // Skip ; after else branch
-        if i < tokens.len() && tokens[i] == Token::Semicolon {
+        // Skip ; or newlines after else branch
+        while i < tokens.len() && (tokens[i] == Token::Semicolon || tokens[i] == Token::Newline) {
             i += 1;
         }
         Some(Box::new(parse_slice(&else_tokens)?))
@@ -176,10 +284,8 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
         return Err("Expected fi".to_string());
     }
 
-    let condition = parse_slice(&cond_tokens)?;
     Ok(Ast::If {
-        condition: Box::new(condition),
-        then_branch: Box::new(then_ast),
+        branches,
         else_branch: else_ast,
     })
 }
@@ -477,20 +583,69 @@ mod tests {
         ];
         let result = parse(tokens).unwrap();
         if let Ast::If {
-            condition,
-            then_branch,
+            branches,
             else_branch,
         } = result
         {
-            if let Ast::Pipeline(cmds) = *condition {
+            assert_eq!(branches.len(), 1);
+            let (condition, then_branch) = &branches[0];
+            if let Ast::Pipeline(cmds) = &**condition {
                 assert_eq!(cmds[0].args, vec!["true"]);
             } else {
                 panic!("condition not pipeline");
             }
-            if let Ast::Pipeline(cmds) = *then_branch {
+            if let Ast::Pipeline(cmds) = &**then_branch {
                 assert_eq!(cmds[0].args, vec!["echo", "yes"]);
             } else {
                 panic!("then_branch not pipeline");
+            }
+            assert!(else_branch.is_none());
+        } else {
+            panic!("not if");
+        }
+    }
+
+    #[test]
+    fn test_parse_if_elif() {
+        let tokens = vec![
+            Token::If,
+            Token::Word("false".to_string()),
+            Token::Semicolon,
+            Token::Then,
+            Token::Word("echo".to_string()),
+            Token::Word("no".to_string()),
+            Token::Semicolon,
+            Token::Elif,
+            Token::Word("true".to_string()),
+            Token::Semicolon,
+            Token::Then,
+            Token::Word("echo".to_string()),
+            Token::Word("yes".to_string()),
+            Token::Semicolon,
+            Token::Fi,
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::If {
+            branches,
+            else_branch,
+        } = result
+        {
+            assert_eq!(branches.len(), 2);
+            // First branch: false -> echo no
+            let (condition1, then1) = &branches[0];
+            if let Ast::Pipeline(cmds) = &**condition1 {
+                assert_eq!(cmds[0].args, vec!["false"]);
+            }
+            if let Ast::Pipeline(cmds) = &**then1 {
+                assert_eq!(cmds[0].args, vec!["echo", "no"]);
+            }
+            // Second branch: true -> echo yes
+            let (condition2, then2) = &branches[1];
+            if let Ast::Pipeline(cmds) = &**condition2 {
+                assert_eq!(cmds[0].args, vec!["true"]);
+            }
+            if let Ast::Pipeline(cmds) = &**then2 {
+                assert_eq!(cmds[0].args, vec!["echo", "yes"]);
             }
             assert!(else_branch.is_none());
         } else {

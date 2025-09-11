@@ -10,6 +10,7 @@ pub enum Token {
     If,
     Then,
     Else,
+    Elif,
     Fi,
     Case,
     In,
@@ -17,6 +18,7 @@ pub enum Token {
     DoubleSemicolon,
     Semicolon,
     RightParen,
+    Newline,
 }
 
 fn is_keyword(word: &str) -> Option<Token> {
@@ -24,6 +26,7 @@ fn is_keyword(word: &str) -> Option<Token> {
         "if" => Some(Token::If),
         "then" => Some(Token::Then),
         "else" => Some(Token::Else),
+        "elif" => Some(Token::Elif),
         "fi" => Some(Token::Fi),
         "case" => Some(Token::Case),
         "in" => Some(Token::In),
@@ -41,7 +44,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
 
     while let Some(&ch) = chars.peek() {
         match ch {
-            ' ' | '\n' | '\t' if !in_double_quote && !in_single_quote => {
+            ' ' | '\t' if !in_double_quote && !in_single_quote => {
                 if !current.is_empty() {
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
@@ -50,6 +53,18 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
                     }
                     current.clear();
                 }
+                chars.next();
+            }
+            '\n' if !in_double_quote && !in_single_quote => {
+                if !current.is_empty() {
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
+                    current.clear();
+                }
+                tokens.push(Token::Newline);
                 chars.next();
             }
             '"' => {

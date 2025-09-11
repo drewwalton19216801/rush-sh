@@ -18,15 +18,24 @@ pub fn execute(ast: Ast) -> i32 {
                 execute_pipeline(&commands)
             }
         }
+        Ast::Sequence(asts) => {
+            let mut exit_code = 0;
+            for ast in asts {
+                exit_code = execute(ast);
+            }
+            exit_code
+        }
         Ast::If {
-            condition,
-            then_branch,
+            branches,
             else_branch,
         } => {
-            let cond_exit = execute(*condition);
-            if cond_exit == 0 {
-                execute(*then_branch)
-            } else if let Some(else_b) = else_branch {
+            for (condition, then_branch) in branches {
+                let cond_exit = execute(*condition);
+                if cond_exit == 0 {
+                    return execute(*then_branch);
+                }
+            }
+            if let Some(else_b) = else_branch {
                 execute(*else_b)
             } else {
                 0
