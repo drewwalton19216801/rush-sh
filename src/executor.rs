@@ -1,166 +1,7 @@
-use std::env;
-use std::process::{Command, Stdio};
-use std::path::Path;
 use std::fs::File;
-use std::io::{self, Write};
+use std::process::{Command, Stdio};
 
 use super::parser::{Ast, ShellCommand};
-
-pub fn is_builtin(cmd: &str) -> bool {
-    matches!(cmd, "cd" | "echo" | "pwd" | "env" | "exit" | "help" | "source")
-}
-
-pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
-    // Handle input redirection for built-ins that might need it
-    let _input_content = if let Some(ref input_file) = cmd.input {
-        match std::fs::read_to_string(input_file) {
-            Ok(content) => Some(content),
-            Err(e) => {
-                eprintln!("Error reading input file '{}': {}", input_file, e);
-                return 1;
-            }
-        }
-    } else {
-        None
-    };
-
-    // Prepare output destination
-    let mut output_writer: Box<dyn Write> = if let Some(ref output_file) = cmd.output {
-        match File::create(output_file) {
-            Ok(file) => Box::new(file),
-            Err(e) => {
-                eprintln!("Error creating output file '{}': {}", output_file, e);
-                return 1;
-            }
-        }
-    } else if let Some(ref append_file) = cmd.append {
-        match File::options().append(true).create(true).open(append_file) {
-            Ok(file) => Box::new(file),
-            Err(e) => {
-                eprintln!("Error opening append file '{}': {}", append_file, e);
-                return 1;
-            }
-        }
-    } else {
-        Box::new(io::stdout())
-    };
-
-    match cmd.args[0].as_str() {
-        "cd" => {
-            // cd doesn't produce output, so redirections don't make sense for it
-            // But we still handle it for consistency
-            let dir = if cmd.args.len() > 1 {
-                cmd.args[1].clone()
-            } else {
-                "~".to_string()
-            };
-            let path = if dir == "~" {
-                env::var("HOME").unwrap_or_else(|_| "/".to_string())
-            } else {
-                dir
-            };
-            if let Err(e) = env::set_current_dir(Path::new(&path)) {
-                let _ = writeln!(output_writer, "cd: {}: {}", path, e);
-                1
-            } else {
-                0
-            }
-        }
-        "echo" => {
-            let output = cmd.args[1..].join(" ");
-            let _ = writeln!(output_writer, "{}", output);
-            0
-        }
-        "pwd" => {
-            match env::current_dir() {
-                Ok(path) => {
-                    let _ = writeln!(output_writer, "{}", path.display());
-                    0
-                }
-                Err(e) => {
-                    let _ = writeln!(output_writer, "pwd: {}", e);
-                    1
-                }
-            }
-        }
-        "env" => {
-            for (key, value) in env::vars() {
-                let _ = writeln!(output_writer, "{}={}", key, value);
-            }
-            0
-        }
-        "exit" => {
-            // For now, just return 0; main handles exit
-            0
-        }
-        "help" => {
-            let _ = writeln!(output_writer, "Rush Shell v{}", env!("CARGO_PKG_VERSION"));
-            let _ = writeln!(output_writer, "");
-            let _ = writeln!(output_writer, "Available built-in commands:");
-            let builtins = [
-                ("cd", "Change directory"),
-                ("echo", "Print arguments"),
-                ("pwd", "Print working directory"),
-                ("env", "Print environment variables"),
-                ("exit", "Exit the shell"),
-                ("help", "Show this help message"),
-                ("source", "Execute a script file with rush")
-            ];
-            for (cmd, desc) in &builtins {
-                let _ = writeln!(output_writer, "  {:<8} {}", cmd, desc);
-            }
-            0
-        }
-        "source" => {
-            if cmd.args.len() < 2 {
-                let _ = writeln!(output_writer, "source: missing script file operand");
-                return 1;
-            }
-            let script_file = &cmd.args[1];
-
-            match std::fs::read_to_string(script_file) {
-                Ok(content) => {
-                    let mut exit_code = 0;
-                    for line in content.lines() {
-                        let line = line.trim();
-                        // Skip shebang lines and empty lines
-                        if line.is_empty() || line.starts_with("#!") {
-                            continue;
-                        }
-                        // Skip comment lines
-                        if line.starts_with("#") {
-                            continue;
-                        }
-                        // Execute the line using the same logic as main.rs
-                        match super::lexer::lex(line) {
-                            Ok(tokens) => {
-                                match super::parser::parse(tokens) {
-                                    Ok(ast) => {
-                                        exit_code = super::executor::execute(ast);
-                                    }
-                                    Err(e) => {
-                                        let _ = writeln!(output_writer, "Parse error: {}", e);
-                                        return 1;
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let _ = writeln!(output_writer, "Lex error: {}", e);
-                                return 1;
-                            }
-                        }
-                    }
-                    exit_code
-                }
-                Err(e) => {
-                    let _ = writeln!(output_writer, "source: {}: {}", script_file, e);
-                    1
-                }
-            }
-        }
-        _ => 1,
-    }
-}
 
 pub fn execute(ast: Ast) -> i32 {
     let Ast::Pipeline(commands) = ast;
@@ -183,8 +24,8 @@ fn execute_single_command(cmd: &ShellCommand) -> i32 {
         return 0;
     }
 
-    if is_builtin(&cmd.args[0]) {
-        execute_builtin(cmd)
+    if crate::builtins::is_builtin(&cmd.args[0]) {
+        crate::builtins::execute_builtin(cmd)
     } else {
         let mut command = Command::new(&cmd.args[0]);
         command.args(&cmd.args[1..]);
@@ -226,15 +67,13 @@ fn execute_single_command(cmd: &ShellCommand) -> i32 {
         }
 
         match command.spawn() {
-            Ok(mut child) => {
-                match child.wait() {
-                    Ok(status) => status.code().unwrap_or(0),
-                    Err(e) => {
-                        eprintln!("Error waiting for command: {}", e);
-                        1
-                    }
+            Ok(mut child) => match child.wait() {
+                Ok(status) => status.code().unwrap_or(0),
+                Err(e) => {
+                    eprintln!("Error waiting for command: {}", e);
+                    1
                 }
-            }
+            },
             Err(e) => {
                 eprintln!("Command spawn error: {}", e);
                 1
@@ -254,14 +93,14 @@ fn execute_pipeline(commands: &[ShellCommand]) -> i32 {
 
         let is_last = i == commands.len() - 1;
 
-        if is_builtin(&cmd.args[0]) {
+        if crate::builtins::is_builtin(&cmd.args[0]) {
             // Built-ins in pipelines are tricky - for now, execute them separately
             // This is not perfect but better than nothing
             if let Some(_prev) = previous_stdout {
                 // We can't easily pipe to built-ins, so just execute
                 eprintln!("Warning: Built-in in pipeline may not work as expected");
             }
-            exit_code = execute_builtin(cmd);
+            exit_code = crate::builtins::execute_builtin(cmd);
             previous_stdout = None;
         } else {
             let mut command = Command::new(&cmd.args[0]);
@@ -346,153 +185,6 @@ fn execute_pipeline(commands: &[ShellCommand]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
-    use std::path::Path;
-    use std::sync::Mutex;
-
-    static CWD_MUTEX: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn test_is_builtin() {
-        assert!(is_builtin("cd"));
-        assert!(is_builtin("echo"));
-        assert!(is_builtin("pwd"));
-        assert!(is_builtin("env"));
-        assert!(is_builtin("exit"));
-        assert!(is_builtin("help"));
-        assert!(!is_builtin("ls"));
-        assert!(!is_builtin("grep"));
-    }
-
-    #[test]
-    fn test_execute_builtin_echo() {
-        let cmd = ShellCommand {
-            args: vec!["echo".to_string(), "hello".to_string(), "world".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-    }
-
-    // Actually, to test output, need to pass a custom output_writer
-    // But execute_builtin creates its own output_writer based on cmd.output etc.
-    // For testing, can create a cmd with output None, but capture stdout? Hard.
-    // Perhaps modify execute_builtin to take output_writer as param, but for now, test logic.
-
-    #[test]
-    fn test_execute_builtin_cd() {
-        let _lock = CWD_MUTEX.lock().unwrap();
-        let original_dir = env::current_dir().unwrap();
-        let temp_dir = "/tmp"; // Assume exists
-        let cmd = ShellCommand {
-            args: vec!["cd".to_string(), temp_dir.to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-        assert_eq!(env::current_dir().unwrap(), Path::new(temp_dir));
-        // Restore
-        env::set_current_dir(original_dir).unwrap();
-    }
-
-    #[test]
-    fn test_execute_builtin_cd_home() {
-        let _lock = CWD_MUTEX.lock().unwrap();
-        let original_dir = env::current_dir().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["cd".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-        let home = env::var("HOME").unwrap_or("/".to_string());
-        assert_eq!(env::current_dir().unwrap(), Path::new(&home));
-        // Restore
-        env::set_current_dir(original_dir).unwrap();
-    }
-
-    #[test]
-    fn test_execute_builtin_pwd() {
-        let cmd = ShellCommand {
-            args: vec!["pwd".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-        // Output to stdout, can't easily test
-    }
-
-    #[test]
-    fn test_execute_builtin_env() {
-        let cmd = ShellCommand {
-            args: vec!["env".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-    }
-
-    #[test]
-    fn test_execute_builtin_exit() {
-        let cmd = ShellCommand {
-            args: vec!["exit".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-    }
-
-    #[test]
-    fn test_execute_builtin_help() {
-        let cmd = ShellCommand {
-            args: vec!["help".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 0);
-    }
-
-    #[test]
-    fn test_execute_builtin_unknown() {
-        let cmd = ShellCommand {
-            args: vec!["unknown".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 1);
-    }
-
-    #[test]
-    fn test_execute_builtin_cd_nonexistent() {
-        let _lock = CWD_MUTEX.lock().unwrap();
-        let original_dir = env::current_dir().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["cd".to_string(), "/nonexistent/directory".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let exit_code = execute_builtin(&cmd);
-        assert_eq!(exit_code, 1);
-        // Should not have changed dir
-        assert_eq!(env::current_dir().unwrap(), original_dir);
-    }
 
     #[test]
     fn test_execute_single_command_builtin() {
@@ -545,7 +237,7 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
-            }
+            },
         ];
         let exit_code = execute_pipeline(&commands);
         assert_eq!(exit_code, 0);
@@ -560,14 +252,12 @@ mod tests {
 
     #[test]
     fn test_execute_single_command() {
-        let ast = Ast::Pipeline(vec![
-            ShellCommand {
-                args: vec!["true".to_string()],
-                input: None,
-                output: None,
-                append: None,
-            }
-        ]);
+        let ast = Ast::Pipeline(vec![ShellCommand {
+            args: vec!["true".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        }]);
         let exit_code = execute(ast);
         assert_eq!(exit_code, 0);
     }

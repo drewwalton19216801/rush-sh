@@ -81,21 +81,22 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::lexer::Token;
+    use super::*;
 
     #[test]
     fn test_single_command() {
         let tokens = vec![Token::Word("ls".to_string())];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["ls".to_string()],
                 input: None,
                 output: None,
                 append: None,
-            }
-        ]));
+            }])
+        );
     }
 
     #[test]
@@ -105,14 +106,15 @@ mod tests {
             Token::Word("-la".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["ls".to_string(), "-la".to_string()],
                 input: None,
                 output: None,
                 append: None,
-            }
-        ]));
+            }])
+        );
     }
 
     #[test]
@@ -124,20 +126,23 @@ mod tests {
             Token::Word("txt".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
-                args: vec!["ls".to_string()],
-                input: None,
-                output: None,
-                append: None,
-            },
-            ShellCommand {
-                args: vec!["grep".to_string(), "txt".to_string()],
-                input: None,
-                output: None,
-                append: None,
-            }
-        ]));
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![
+                ShellCommand {
+                    args: vec!["ls".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                },
+                ShellCommand {
+                    args: vec!["grep".to_string(), "txt".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                }
+            ])
+        );
     }
 
     #[test]
@@ -148,14 +153,15 @@ mod tests {
             Token::Word("input.txt".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
                 input: Some("input.txt".to_string()),
                 output: None,
                 append: None,
-            }
-        ]));
+            }])
+        );
     }
 
     #[test]
@@ -167,14 +173,15 @@ mod tests {
             Token::Word("output.txt".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 input: None,
                 output: Some("output.txt".to_string()),
                 append: None,
-            }
-        ]));
+            }])
+        );
     }
 
     #[test]
@@ -186,14 +193,15 @@ mod tests {
             Token::Word("output.txt".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 input: None,
                 output: None,
                 append: Some("output.txt".to_string()),
-            }
-        ]));
+            }])
+        );
     }
 
     #[test]
@@ -211,26 +219,29 @@ mod tests {
             Token::Word("output.txt".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
-                args: vec!["cat".to_string()],
-                input: Some("input.txt".to_string()),
-                output: None,
-                append: None,
-            },
-            ShellCommand {
-                args: vec!["grep".to_string(), "pattern".to_string()],
-                input: None,
-                output: None,
-                append: None,
-            },
-            ShellCommand {
-                args: vec!["sort".to_string()],
-                input: None,
-                output: Some("output.txt".to_string()),
-                append: None,
-            }
-        ]));
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![
+                ShellCommand {
+                    args: vec!["cat".to_string()],
+                    input: Some("input.txt".to_string()),
+                    output: None,
+                    append: None,
+                },
+                ShellCommand {
+                    args: vec!["grep".to_string(), "pattern".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                },
+                ShellCommand {
+                    args: vec!["sort".to_string()],
+                    input: None,
+                    output: Some("output.txt".to_string()),
+                    append: None,
+                }
+            ])
+        );
     }
 
     #[test]
@@ -252,19 +263,17 @@ mod tests {
     #[test]
     fn test_redirection_without_file() {
         // Parser doesn't check for missing file, just skips if no token after
-        let tokens = vec![
-            Token::Word("cat".to_string()),
-            Token::RedirIn,
-        ];
+        let tokens = vec![Token::Word("cat".to_string()), Token::RedirIn];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
                 input: None,
                 output: None,
                 append: None,
-            }
-        ]));
+            }])
+        );
     }
 
     #[test]
@@ -277,13 +286,14 @@ mod tests {
             Token::Word("file2.txt".to_string()),
         ];
         let result = parse(tokens).unwrap();
-        assert_eq!(result, Ast::Pipeline(vec![
-            ShellCommand {
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
                 input: Some("file1.txt".to_string()),
                 output: Some("file2.txt".to_string()),
                 append: None,
-            }
-        ]));
+            }])
+        );
     }
 }
