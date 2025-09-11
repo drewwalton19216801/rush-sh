@@ -46,10 +46,18 @@ pub fn execute(ast: Ast) -> i32 {
             cases,
             default,
         } => {
-            // For now, simple implementation without glob matching
-            for (pattern, branch) in cases {
-                if word == pattern {
-                    return execute(branch);
+            for (patterns, branch) in cases {
+                for pattern in &patterns {
+                    if let Ok(glob_pattern) = glob::Pattern::new(pattern) {
+                        if glob_pattern.matches(&word) {
+                            return execute(branch);
+                        }
+                    } else {
+                        // If pattern is invalid, fall back to exact match
+                        if &word == pattern {
+                            return execute(branch);
+                        }
+                    }
                 }
             }
             if let Some(def) = default {

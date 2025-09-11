@@ -10,17 +10,21 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It supports interactive
 
 1. **Lexer**: Tokenizes input lines into tokens. Handles:
 
-   - Words (commands, args, with variable expansion $VAR)
-   - Operators: | (pipe), > (output redirect), < (input redirect), >> (append redirect)
-   - Quotes: "double" for expansion, 'single' for literal
-   - Escapes: \ for special chars
-   - Variables: $VAR, ${VAR}
+    - Words (commands, args, with variable expansion $VAR)
+    - Operators: | (pipe), > (output redirect), < (input redirect), >> (append redirect)
+    - Quotes: "double" for expansion, 'single' for literal
+    - Escapes: \ for special chars
+    - Variables: $VAR, ${VAR}
+    - Control flow: if, then, else, elif, fi, case, in, esac, ;;, ()
 
-2. **Parser**: Builds an Abstract Syntax Tree (AST) from tokens. Simple grammar:
+2. **Parser**: Builds an Abstract Syntax Tree (AST) from tokens. Grammar:
 
-   - Pipeline: Command | Command | ...
-   - Command: words + redirections (input/output files)
-   - No complex control flow initially (add if/while later if needed)
+    - Pipeline: Command | Command | ...
+    - Command: words + redirections (input/output files)
+    - Control Flow:
+        - If: if condition; then commands; [elif condition; then commands;]* [else commands;] fi
+        - Case: case word in pattern1|pattern2) commands ;; ... *) default ;; esac
+            - Patterns support glob matching (*, ?, [abc], etc.) using the glob crate
 
 3. **Executor**: Runs the AST:
 
@@ -55,6 +59,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It supports interactive
 - signal-hook crate (v0.3) for robust signal handling that works with rustyline
 - libc crate for low-level system interactions
 - nix crate (available for future advanced Unix I/O if needed)
+- glob crate (v0.3) for pattern matching in case statements
 
 ### Error Handling
 
