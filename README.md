@@ -14,6 +14,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `echo`: Print text
   - `pwd`: Print working directory
   - `env`: List environment variables
+  - `source`: Execute a script file with rush (bypasses shebang)
+  - `help`: Show available commands
 - **Signal Handling**: Graceful handling of SIGINT (Ctrl+C) and SIGTERM.
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
@@ -58,7 +60,7 @@ Execute commands from a file:
 ./target/release/rush script.sh
 ```
 
-The shell will read and execute each line from the script file.
+The shell will read and execute each line from the script file. Note that when using script mode, shebang lines (e.g., `#!/usr/bin/env bash`) are not bypassed - they are executed as regular comments.
 
 ### Command Mode
 
@@ -70,6 +72,21 @@ Execute a command string directly:
 
 The shell will execute the provided command string and exit.
 
+### Source Command
+
+The `source` built-in command provides a way to execute script files while bypassing shebang lines that may specify other shells:
+
+```bash
+source script.sh
+```
+
+This is particularly useful for:
+- Executing scripts written for rush that contain `#!/usr/bin/env rush` shebangs
+- Running scripts with shebangs for other shells (like `#!/usr/bin/env bash`) using rush instead
+- Ensuring consistent execution environment regardless of shebang declarations
+
+Unlike script mode (running `./target/release/rush script.sh`), the `source` command automatically skips shebang lines and executes all commands using the rush interpreter.
+
 ### Examples
 
 - Run a command: `ls -la`
@@ -77,6 +94,8 @@ The shell will execute the provided command string and exit.
 - Redirect output: `echo "Hello" > hello.txt`
 - Change directory: `cd /tmp`
 - Print working directory: `pwd`
+- Execute a script: `source script.sh`
+- Execute a script with shebang bypass: `source examples/basic_commands.sh`
 
 ## Architecture
 
@@ -102,7 +121,7 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 
 - **Lexer Tests** (16 tests): Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
 - **Parser Tests** (11 tests): AST construction for single commands, pipelines, redirections, and error cases.
-- **Executor Tests** (15 tests): Built-in commands, external command execution, pipelines, redirections, and error handling.
+- **Executor Tests** (16 tests): Built-in commands, external command execution, pipelines, redirections, and error handling.
 - **Integration Tests** (8 tests): End-to-end command execution, including pipelines, redirections, and variable expansion.
 - **Main Tests** (1 test): Error handling for invalid directory changes.
 
@@ -125,7 +144,7 @@ cargo test integration
 
 The test suite provides extensive coverage of:
 - Command parsing and execution
-- Built-in command functionality (cd, echo, pwd, env, exit, help)
+- Built-in command functionality (cd, echo, pwd, env, exit, help, source)
 - Pipeline and redirection handling
 - Variable expansion
 - Error conditions and edge cases

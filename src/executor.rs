@@ -7,7 +7,7 @@ use std::io::{self, Write};
 use super::parser::{Ast, ShellCommand};
 
 pub fn is_builtin(cmd: &str) -> bool {
-    matches!(cmd, "cd" | "echo" | "pwd" | "env" | "exit" | "help")
+    matches!(cmd, "cd" | "echo" | "pwd" | "env" | "exit" | "help" | "source")
 }
 
 pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
@@ -103,12 +103,60 @@ pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
                 ("pwd", "Print working directory"),
                 ("env", "Print environment variables"),
                 ("exit", "Exit the shell"),
-                ("help", "Show this help message")
+                ("help", "Show this help message"),
+                ("source", "Execute a script file with rush")
             ];
             for (cmd, desc) in &builtins {
                 let _ = writeln!(output_writer, "  {:<8} {}", cmd, desc);
             }
             0
+        }
+        "source" => {
+            if cmd.args.len() < 2 {
+                let _ = writeln!(output_writer, "source: missing script file operand");
+                return 1;
+            }
+            let script_file = &cmd.args[1];
+
+            match std::fs::read_to_string(script_file) {
+                Ok(content) => {
+                    let mut exit_code = 0;
+                    for line in content.lines() {
+                        let line = line.trim();
+                        // Skip shebang lines and empty lines
+                        if line.is_empty() || line.starts_with("#!") {
+                            continue;
+                        }
+                        // Skip comment lines
+                        if line.starts_with("#") {
+                            continue;
+                        }
+                        // Execute the line using the same logic as main.rs
+                        match super::lexer::lex(line) {
+                            Ok(tokens) => {
+                                match super::parser::parse(tokens) {
+                                    Ok(ast) => {
+                                        exit_code = super::executor::execute(ast);
+                                    }
+                                    Err(e) => {
+                                        let _ = writeln!(output_writer, "Parse error: {}", e);
+                                        return 1;
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let _ = writeln!(output_writer, "Lex error: {}", e);
+                                return 1;
+                            }
+                        }
+                    }
+                    exit_code
+                }
+                Err(e) => {
+                    let _ = writeln!(output_writer, "source: {}: {}", script_file, e);
+                    1
+                }
+            }
         }
         _ => 1,
     }
@@ -177,10 +225,18 @@ fn execute_single_command(cmd: &ShellCommand) -> i32 {
             }
         }
 
-        match command.status() {
-            Ok(status) => status.code().unwrap_or(0),
+        match command.spawn() {
+            Ok(mut child) => {
+                match child.wait() {
+                    Ok(status) => status.code().unwrap_or(0),
+                    Err(e) => {
+                        eprintln!("Error waiting for command: {}", e);
+                        1
+                    }
+                }
+            }
             Err(e) => {
-                eprintln!("Command execution error: {}", e);
+                eprintln!("Command spawn error: {}", e);
                 1
             }
         }
