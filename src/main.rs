@@ -6,6 +6,7 @@ use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
+mod completion;
 mod executor;
 mod lexer;
 mod parser;
@@ -70,7 +71,8 @@ fn main() {
     } else {
         // Interactive mode
         println!("Rush shell started. Type 'exit' to quit.");
-        let mut rl = Editor::<(), FileHistory>::new().unwrap();
+        let mut rl = Editor::<completion::RushCompleter, FileHistory>::new().unwrap();
+        rl.set_helper(Some(completion::RushCompleter::new()));
 
         // Configure rustyline to handle signals gracefully
         // With signal-hook feature enabled, this helps coordinate with our signal handler
