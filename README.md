@@ -115,6 +115,7 @@ Rush consists of the following components:
 - **Lexer**: Tokenizes input into commands, operators, and variables.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens.
 - **Executor**: Executes the AST, handling pipes, redirections, and built-ins.
+- **Built-in Commands**: Optimized detection and execution of built-in commands using a centralized constant array for improved maintainability and performance.
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
 - **Shell State**: Manages environment variables and current directory.
 
