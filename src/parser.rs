@@ -10,7 +10,7 @@ pub enum Ast {
     },
     Case {
         word: String,
-        cases: Vec<(String, Ast)>,
+        cases: Vec<(Vec<String>, Ast)>,
         default: Option<Box<Ast>>,
     },
 }
@@ -92,6 +92,15 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                         }
                     }
                     _ => {}
+                }
+                i += 1;
+            }
+        } else if tokens[i] == Token::Case {
+            // For case statements, find the matching esac
+            while i < tokens.len() {
+                if tokens[i] == Token::Esac {
+                    i += 1; // Include the esac
+                    break;
                 }
                 i += 1;
             }
@@ -291,7 +300,6 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
 }
 
 fn parse_case(tokens: &[Token]) -> Result<Ast, String> {
-    // Simple case: case word in pattern) commands ;; esac
     let mut i = 1; // Skip 'case'
 
     // Parse word
@@ -310,44 +318,84 @@ fn parse_case(tokens: &[Token]) -> Result<Ast, String> {
     }
     i += 1;
 
-    // Parse pattern
-    if i >= tokens.len() || !matches!(tokens[i], Token::Word(_)) {
-        return Err("Expected pattern after in".to_string());
-    }
-    let pattern = if let Token::Word(ref p) = tokens[i] {
-        p.clone()
-    } else {
-        unreachable!()
-    };
-    i += 1;
+    let mut cases = Vec::new();
+    let mut default = None;
 
-    if i >= tokens.len() || tokens[i] != Token::RightParen {
-        return Err("Expected ) after pattern".to_string());
-    }
-    i += 1;
+    loop {
+        // Skip newlines
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
 
-    // Parse commands
-    let mut commands_tokens = Vec::new();
-    while i < tokens.len() && tokens[i] != Token::DoubleSemicolon && tokens[i] != Token::Esac {
-        commands_tokens.push(tokens[i].clone());
+        if i >= tokens.len() {
+            return Err("Unexpected end in case statement".to_string());
+        }
+
+        if tokens[i] == Token::Esac {
+            break;
+        }
+
+        // Parse patterns
+        let mut patterns = Vec::new();
+        while i < tokens.len() && tokens[i] != Token::RightParen {
+            if let Token::Word(ref p) = tokens[i] {
+                // Split pattern on |
+                for pat in p.split('|') {
+                    patterns.push(pat.to_string());
+                }
+            } else if tokens[i] == Token::Pipe {
+                // Skip | separator
+            } else if tokens[i] == Token::Newline {
+                // Skip newlines in patterns
+            } else {
+                return Err(format!("Expected pattern, found {:?}", tokens[i]));
+            }
+            i += 1;
+        }
+
+        if i >= tokens.len() || tokens[i] != Token::RightParen {
+            return Err("Expected ) after patterns".to_string());
+        }
         i += 1;
-    }
 
-    let commands_ast = parse_slice(&commands_tokens)?;
+        // Parse commands
+        let mut commands_tokens = Vec::new();
+        while i < tokens.len() && tokens[i] != Token::DoubleSemicolon && tokens[i] != Token::Esac {
+            commands_tokens.push(tokens[i].clone());
+            i += 1;
+        }
 
-    if i >= tokens.len() || tokens[i] != Token::DoubleSemicolon {
-        return Err("Expected ;; after commands".to_string());
-    }
-    i += 1;
+        let commands_ast = parse_slice(&commands_tokens)?;
 
-    if i >= tokens.len() || tokens[i] != Token::Esac {
-        return Err("Expected esac".to_string());
+        if i >= tokens.len() {
+            return Err("Unexpected end in case statement".to_string());
+        }
+
+        if tokens[i] == Token::DoubleSemicolon {
+            i += 1;
+            // Check if this is the default case (*)
+            if patterns.len() == 1 && patterns[0] == "*" {
+                default = Some(Box::new(commands_ast));
+            } else {
+                cases.push((patterns, commands_ast));
+            }
+        } else if tokens[i] == Token::Esac {
+            // Last case without ;;
+            if patterns.len() == 1 && patterns[0] == "*" {
+                default = Some(Box::new(commands_ast));
+            } else {
+                cases.push((patterns, commands_ast));
+            }
+            break;
+        } else {
+            return Err("Expected ;; or esac after commands".to_string());
+        }
     }
 
     Ok(Ast::Case {
         word,
-        cases: vec![(pattern, commands_ast)],
-        default: None,
+        cases,
+        default,
     })
 }
 
