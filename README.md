@@ -16,6 +16,11 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `env`: List environment variables
   - `source`: Execute a script file with rush (bypasses shebang)
   - `help`: Show available commands
+- **Tab Completion**: Intelligent completion for commands, files, and directories.
+  - **Command Completion**: Built-in commands and executables from PATH
+  - **File/Directory Completion**: Files and directories with relative paths
+  - **Directory Traversal**: Support for nested paths (`src/`, `../`, `/usr/bin/`)
+  - **Home Directory Expansion**: Completion for `~/` and `~/Documents/` paths
 - **Signal Handling**: Graceful handling of SIGINT (Ctrl+C) and SIGTERM.
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
@@ -96,6 +101,12 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Print working directory: `pwd`
 - Execute a script: `source script.sh`
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
+- Tab completion:
+  - Complete commands: `cd` → `cd `, `e` → `echo `, `env `, `exit `
+  - Complete files: `cat f` → `cat file.txt `
+  - Complete directories: `cd src/` → `cd src/main/`
+  - Complete from PATH: `l` → `ls `, `g` → `grep `
+  - Complete nested paths: `ls src/m` → `ls src/main/`
 
 ## Architecture
 
@@ -104,6 +115,7 @@ Rush consists of the following components:
 - **Lexer**: Tokenizes input into commands, operators, and variables.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens.
 - **Executor**: Executes the AST, handling pipes, redirections, and built-ins.
+- **Completion**: Provides intelligent tab-completion for commands, files, and directories.
 - **Shell State**: Manages environment variables and current directory.
 
 ## Dependencies
@@ -119,11 +131,12 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 
 ### Test Structure
 
-- **Lexer Tests** (16 tests): Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
-- **Parser Tests** (11 tests): AST construction for single commands, pipelines, redirections, and error cases.
-- **Executor Tests** (16 tests): Built-in commands, external command execution, pipelines, redirections, and error handling.
-- **Integration Tests** (8 tests): End-to-end command execution, including pipelines, redirections, and variable expansion.
-- **Main Tests** (1 test): Error handling for invalid directory changes.
+- **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
+- **Parser Tests** AST construction for single commands, pipelines, redirections, and error cases.
+- **Executor Tests** Built-in commands, external command execution, pipelines, redirections, and error handling.
+- **Completion Tests** Tab-completion for commands, files, directories, path traversal, and edge cases.
+- **Integration Tests** End-to-end command execution, including pipelines, redirections, and variable expansion.
+- **Main Tests** Error handling for invalid directory changes.
 
 ### Running Tests
 
@@ -147,10 +160,11 @@ The test suite provides extensive coverage of:
 - Built-in command functionality (cd, echo, pwd, env, exit, help, source)
 - Pipeline and redirection handling
 - Variable expansion
+- Tab-completion for commands, files, and directories
+- Path traversal and directory completion
 - Error conditions and edge cases
 - Signal handling integration
 
-Total: 51 tests, all passing.
 
 ## Contributing
 
