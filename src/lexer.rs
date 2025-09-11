@@ -1,5 +1,7 @@
 use std::env;
 
+use super::state::ShellState;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     Word(String),
@@ -35,7 +37,7 @@ fn is_keyword(word: &str) -> Option<Token> {
     }
 }
 
-pub fn lex(input: &str) -> Result<Vec<Token>, String> {
+pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
     let mut current = String::new();
@@ -111,7 +113,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
                     .take_while(|c| c.is_alphanumeric() || *c == '_')
                     .collect();
                 if !var_name.is_empty() {
-                    if let Ok(val) = env::var(&var_name) {
+                    if let Some(val) = shell_state.get_var(&var_name) {
                         current.push_str(&val);
                     } else {
                         current.push('$');
@@ -227,17 +229,18 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
 
     #[test]
     fn test_basic_word() {
-        let result = lex("ls").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("ls", &shell_state).unwrap();
         assert_eq!(result, vec![Token::Word("ls".to_string())]);
     }
 
     #[test]
     fn test_multiple_words() {
-        let result = lex("ls -la").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("ls -la", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -249,7 +252,8 @@ mod tests {
 
     #[test]
     fn test_pipe() {
-        let result = lex("ls | grep txt").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("ls | grep txt", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -263,7 +267,8 @@ mod tests {
 
     #[test]
     fn test_redirections() {
-        let result = lex("echo hello > output.txt").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo hello > output.txt", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -277,7 +282,8 @@ mod tests {
 
     #[test]
     fn test_append_redirection() {
-        let result = lex("echo hello >> output.txt").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo hello >> output.txt", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -291,7 +297,8 @@ mod tests {
 
     #[test]
     fn test_input_redirection() {
-        let result = lex("cat < input.txt").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("cat < input.txt", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -304,7 +311,8 @@ mod tests {
 
     #[test]
     fn test_double_quotes() {
-        let result = lex("echo \"hello world\"").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo \"hello world\"", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -316,7 +324,8 @@ mod tests {
 
     #[test]
     fn test_single_quotes() {
-        let result = lex("echo 'hello world'").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo 'hello world'", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -328,8 +337,9 @@ mod tests {
 
     #[test]
     fn test_variable_expansion() {
-        env::set_var("TEST_VAR", "expanded_value");
-        let result = lex("echo $TEST_VAR").unwrap();
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_var("TEST_VAR", "expanded_value".to_string());
+        let result = lex("echo $TEST_VAR", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -337,14 +347,12 @@ mod tests {
                 Token::Word("expanded_value".to_string())
             ]
         );
-        env::remove_var("TEST_VAR");
     }
 
     #[test]
     fn test_variable_expansion_nonexistent() {
-        // Ensure TEST_VAR2 is not set
-        env::remove_var("TEST_VAR2");
-        let result = lex("echo $TEST_VAR2").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo $TEST_VAR2", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -356,7 +364,8 @@ mod tests {
 
     #[test]
     fn test_empty_variable() {
-        let result = lex("echo $").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo $", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -368,8 +377,9 @@ mod tests {
 
     #[test]
     fn test_mixed_quotes_and_variables() {
-        env::set_var("USER", "alice");
-        let result = lex("echo \"Hello $USER\"").unwrap();
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_var("USER", "alice".to_string());
+        let result = lex("echo \"Hello $USER\"", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -377,13 +387,13 @@ mod tests {
                 Token::Word("Hello alice".to_string())
             ]
         );
-        env::remove_var("USER");
     }
 
     #[test]
     fn test_unclosed_double_quote() {
         // Lexer doesn't handle unclosed quotes as errors, just treats as literal
-        let result = lex("echo \"hello").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo \"hello", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -395,19 +405,26 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let result = lex("").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("", &shell_state).unwrap();
         assert_eq!(result, Vec::<Token>::new());
     }
 
     #[test]
     fn test_only_spaces() {
-        let result = lex("   ").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("   ", &shell_state).unwrap();
         assert_eq!(result, Vec::<Token>::new());
     }
 
     #[test]
     fn test_complex_pipeline() {
-        let result = lex("cat input.txt | grep \"search term\" > output.txt").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex(
+            "cat input.txt | grep \"search term\" > output.txt",
+            &shell_state,
+        )
+        .unwrap();
         assert_eq!(
             result,
             vec![
@@ -424,7 +441,8 @@ mod tests {
 
     #[test]
     fn test_if_tokens() {
-        let result = lex("if true; then echo yes; fi").unwrap();
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("if true; then echo yes; fi", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
