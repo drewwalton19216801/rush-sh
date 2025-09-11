@@ -103,7 +103,15 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
                 chars.next();
             }
             _ => {
-                current.push(ch);
+                if ch == '~' && current.is_empty() {
+                    if let Ok(home) = env::var("HOME") {
+                        current.push_str(&home);
+                    } else {
+                        current.push('~');
+                    }
+                } else {
+                    current.push(ch);
+                }
                 chars.next();
             }
         }
