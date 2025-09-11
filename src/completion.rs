@@ -1,7 +1,7 @@
-use rustyline::completion::{Completer, Candidate};
-use rustyline::validate::Validator;
+use rustyline::completion::{Candidate, Completer};
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
+use rustyline::validate::Validator;
 use rustyline::{Context, Helper};
 use std::env;
 use std::fs;
@@ -37,24 +37,11 @@ impl RushCompleter {
                             if file_type.is_file() {
                                 if let Some(name) = entry.file_name().to_str() {
                                     // Check if executable (on Unix-like systems)
-                                    #[cfg(unix)]
-                                    {
-                                        use std::os::unix::fs::PermissionsExt;
-                                        if let Ok(metadata) = entry.metadata() {
-                                            let permissions = metadata.permissions();
-                                            if permissions.mode() & 0o111 != 0 {
-                                                executables.push(name.to_string());
-                                            }
-                                        }
-                                    }
-                                    #[cfg(windows)]
-                                    {
-                                        // On Windows, check for .exe, .bat, .cmd extensions
-                                        if name.ends_with(".exe") || name.ends_with(".bat") || name.ends_with(".cmd") {
-                                            let name_without_ext = name.trim_end_matches(".exe")
-                                                .trim_end_matches(".bat")
-                                                .trim_end_matches(".cmd");
-                                            executables.push(name_without_ext.to_string());
+                                    use std::os::unix::fs::PermissionsExt;
+                                    if let Ok(metadata) = entry.metadata() {
+                                        let permissions = metadata.permissions();
+                                        if permissions.mode() & 0o111 != 0 {
+                                            executables.push(name.to_string());
                                         }
                                     }
                                 }
@@ -137,7 +124,8 @@ impl RushCompleter {
                 if let Some(name) = entry.file_name().to_str() {
                     if name.starts_with(&prefix) {
                         // Determine the replacement string
-                        let replacement = if current_word.is_empty() || current_word.ends_with('/') {
+                        let replacement = if current_word.is_empty() || current_word.ends_with('/')
+                        {
                             // If completing from a directory, just append the name
                             format!("{}{}", current_word, name)
                         } else if let Some(last_slash) = current_word.rfind('/') {
@@ -171,7 +159,10 @@ impl RushCompleter {
 
     fn parse_path_for_completion(word: &str) -> (std::path::PathBuf, String) {
         if word.is_empty() {
-            return (env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()), String::new());
+            return (
+                env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
+                String::new(),
+            );
         }
 
         let path = Path::new(word);
@@ -184,7 +175,8 @@ impl RushCompleter {
             }
 
             if let Some(parent) = path.parent() {
-                let prefix = path.file_name()
+                let prefix = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_string();
@@ -212,7 +204,8 @@ impl RushCompleter {
 
                 if let Some(parent) = relative_path.parent() {
                     let full_parent = home_path.join(parent);
-                    let prefix = relative_path.file_name()
+                    let prefix = relative_path
+                        .file_name()
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_string();
@@ -242,7 +235,10 @@ impl RushCompleter {
             (base_dir, file_part.to_string())
         } else {
             // No directory separator, complete from current directory
-            (env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()), word.to_string())
+            (
+                env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf()),
+                word.to_string(),
+            )
         }
     }
 }
@@ -425,7 +421,10 @@ pub struct RushCandidate {
 
 impl RushCandidate {
     pub fn new(display: String, replacement: String) -> Self {
-        Self { display, replacement }
+        Self {
+            display,
+            replacement,
+        }
     }
 }
 
