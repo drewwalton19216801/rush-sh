@@ -1,10 +1,9 @@
+use os_pipe::pipe;
 use std::fs::File;
-use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::process::{Command, Stdio};
 
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
-use nix::unistd;
 
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
@@ -161,14 +160,21 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             // Built-ins in pipelines are tricky - for now, execute them separately
             // This is not perfect but better than nothing
             if !is_last {
-                // Create a pipe to capture builtin output
-                let (reader_fd, writer_fd) = unistd::pipe().unwrap();
-                let reader = unsafe { std::fs::File::from_raw_fd(reader_fd.into_raw_fd()) };
-                let writer = unsafe { std::fs::File::from_raw_fd(writer_fd.into_raw_fd()) };
+                // Create a safe pipe
+                let (reader, writer) = match pipe() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Error creating pipe for builtin: {}", e);
+                        return 1;
+                    }
+                };
+                // Execute builtin with writer for output capture
                 exit_code =
                     crate::builtins::execute_builtin(cmd, shell_state, Some(Box::new(writer)));
+                // Use reader for next command's stdin
                 previous_stdout = Some(Stdio::from(reader));
             } else {
+                // Last command: no need to pipe output
                 exit_code = crate::builtins::execute_builtin(cmd, shell_state, None);
                 previous_stdout = None;
             }
