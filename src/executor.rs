@@ -1,3 +1,4 @@
+use os_pipe::pipe;
 use std::fs::File;
 use std::process::{Command, Stdio};
 
@@ -80,7 +81,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
     }
 
     if crate::builtins::is_builtin(&cmd.args[0]) {
-        crate::builtins::execute_builtin(cmd, shell_state)
+        crate::builtins::execute_builtin(cmd, shell_state, None)
     } else {
         let mut command = Command::new(&cmd.args[0]);
         command.args(&cmd.args[1..]);
@@ -158,12 +159,25 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
         if crate::builtins::is_builtin(&cmd.args[0]) {
             // Built-ins in pipelines are tricky - for now, execute them separately
             // This is not perfect but better than nothing
-            if let Some(_prev) = previous_stdout {
-                // We can't easily pipe to built-ins, so just execute
-                eprintln!("Warning: Built-in in pipeline may not work as expected");
+            if !is_last {
+                // Create a safe pipe
+                let (reader, writer) = match pipe() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Error creating pipe for builtin: {}", e);
+                        return 1;
+                    }
+                };
+                // Execute builtin with writer for output capture
+                exit_code =
+                    crate::builtins::execute_builtin(cmd, shell_state, Some(Box::new(writer)));
+                // Use reader for next command's stdin
+                previous_stdout = Some(Stdio::from(reader));
+            } else {
+                // Last command: no need to pipe output
+                exit_code = crate::builtins::execute_builtin(cmd, shell_state, None);
+                previous_stdout = None;
             }
-            exit_code = crate::builtins::execute_builtin(cmd, shell_state);
-            previous_stdout = None;
         } else {
             let mut command = Command::new(&cmd.args[0]);
             command.args(&cmd.args[1..]);
