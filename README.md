@@ -36,6 +36,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 ### Build
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/drewwalton19216801/rush.git
    cd rush
@@ -89,6 +90,7 @@ source script.sh
 ```
 
 This is particularly useful for:
+
 - Executing scripts written for rush that contain `#!/usr/bin/env rush` shebangs
 - Running scripts with shebangs for other shells (like `#!/usr/bin/env bash`) using rush instead
 - Ensuring consistent execution environment regardless of shebang declarations
@@ -148,11 +150,13 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 ### Running Tests
 
 Run all tests with:
+
 ```bash
 cargo test
 ```
 
 Run specific test modules:
+
 ```bash
 cargo test lexer
 cargo test parser
@@ -163,6 +167,7 @@ cargo test integration
 ### Test Coverage
 
 The test suite provides extensive coverage of:
+
 - Command parsing and execution
 - Built-in command functionality (cd, echo, pwd, env, exit, help, source)
 - Pipeline and redirection handling
@@ -171,7 +176,6 @@ The test suite provides extensive coverage of:
 - Path traversal and directory completion
 - Error conditions and edge cases
 - Signal handling integration
-
 
 ## Contributing
 

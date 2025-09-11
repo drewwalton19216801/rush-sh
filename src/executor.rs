@@ -18,7 +18,11 @@ pub fn execute(ast: Ast) -> i32 {
                 execute_pipeline(&commands)
             }
         }
-        Ast::If { condition, then_branch, else_branch } => {
+        Ast::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             let cond_exit = execute(*condition);
             if cond_exit == 0 {
                 execute(*then_branch)
@@ -28,7 +32,11 @@ pub fn execute(ast: Ast) -> i32 {
                 0
             }
         }
-        Ast::Case { word, cases, default } => {
+        Ast::Case {
+            word,
+            cases,
+            default,
+        } => {
             // For now, simple implementation without glob matching
             for (pattern, branch) in cases {
                 if word == pattern {

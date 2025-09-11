@@ -72,7 +72,10 @@ fn main() {
 
         // Configure rustyline to handle signals gracefully
         // With signal-hook feature enabled, this helps coordinate with our signal handler
-        rl.bind_sequence(rustyline::KeyEvent::new('\x03', rustyline::Modifiers::NONE), rustyline::Cmd::Interrupt);
+        rl.bind_sequence(
+            rustyline::KeyEvent::new('\x03', rustyline::Modifiers::NONE),
+            rustyline::Cmd::Interrupt,
+        );
 
         loop {
             if SHUTDOWN.load(Ordering::Relaxed) {

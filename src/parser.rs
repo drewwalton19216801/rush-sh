@@ -3,8 +3,16 @@ use super::lexer::Token;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ast {
     Pipeline(Vec<ShellCommand>),
-    If { condition: Box<Ast>, then_branch: Box<Ast>, else_branch: Option<Box<Ast>> },
-    Case { word: String, cases: Vec<(String, Ast)>, default: Option<Box<Ast>> },
+    If {
+        condition: Box<Ast>,
+        then_branch: Box<Ast>,
+        else_branch: Option<Box<Ast>>,
+    },
+    Case {
+        word: String,
+        cases: Vec<(String, Ast)>,
+        default: Option<Box<Ast>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,7 +140,11 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
 
     // Parse then branch until ; or else or fi
     let mut then_tokens = Vec::new();
-    while i < tokens.len() && tokens[i] != Token::Semicolon && tokens[i] != Token::Else && tokens[i] != Token::Fi {
+    while i < tokens.len()
+        && tokens[i] != Token::Semicolon
+        && tokens[i] != Token::Else
+        && tokens[i] != Token::Fi
+    {
         then_tokens.push(tokens[i].clone());
         i += 1;
     }
@@ -464,7 +476,12 @@ mod tests {
             Token::Fi,
         ];
         let result = parse(tokens).unwrap();
-        if let Ast::If { condition, then_branch, else_branch } = result {
+        if let Ast::If {
+            condition,
+            then_branch,
+            else_branch,
+        } = result
+        {
             if let Ast::Pipeline(cmds) = *condition {
                 assert_eq!(cmds[0].args, vec!["true"]);
             } else {
