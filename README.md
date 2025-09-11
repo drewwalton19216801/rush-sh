@@ -9,7 +9,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
 - **Environment Variables**: Support for `$VAR` and `${VAR}` expansion.
 - **Control Structures**:
-  - `if` statements: `if condition; then commands; else commands; fi`
+  - `if` statements: `if condition; then commands; elif condition; then commands; else commands; fi`
   - `case` statements: `case word in pattern) commands ;; esac`
 - **Built-in Commands**:
   - `cd`: Change directory
@@ -106,8 +106,10 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Print working directory: `pwd`
 - Execute a script: `source script.sh`
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
+- Execute elif example script: `source examples/elif_example.sh`
 - Use control structures:
   - If statement: `if true; then echo yes; else echo no; fi`
+  - If-elif-else statement: `if false; then echo no; elif true; then echo yes; else echo maybe; fi`
   - Case statement: `case hello in hello) echo match ;; *) echo no match ;; esac`
 - Tab completion:
   - Complete commands: `cd` → `cd `, `e` → `echo `, `env `, `exit `
@@ -141,7 +143,7 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 ### Test Structure
 
 - **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
-- **Parser Tests** AST construction for single commands, pipelines, redirections, and error cases.
+- **Parser Tests** AST construction for single commands, pipelines, redirections, if-elif-else statements, and error cases.
 - **Executor Tests** Built-in commands, external command execution, pipelines, redirections, and error handling.
 - **Completion Tests** Tab-completion for commands, files, directories, path traversal, and edge cases.
 - **Integration Tests** End-to-end command execution, including pipelines, redirections, and variable expansion.
@@ -171,6 +173,7 @@ The test suite provides extensive coverage of:
 - Command parsing and execution
 - Built-in command functionality (cd, echo, pwd, env, exit, help, source)
 - Pipeline and redirection handling
+- Control structures (if-elif-else statements)
 - Variable expansion
 - Tab-completion for commands, files, and directories
 - Path traversal and directory completion
