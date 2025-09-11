@@ -10,6 +10,18 @@ const BUILTINS: &[&str] = &[
     "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset",
 ];
 
+const BUILTIN_DESCRIPTIONS: &[(&str, &str)] = &[
+    ("cd", "Change directory"),
+    ("echo", "Print arguments"),
+    ("pwd", "Print working directory"),
+    ("env", "Print environment variables"),
+    ("exit", "Exit the shell"),
+    ("help", "Show this help message"),
+    ("source", "Execute a script file with rush"),
+    ("export", "Export variables to environment"),
+    ("unset", "Unset shell variables"),
+];
+
 pub fn is_builtin(cmd: &str) -> bool {
     BUILTINS.contains(&cmd)
 }
@@ -115,20 +127,20 @@ pub fn execute_builtin(
             0
         }
         "help" => {
-            let _ = writeln!(output_writer, "Rush Shell v{}", env!("CARGO_PKG_VERSION"));
-            let _ = writeln!(output_writer, "");
-            let _ = writeln!(output_writer, "Available built-in commands:");
-            let builtins = [
-                ("cd", "Change directory"),
-                ("echo", "Print arguments"),
-                ("pwd", "Print working directory"),
-                ("env", "Print environment variables"),
-                ("exit", "Exit the shell"),
-                ("help", "Show this help message"),
-                ("source", "Execute a script file with rush"),
-            ];
-            for (cmd, desc) in &builtins {
-                let _ = writeln!(output_writer, "  {:<8} {}", cmd, desc);
+            // Attempt to write the header, handling potential errors
+            if writeln!(output_writer, "Rush Shell v{}", env!("CARGO_PKG_VERSION")).is_err()
+                || writeln!(output_writer, "").is_err()
+                || writeln!(output_writer, "Available built-in commands:").is_err() {
+                return 1; // Return error if header write fails
+            }
+
+            // Iterate over the complete builtins list with descriptions
+            for (cmd, desc) in BUILTIN_DESCRIPTIONS {
+                // Use explicit formatting for better readability
+                let formatted_line = format!("  {:<12} {}", cmd, desc);
+                if writeln!(output_writer, "{}", formatted_line).is_err() {
+                    return 1; // Return error if any command write fails
+                }
             }
             0
         }
