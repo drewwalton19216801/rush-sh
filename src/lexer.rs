@@ -420,7 +420,11 @@ mod tests {
     #[test]
     fn test_complex_pipeline() {
         let shell_state = crate::state::ShellState::new();
-        let result = lex("cat input.txt | grep \"search term\" > output.txt", &shell_state).unwrap();
+        let result = lex(
+            "cat input.txt | grep \"search term\" > output.txt",
+            &shell_state,
+        )
+        .unwrap();
         assert_eq!(
             result,
             vec![

@@ -46,7 +46,10 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                     let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
                     // Basic validation: variable name should start with letter or underscore
                     if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
-                        return Ok(Ast::Assignment { var, value: full_value });
+                        return Ok(Ast::Assignment {
+                            var,
+                            value: full_value,
+                        });
                     }
                 }
             }
@@ -61,7 +64,10 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                     let var = var_eq[..eq_pos].to_string();
                     // Basic validation: variable name should start with letter or underscore
                     if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
-                        return Ok(Ast::Assignment { var, value: value.clone() });
+                        return Ok(Ast::Assignment {
+                            var,
+                            value: value.clone(),
+                        });
                     }
                 }
             }
@@ -323,12 +329,16 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
 
     let else_ast = if i < tokens.len() && tokens[i] == Token::Else {
         i += 1; // Skip else
-        // Skip any newlines after else
+                // Skip any newlines after else
         while i < tokens.len() && tokens[i] == Token::Newline {
             i += 1;
         }
         let mut else_tokens = Vec::new();
-        while i < tokens.len() && tokens[i] != Token::Semicolon && tokens[i] != Token::Newline && tokens[i] != Token::Fi {
+        while i < tokens.len()
+            && tokens[i] != Token::Semicolon
+            && tokens[i] != Token::Newline
+            && tokens[i] != Token::Fi
+        {
             else_tokens.push(tokens[i].clone());
             i += 1;
         }

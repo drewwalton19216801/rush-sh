@@ -135,7 +135,10 @@ mod tests {
         state.export_var("EXPORT_VAR");
 
         let child_env = state.get_env_for_child();
-        assert_eq!(child_env.get("EXPORT_VAR"), Some(&"export_value".to_string()));
+        assert_eq!(
+            child_env.get("EXPORT_VAR"),
+            Some(&"export_value".to_string())
+        );
     }
 
     #[test]

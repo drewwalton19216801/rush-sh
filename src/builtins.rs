@@ -6,7 +6,9 @@ use std::path::Path;
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
-const BUILTINS: &[&str] = &["cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset"];
+const BUILTINS: &[&str] = &[
+    "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset",
+];
 
 pub fn is_builtin(cmd: &str) -> bool {
     BUILTINS.contains(&cmd)
