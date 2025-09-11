@@ -11,11 +11,20 @@ mod completion;
 mod executor;
 mod lexer;
 mod parser;
+mod state;
 
 static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
+    // Initialize shell state
+    let mut shell_state = state::ShellState::new();
+
+    // Set script name for script mode
+    if args.len() > 1 && args[1] != "-c" {
+        shell_state.set_script_name(&args[1]);
+    }
 
     // Set up signal handling
     let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("Failed to create signal handler");
@@ -45,7 +54,7 @@ fn main() {
                 if SHUTDOWN.load(Ordering::Relaxed) {
                     println!("\nReceived SIGTERM, exiting gracefully.");
                 } else {
-                    execute_line(&args[2]);
+                    execute_command_string(&args[2], &mut shell_state);
                 }
             } else {
                 eprintln!("Error: -c requires a command string");
@@ -57,7 +66,7 @@ fn main() {
                 if SHUTDOWN.load(Ordering::Relaxed) {
                     println!("\nReceived SIGTERM, exiting gracefully.");
                 } else {
-                    execute_line(&content);
+                    execute_script(&content, &mut shell_state);
                 }
             } else {
                 eprintln!("Error: Could not read script file '{}'", args[1]);
@@ -89,7 +98,7 @@ fn main() {
                     if line == "exit" {
                         break;
                     }
-                    execute_line(&line);
+                    execute_line(&line, &mut shell_state);
                 }
                 Err(err) => {
                     // Check if it's a signal-related error or if shutdown was requested
@@ -115,21 +124,49 @@ fn main() {
     }
 }
 
-fn execute_line(line: &str) {
-    match lexer::lex(line) {
+fn execute_line(line: &str, shell_state: &mut state::ShellState) {
+    match lexer::lex(line, shell_state) {
         Ok(tokens) => {
             match parser::parse(tokens) {
                 Ok(ast) => {
-                    let _exit_code = executor::execute(ast);
+                    let exit_code = executor::execute(ast, shell_state);
+                    shell_state.set_last_exit_code(exit_code);
                     // TODO: For now, no printing of AST
                 }
                 Err(e) => {
                     eprintln!("Parse error: {}", e);
+                    shell_state.set_last_exit_code(1);
                 }
             }
         }
         Err(e) => {
             eprintln!("Lex error: {}", e);
+            shell_state.set_last_exit_code(1);
+        }
+    }
+}
+
+fn execute_script(content: &str, shell_state: &mut state::ShellState) {
+    for line in content.lines() {
+        let line = line.trim();
+        // Skip shebang lines and empty lines
+        if line.is_empty() || line.starts_with("#!") {
+            continue;
+        }
+        // Skip comment lines
+        if line.starts_with("#") {
+            continue;
+        }
+        execute_line(line, shell_state);
+    }
+}
+
+fn execute_command_string(command_string: &str, shell_state: &mut state::ShellState) {
+    // Split on semicolons and execute each command separately
+    for cmd in command_string.split(';') {
+        let cmd = cmd.trim();
+        if !cmd.is_empty() {
+            execute_line(cmd, shell_state);
         }
     }
 }
@@ -143,36 +180,40 @@ mod tests {
     #[test]
     fn test_integration_true() {
         let line = "true";
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
     #[test]
     fn test_integration_false() {
         let line = "false";
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 1);
     }
 
     #[test]
     fn test_integration_echo() {
         let line = "echo hello world";
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
     #[test]
     fn test_integration_pipeline() {
         let line = "echo hello | cat";
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
@@ -180,9 +221,10 @@ mod tests {
     fn test_integration_redirection_output() {
         let temp_file = "/tmp/rush_test_output.txt";
         let line = &format!("echo test > {}", temp_file);
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         assert!(Path::new(temp_file).exists());
         let content = fs::read_to_string(temp_file).unwrap();
@@ -195,9 +237,10 @@ mod tests {
         let temp_file = "/tmp/rush_test_input.txt";
         fs::write(temp_file, "input content").unwrap();
         let line = &format!("cat < {}", temp_file);
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         fs::remove_file(temp_file).unwrap();
     }
@@ -206,9 +249,10 @@ mod tests {
     fn test_integration_variable_expansion() {
         std::env::set_var("TEST_INTEGRATION_VAR", "expanded");
         let line = "echo $TEST_INTEGRATION_VAR";
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         std::env::remove_var("TEST_INTEGRATION_VAR");
     }
@@ -217,9 +261,10 @@ mod tests {
     fn test_integration_builtin_cd() {
         let original_dir = std::env::current_dir().unwrap();
         let line = "cd /tmp";
-        let tokens = lexer::lex(line).unwrap();
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast);
+        let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         assert_eq!(std::env::current_dir().unwrap(), Path::new("/tmp"));
         std::env::set_current_dir(original_dir).unwrap();

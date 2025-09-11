@@ -7,7 +7,11 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Command Execution**: Execute external commands and built-in commands.
 - **Pipes**: Chain commands using the `|` operator.
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
-- **Environment Variables**: Support for `$VAR` and `${VAR}` expansion.
+- **Environment Variables**: Full support for variable assignment, expansion, and export.
+  - Variable assignment: `VAR=value` and `VAR="quoted value"`
+  - Variable expansion: `$VAR` and special variables (`$?`, `$$`, `$0`)
+  - Export mechanism: `export VAR` and `export VAR=value`
+  - Variable scoping: Shell variables vs exported environment variables
 - **Control Structures**:
   - `if` statements: `if condition; then commands; elif condition; then commands; else commands; fi`
   - `case` statements with glob pattern matching: `case word in pattern1|pattern2) commands ;; *.txt) commands ;; *) default ;; esac`
@@ -17,6 +21,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `echo`: Print text
   - `pwd`: Print working directory
   - `env`: List environment variables
+  - `export`: Export variables to child processes
+  - `unset`: Remove variables
   - `source`: Execute a script file with rush (bypasses shebang)
   - `help`: Show available commands
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
@@ -28,6 +34,63 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
 ## Latest Updates
+
+### Environment Variable Support
+
+Rush now provides comprehensive environment variable support with full POSIX compliance:
+
+- **Variable Assignment**: Support for both simple and quoted assignments
+  ```bash
+  MY_VAR=hello
+  MY_VAR="hello world"
+  NAME="Alice"
+  ```
+
+- **Variable Expansion**: Expand variables in commands with `$VAR` syntax
+  ```bash
+  echo "Hello $NAME"
+  echo "Current directory: $PWD"
+  ```
+
+- **Special Variables**: Built-in support for special shell variables
+  ```bash
+  echo "Last exit code: $?"
+  echo "Shell PID: $$"
+  echo "Script name: $0"
+  ```
+
+- **Export Mechanism**: Export variables to child processes
+  ```bash
+  export MY_VAR
+  export NEW_VAR=value
+  ```
+
+- **Variable Management**: Full lifecycle management with `unset`
+  ```bash
+  unset MY_VAR
+  ```
+
+- **Multi-Mode Support**: Variables work consistently across all execution modes
+  - Interactive mode: Variables persist across commands
+  - Script mode: Variables available throughout script execution
+  - Command string mode: Variables work in `-c` command strings
+
+Example usage:
+```bash
+# Set and use variables
+MY_VAR="Hello from Rush"
+echo "Message: $MY_VAR"
+
+# Export to child processes
+export MY_VAR
+env | grep MY_VAR
+
+# Use in pipelines
+echo "$MY_VAR" | grep "Rush"
+
+# Special variables
+if true; then echo "Success ($?)"; fi
+```
 
 ### Case Statements with Glob Pattern Matching
 
@@ -130,6 +193,12 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
 - Execute elif example script: `source examples/elif_example.sh`
 - Execute case example script: `source examples/case_example.sh`
+- Execute variables example script: `source examples/variables_example.sh`
+- Environment variables:
+  - Set variables: `MY_VAR=hello; echo $MY_VAR`
+  - Export variables: `export MY_VAR=value; env | grep MY_VAR`
+  - Special variables: `echo "Exit code: $?"; echo "PID: $$"`
+  - Quoted values: `NAME="John Doe"; echo "Hello $NAME"`
 - Use control structures:
   - If statement: `if true; then echo yes; else echo no; fi`
   - If-elif-else statement: `if false; then echo no; elif true; then echo yes; else echo maybe; fi`
@@ -149,12 +218,12 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 
 Rush consists of the following components:
 
-- **Lexer**: Tokenizes input into commands, operators, and variables.
-- **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures like case statements with glob patterns.
-- **Executor**: Executes the AST, handling pipes, redirections, built-ins, and glob pattern matching in case statements.
-- **Built-in Commands**: Optimized detection and execution of built-in commands using a centralized constant array for improved maintainability and performance.
+- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion.
+- **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
+- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, and environment variable inheritance.
+- **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), and current directory.
+- **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`).
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
-- **Shell State**: Manages environment variables and current directory.
 
 ## Dependencies
 
@@ -199,10 +268,11 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, echo, pwd, env, exit, help, source)
+- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
-- Variable expansion
+- Environment variable support (assignment, expansion, export, special variables)
+- Variable scoping and inheritance
 - Tab-completion for commands, files, and directories
 - Path traversal and directory completion
 - Error conditions and edge cases

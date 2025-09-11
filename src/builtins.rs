@@ -4,8 +4,9 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use crate::parser::ShellCommand;
+use crate::state::ShellState;
 
-const BUILTINS: &[&str] = &["cd", "echo", "pwd", "env", "exit", "help", "source"];
+const BUILTINS: &[&str] = &["cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset"];
 
 pub fn is_builtin(cmd: &str) -> bool {
     BUILTINS.contains(&cmd)
@@ -15,7 +16,7 @@ pub fn get_builtin_commands() -> Vec<String> {
     BUILTINS.iter().map(|s| s.to_string()).collect()
 }
 
-pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
+pub fn execute_builtin(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
     // Handle input redirection for built-ins that might need it
     let _input_content = if let Some(ref input_file) = cmd.input {
         match std::fs::read_to_string(input_file) {
@@ -87,8 +88,17 @@ pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
             }
         },
         "env" => {
+            // Show exported shell variables first
+            for var_name in &shell_state.exported {
+                if let Some(value) = shell_state.variables.get(var_name) {
+                    let _ = writeln!(output_writer, "{}={}", var_name, value);
+                }
+            }
+            // Then show environment variables (excluding those already shown)
             for (key, value) in env::vars() {
-                let _ = writeln!(output_writer, "{}={}", key, value);
+                if !shell_state.exported.contains(&key) {
+                    let _ = writeln!(output_writer, "{}={}", key, value);
+                }
             }
             0
         }
@@ -135,10 +145,13 @@ pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
                             continue;
                         }
                         // Execute the line using the same logic as main.rs
-                        match crate::lexer::lex(line) {
+                        // Note: source builtin doesn't have access to shell state, so we create a temporary one
+                        // This is a limitation - sourced scripts don't share variables with parent
+                        let mut temp_state = crate::state::ShellState::new();
+                        match crate::lexer::lex(line, &temp_state) {
                             Ok(tokens) => match crate::parser::parse(tokens) {
                                 Ok(ast) => {
-                                    exit_code = crate::executor::execute(ast);
+                                    exit_code = crate::executor::execute(ast, &mut temp_state);
                                 }
                                 Err(e) => {
                                     let _ = writeln!(output_writer, "Parse error: {}", e);
@@ -157,6 +170,39 @@ pub fn execute_builtin(cmd: &ShellCommand) -> i32 {
                     let _ = writeln!(output_writer, "source: {}: {}", script_file, e);
                     1
                 }
+            }
+        }
+        "export" => {
+            if cmd.args.len() < 2 {
+                // Print all exported variables
+                for var_name in &shell_state.exported {
+                    if let Some(value) = shell_state.variables.get(var_name) {
+                        let _ = writeln!(output_writer, "export {}={}", var_name, value);
+                    }
+                }
+                0
+            } else {
+                let arg = &cmd.args[1];
+                if let Some(eq_pos) = arg.find('=') {
+                    // export VAR=value
+                    let var = arg[..eq_pos].to_string();
+                    let value = arg[eq_pos + 1..].to_string();
+                    shell_state.set_exported_var(&var, value);
+                    0
+                } else {
+                    // export VAR (mark existing var as exported)
+                    shell_state.export_var(arg);
+                    0
+                }
+            }
+        }
+        "unset" => {
+            if cmd.args.len() < 2 {
+                let _ = writeln!(output_writer, "unset: missing variable name");
+                1
+            } else {
+                shell_state.unset_var(&cmd.args[1]);
+                0
             }
         }
         _ => 1,
@@ -187,7 +233,8 @@ mod tests {
             output: None,
             append: None,
         };
-        let exit_code = execute_builtin(&cmd);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
@@ -199,7 +246,8 @@ mod tests {
             output: None,
             append: None,
         };
-        let exit_code = execute_builtin(&cmd);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state);
         assert_eq!(exit_code, 1);
     }
 
@@ -213,6 +261,8 @@ mod tests {
         assert!(commands.contains(&"exit".to_string()));
         assert!(commands.contains(&"help".to_string()));
         assert!(commands.contains(&"source".to_string()));
-        assert_eq!(commands.len(), 7);
+        assert!(commands.contains(&"export".to_string()));
+        assert!(commands.contains(&"unset".to_string()));
+        assert_eq!(commands.len(), 9);
     }
 }

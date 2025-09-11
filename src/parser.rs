@@ -4,6 +4,10 @@ use super::lexer::Token;
 pub enum Ast {
     Pipeline(Vec<ShellCommand>),
     Sequence(Vec<Ast>),
+    Assignment {
+        var: String,
+        value: String,
+    },
     If {
         branches: Vec<(Box<Ast>, Box<Ast>)>, // (condition, then_branch)
         else_branch: Option<Box<Ast>>,
@@ -30,6 +34,54 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
 fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     if tokens.is_empty() {
         return Err("No commands found".to_string());
+    }
+
+    // Check if it's an assignment
+    if tokens.len() == 2 {
+        // Check for pattern: VAR= VALUE
+        if let (Token::Word(ref var_eq), Token::Word(ref value)) = (&tokens[0], &tokens[1]) {
+            if let Some(eq_pos) = var_eq.find('=') {
+                if eq_pos > 0 && eq_pos < var_eq.len() - 1 {
+                    let var = var_eq[..eq_pos].to_string();
+                    let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
+                    // Basic validation: variable name should start with letter or underscore
+                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+                        return Ok(Ast::Assignment { var, value: full_value });
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if it's an assignment (VAR= VALUE)
+    if tokens.len() == 2 {
+        if let (Token::Word(ref var_eq), Token::Word(ref value)) = (&tokens[0], &tokens[1]) {
+            if let Some(eq_pos) = var_eq.find('=') {
+                if eq_pos > 0 && eq_pos == var_eq.len() - 1 {
+                    let var = var_eq[..eq_pos].to_string();
+                    // Basic validation: variable name should start with letter or underscore
+                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+                        return Ok(Ast::Assignment { var, value: value.clone() });
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if it's an assignment (single token with =)
+    if tokens.len() == 1 {
+        if let Token::Word(ref word) = tokens[0] {
+            if let Some(eq_pos) = word.find('=') {
+                if eq_pos > 0 && eq_pos < word.len() - 1 {
+                    let var = word[..eq_pos].to_string();
+                    let value = word[eq_pos + 1..].to_string();
+                    // Basic validation: variable name should start with letter or underscore
+                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+                        return Ok(Ast::Assignment { var, value });
+                    }
+                }
+            }
+        }
     }
 
     // Check if it's an if statement
@@ -698,6 +750,42 @@ mod tests {
             assert!(else_branch.is_none());
         } else {
             panic!("not if");
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment() {
+        let tokens = vec![Token::Word("MY_VAR=test_value".to_string())];
+        let result = parse(tokens).unwrap();
+        if let Ast::Assignment { var, value } = result {
+            assert_eq!(var, "MY_VAR");
+            assert_eq!(value, "test_value");
+        } else {
+            panic!("not assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment_quoted() {
+        let tokens = vec![Token::Word("MY_VAR=hello world".to_string())];
+        let result = parse(tokens).unwrap();
+        if let Ast::Assignment { var, value } = result {
+            assert_eq!(var, "MY_VAR");
+            assert_eq!(value, "hello world");
+        } else {
+            panic!("not assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment_invalid() {
+        // Variable name starting with number should not be parsed as assignment
+        let tokens = vec![Token::Word("123VAR=value".to_string())];
+        let result = parse(tokens).unwrap();
+        if let Ast::Pipeline(cmds) = result {
+            assert_eq!(cmds[0].args, vec!["123VAR=value"]);
+        } else {
+            panic!("should be parsed as pipeline");
         }
     }
 }

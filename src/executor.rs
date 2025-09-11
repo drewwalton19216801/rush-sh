@@ -2,9 +2,14 @@ use std::fs::File;
 use std::process::{Command, Stdio};
 
 use super::parser::{Ast, ShellCommand};
+use super::state::ShellState;
 
-pub fn execute(ast: Ast) -> i32 {
+pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
+        Ast::Assignment { var, value } => {
+            shell_state.set_var(&var, value);
+            0
+        }
         Ast::Pipeline(commands) => {
             if commands.is_empty() {
                 return 0;
@@ -12,16 +17,16 @@ pub fn execute(ast: Ast) -> i32 {
 
             if commands.len() == 1 {
                 // Single command, handle redirections
-                execute_single_command(&commands[0])
+                execute_single_command(&commands[0], shell_state)
             } else {
                 // Pipeline
-                execute_pipeline(&commands)
+                execute_pipeline(&commands, shell_state)
             }
         }
         Ast::Sequence(asts) => {
             let mut exit_code = 0;
             for ast in asts {
-                exit_code = execute(ast);
+                exit_code = execute(ast, shell_state);
             }
             exit_code
         }
@@ -30,13 +35,13 @@ pub fn execute(ast: Ast) -> i32 {
             else_branch,
         } => {
             for (condition, then_branch) in branches {
-                let cond_exit = execute(*condition);
+                let cond_exit = execute(*condition, shell_state);
                 if cond_exit == 0 {
-                    return execute(*then_branch);
+                    return execute(*then_branch, shell_state);
                 }
             }
             if let Some(else_b) = else_branch {
-                execute(*else_b)
+                execute(*else_b, shell_state)
             } else {
                 0
             }
@@ -50,18 +55,18 @@ pub fn execute(ast: Ast) -> i32 {
                 for pattern in &patterns {
                     if let Ok(glob_pattern) = glob::Pattern::new(pattern) {
                         if glob_pattern.matches(&word) {
-                            return execute(branch);
+                            return execute(branch, shell_state);
                         }
                     } else {
                         // If pattern is invalid, fall back to exact match
                         if &word == pattern {
-                            return execute(branch);
+                            return execute(branch, shell_state);
                         }
                     }
                 }
             }
             if let Some(def) = default {
-                execute(*def)
+                execute(*def, shell_state)
             } else {
                 0
             }
@@ -69,16 +74,23 @@ pub fn execute(ast: Ast) -> i32 {
     }
 }
 
-fn execute_single_command(cmd: &ShellCommand) -> i32 {
+fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
     if cmd.args.is_empty() {
         return 0;
     }
 
     if crate::builtins::is_builtin(&cmd.args[0]) {
-        crate::builtins::execute_builtin(cmd)
+        crate::builtins::execute_builtin(cmd, shell_state)
     } else {
         let mut command = Command::new(&cmd.args[0]);
         command.args(&cmd.args[1..]);
+
+        // Set environment for child process
+        let child_env = shell_state.get_env_for_child();
+        command.env_clear();
+        for (key, value) in child_env {
+            command.env(key, value);
+        }
 
         // Handle input redirection
         if let Some(ref input_file) = cmd.input {
@@ -132,7 +144,7 @@ fn execute_single_command(cmd: &ShellCommand) -> i32 {
     }
 }
 
-fn execute_pipeline(commands: &[ShellCommand]) -> i32 {
+fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> i32 {
     let mut exit_code = 0;
     let mut previous_stdout = None;
 
@@ -150,11 +162,18 @@ fn execute_pipeline(commands: &[ShellCommand]) -> i32 {
                 // We can't easily pipe to built-ins, so just execute
                 eprintln!("Warning: Built-in in pipeline may not work as expected");
             }
-            exit_code = crate::builtins::execute_builtin(cmd);
+            exit_code = crate::builtins::execute_builtin(cmd, shell_state);
             previous_stdout = None;
         } else {
             let mut command = Command::new(&cmd.args[0]);
             command.args(&cmd.args[1..]);
+
+            // Set environment for child process
+            let child_env = shell_state.get_env_for_child();
+            command.env_clear();
+            for (key, value) in child_env {
+                command.env(key, value);
+            }
 
             // Set stdin from previous command's stdout
             if let Some(prev) = previous_stdout.take() {
@@ -244,7 +263,8 @@ mod tests {
             output: None,
             append: None,
         };
-        let exit_code = execute_single_command(&cmd);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
@@ -257,7 +277,8 @@ mod tests {
             output: None,
             append: None,
         };
-        let exit_code = execute_single_command(&cmd);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
@@ -269,7 +290,8 @@ mod tests {
             output: None,
             append: None,
         };
-        let exit_code = execute_single_command(&cmd);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 1); // Command not found
     }
 
@@ -289,14 +311,16 @@ mod tests {
                 append: None,
             },
         ];
-        let exit_code = execute_pipeline(&commands);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_pipeline(&commands, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
     #[test]
     fn test_execute_empty_pipeline() {
         let commands = vec![];
-        let exit_code = execute(Ast::Pipeline(commands));
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute(Ast::Pipeline(commands), &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 
@@ -308,7 +332,8 @@ mod tests {
             output: None,
             append: None,
         }]);
-        let exit_code = execute(ast);
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 }
