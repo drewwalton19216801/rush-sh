@@ -348,6 +348,9 @@ mod tests {
     use super::*;
     use std::env;
     use std::path::Path;
+    use std::sync::Mutex;
+
+    static CWD_MUTEX: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_is_builtin() {
@@ -380,6 +383,7 @@ mod tests {
 
     #[test]
     fn test_execute_builtin_cd() {
+        let _lock = CWD_MUTEX.lock().unwrap();
         let original_dir = env::current_dir().unwrap();
         let temp_dir = "/tmp"; // Assume exists
         let cmd = ShellCommand {
@@ -397,6 +401,7 @@ mod tests {
 
     #[test]
     fn test_execute_builtin_cd_home() {
+        let _lock = CWD_MUTEX.lock().unwrap();
         let original_dir = env::current_dir().unwrap();
         let cmd = ShellCommand {
             args: vec!["cd".to_string()],
@@ -475,6 +480,7 @@ mod tests {
 
     #[test]
     fn test_execute_builtin_cd_nonexistent() {
+        let _lock = CWD_MUTEX.lock().unwrap();
         let original_dir = env::current_dir().unwrap();
         let cmd = ShellCommand {
             args: vec!["cd".to_string(), "/nonexistent/directory".to_string()],
