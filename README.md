@@ -8,6 +8,9 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Pipes**: Chain commands using the `|` operator.
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
 - **Environment Variables**: Support for `$VAR` and `${VAR}` expansion.
+- **Control Structures**:
+  - `if` statements: `if condition; then commands; else commands; fi`
+  - `case` statements: `case word in pattern) commands ;; esac`
 - **Built-in Commands**:
   - `cd`: Change directory
   - `exit`: Exit the shell
@@ -101,6 +104,9 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Print working directory: `pwd`
 - Execute a script: `source script.sh`
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
+- Use control structures:
+  - If statement: `if true; then echo yes; else echo no; fi`
+  - Case statement: `case hello in hello) echo match ;; *) echo no match ;; esac`
 - Tab completion:
   - Complete commands: `cd` → `cd `, `e` → `echo `, `env `, `exit `
   - Complete files: `cat f` → `cat file.txt `

@@ -4,18 +4,43 @@ use std::process::{Command, Stdio};
 use super::parser::{Ast, ShellCommand};
 
 pub fn execute(ast: Ast) -> i32 {
-    let Ast::Pipeline(commands) = ast;
+    match ast {
+        Ast::Pipeline(commands) => {
+            if commands.is_empty() {
+                return 0;
+            }
 
-    if commands.is_empty() {
-        return 0;
-    }
-
-    if commands.len() == 1 {
-        // Single command, handle redirections
-        execute_single_command(&commands[0])
-    } else {
-        // Pipeline
-        execute_pipeline(&commands)
+            if commands.len() == 1 {
+                // Single command, handle redirections
+                execute_single_command(&commands[0])
+            } else {
+                // Pipeline
+                execute_pipeline(&commands)
+            }
+        }
+        Ast::If { condition, then_branch, else_branch } => {
+            let cond_exit = execute(*condition);
+            if cond_exit == 0 {
+                execute(*then_branch)
+            } else if let Some(else_b) = else_branch {
+                execute(*else_b)
+            } else {
+                0
+            }
+        }
+        Ast::Case { word, cases, default } => {
+            // For now, simple implementation without glob matching
+            for (pattern, branch) in cases {
+                if word == pattern {
+                    return execute(branch);
+                }
+            }
+            if let Some(def) = default {
+                execute(*def)
+            } else {
+                0
+            }
+        }
     }
 }
 

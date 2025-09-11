@@ -54,15 +54,10 @@ fn main() {
         } else {
             // Script mode
             if let Ok(content) = fs::read_to_string(&args[1]) {
-                for line in content.lines() {
-                    if SHUTDOWN.load(Ordering::Relaxed) {
-                        println!("\nReceived SIGTERM, exiting gracefully.");
-                        break;
-                    }
-                    let line = line.trim();
-                    if !line.is_empty() {
-                        execute_line(line);
-                    }
+                if SHUTDOWN.load(Ordering::Relaxed) {
+                    println!("\nReceived SIGTERM, exiting gracefully.");
+                } else {
+                    execute_line(&content);
                 }
             } else {
                 eprintln!("Error: Could not read script file '{}'", args[1]);

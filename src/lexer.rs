@@ -7,6 +7,29 @@ pub enum Token {
     RedirOut,
     RedirIn,
     RedirAppend,
+    If,
+    Then,
+    Else,
+    Fi,
+    Case,
+    In,
+    Esac,
+    DoubleSemicolon,
+    Semicolon,
+    RightParen,
+}
+
+fn is_keyword(word: &str) -> Option<Token> {
+    match word {
+        "if" => Some(Token::If),
+        "then" => Some(Token::Then),
+        "else" => Some(Token::Else),
+        "fi" => Some(Token::Fi),
+        "case" => Some(Token::Case),
+        "in" => Some(Token::In),
+        "esac" => Some(Token::Esac),
+        _ => None,
+    }
 }
 
 pub fn lex(input: &str) -> Result<Vec<Token>, String> {
@@ -18,9 +41,13 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
 
     while let Some(&ch) = chars.peek() {
         match ch {
-            ' ' if !in_double_quote && !in_single_quote => {
+            ' ' | '\n' | '\t' if !in_double_quote && !in_single_quote => {
                 if !current.is_empty() {
-                    tokens.push(Token::Word(current.clone()));
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
                     current.clear();
                 }
                 chars.next();
@@ -32,7 +59,11 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
                     in_double_quote = false;
                 } else if !in_single_quote {
                     if !current.is_empty() {
-                        tokens.push(Token::Word(current.clone()));
+                        if let Some(keyword) = is_keyword(&current) {
+                            tokens.push(keyword);
+                        } else {
+                            tokens.push(Token::Word(current.clone()));
+                        }
                         current.clear();
                     }
                     in_double_quote = true;
@@ -46,7 +77,11 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
                     in_single_quote = false;
                 } else if !in_double_quote {
                     if !current.is_empty() {
-                        tokens.push(Token::Word(current.clone()));
+                        if let Some(keyword) = is_keyword(&current) {
+                            tokens.push(keyword);
+                        } else {
+                            tokens.push(Token::Word(current.clone()));
+                        }
                         current.clear();
                     }
                     in_single_quote = true;
@@ -74,7 +109,11 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
             }
             '|' => {
                 if !current.is_empty() {
-                    tokens.push(Token::Word(current.clone()));
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
                     current.clear();
                 }
                 tokens.push(Token::Pipe);
@@ -82,7 +121,11 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
             }
             '>' => {
                 if !current.is_empty() {
-                    tokens.push(Token::Word(current.clone()));
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
                     current.clear();
                 }
                 chars.next();
@@ -99,11 +142,48 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
             }
             '<' => {
                 if !current.is_empty() {
-                    tokens.push(Token::Word(current.clone()));
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
                     current.clear();
                 }
                 tokens.push(Token::RedirIn);
                 chars.next();
+            }
+            ')' => {
+                if !current.is_empty() {
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
+                    current.clear();
+                }
+                tokens.push(Token::RightParen);
+                chars.next();
+            }
+            ';' => {
+                if !current.is_empty() {
+                    if let Some(keyword) = is_keyword(&current) {
+                        tokens.push(keyword);
+                    } else {
+                        tokens.push(Token::Word(current.clone()));
+                    }
+                    current.clear();
+                }
+                chars.next();
+                if let Some(&next_ch) = chars.peek() {
+                    if next_ch == ';' {
+                        chars.next();
+                        tokens.push(Token::DoubleSemicolon);
+                    } else {
+                        tokens.push(Token::Semicolon);
+                    }
+                } else {
+                    tokens.push(Token::Semicolon);
+                }
             }
             _ => {
                 if ch == '~' && current.is_empty() {
@@ -120,7 +200,11 @@ pub fn lex(input: &str) -> Result<Vec<Token>, String> {
         }
     }
     if !current.is_empty() {
-        tokens.push(Token::Word(current));
+        if let Some(keyword) = is_keyword(&current) {
+            tokens.push(keyword);
+        } else {
+            tokens.push(Token::Word(current));
+        }
     }
     Ok(tokens)
 }
@@ -319,6 +403,24 @@ mod tests {
                 Token::Word("search term".to_string()),
                 Token::RedirOut,
                 Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_if_tokens() {
+        let result = lex("if true; then echo yes; fi").unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::If,
+                Token::Word("true".to_string()),
+                Token::Semicolon,
+                Token::Then,
+                Token::Word("echo".to_string()),
+                Token::Word("yes".to_string()),
+                Token::Semicolon,
+                Token::Fi,
             ]
         );
     }
