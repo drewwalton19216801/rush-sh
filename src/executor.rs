@@ -1,8 +1,10 @@
 use std::fs::File;
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::process::{Command, Stdio};
 
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
+use nix::unistd;
 
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
@@ -80,7 +82,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
     }
 
     if crate::builtins::is_builtin(&cmd.args[0]) {
-        crate::builtins::execute_builtin(cmd, shell_state)
+        crate::builtins::execute_builtin(cmd, shell_state, None)
     } else {
         let mut command = Command::new(&cmd.args[0]);
         command.args(&cmd.args[1..]);
@@ -158,12 +160,18 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
         if crate::builtins::is_builtin(&cmd.args[0]) {
             // Built-ins in pipelines are tricky - for now, execute them separately
             // This is not perfect but better than nothing
-            if let Some(_prev) = previous_stdout {
-                // We can't easily pipe to built-ins, so just execute
-                eprintln!("Warning: Built-in in pipeline may not work as expected");
+            if !is_last {
+                // Create a pipe to capture builtin output
+                let (reader_fd, writer_fd) = unistd::pipe().unwrap();
+                let reader = unsafe { std::fs::File::from_raw_fd(reader_fd.into_raw_fd()) };
+                let writer = unsafe { std::fs::File::from_raw_fd(writer_fd.into_raw_fd()) };
+                exit_code =
+                    crate::builtins::execute_builtin(cmd, shell_state, Some(Box::new(writer)));
+                previous_stdout = Some(Stdio::from(reader));
+            } else {
+                exit_code = crate::builtins::execute_builtin(cmd, shell_state, None);
+                previous_stdout = None;
             }
-            exit_code = crate::builtins::execute_builtin(cmd, shell_state);
-            previous_stdout = None;
         } else {
             let mut command = Command::new(&cmd.args[0]);
             command.args(&cmd.args[1..]);

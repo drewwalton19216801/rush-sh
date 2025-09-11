@@ -18,7 +18,11 @@ pub fn get_builtin_commands() -> Vec<String> {
     BUILTINS.iter().map(|s| s.to_string()).collect()
 }
 
-pub fn execute_builtin(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
+pub fn execute_builtin(
+    cmd: &ShellCommand,
+    shell_state: &mut ShellState,
+    output_override: Option<Box<dyn std::io::Write>>,
+) -> i32 {
     // Handle input redirection for built-ins that might need it
     let _input_content = if let Some(ref input_file) = cmd.input {
         match std::fs::read_to_string(input_file) {
@@ -33,7 +37,9 @@ pub fn execute_builtin(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 
     };
 
     // Prepare output destination
-    let mut output_writer: Box<dyn Write> = if let Some(ref output_file) = cmd.output {
+    let mut output_writer: Box<dyn Write> = if let Some(override_writer) = output_override {
+        override_writer
+    } else if let Some(ref output_file) = cmd.output {
         match File::create(output_file) {
             Ok(file) => Box::new(file),
             Err(e) => {
@@ -236,7 +242,7 @@ mod tests {
             append: None,
         };
         let mut shell_state = crate::state::ShellState::new();
-        let exit_code = execute_builtin(&cmd, &mut shell_state);
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
         assert_eq!(exit_code, 0);
     }
 
@@ -249,7 +255,7 @@ mod tests {
             append: None,
         };
         let mut shell_state = crate::state::ShellState::new();
-        let exit_code = execute_builtin(&cmd, &mut shell_state);
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
         assert_eq!(exit_code, 1);
     }
 
