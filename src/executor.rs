@@ -27,13 +27,22 @@ fn expand_variables_in_string(input: &str, shell_state: &ShellState) -> String {
             let mut var_name = String::new();
             let mut next_ch = chars.peek();
 
-            while let Some(&c) = next_ch {
-                if c.is_alphanumeric() || c == '_' {
+            // Handle special single-character variables first
+            if let Some(&c) = next_ch {
+                if c == '?' || c == '$' || c == '0' {
                     var_name.push(c);
                     chars.next(); // consume the character
-                    next_ch = chars.peek();
                 } else {
-                    break;
+                    // Regular variable name
+                    while let Some(&c) = next_ch {
+                        if c.is_alphanumeric() || c == '_' {
+                            var_name.push(c);
+                            chars.next(); // consume the character
+                            next_ch = chars.peek();
+                        } else {
+                            break;
+                        }
+                    }
                 }
             }
 
