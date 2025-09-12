@@ -2,8 +2,13 @@
 
 Rush is a POSIX sh-compatible shell implemented in Rust. It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports basic shell features like command execution, pipes, redirections, environment variables, and built-in commands.
 
-Like Tom Sawyer persuading his friends that whitewashing the fence was a privilege, Rush aims to make the work of scripting feel effortless—clean, fast, and maybe even a little fun.
+## Pun-der the Hood
 
+- In a hurry? Don’t bash your head against it—Rush it.
+- When your pipelines need a drum solo, put them on Rush and let the commands Neil-Peart through.
+- Tom Sawyer tip: chores go faster when you make them look like a Rush job; no need to paint the fence by hand when the shell can whitewash it with a one-liner.
+- Alias your productivity: `alias hurry='rush -c "do the thing"'`—because sometimes you just need to rush to judgment.
+- This shell doesn’t just run fast; it gives you the Rush of a clean exit status.
 
 ## Features
 
