@@ -56,7 +56,10 @@ impl RushCompleter {
     }
 
     fn looks_like_file_path(word: &str) -> bool {
-        word.starts_with("./") || word.starts_with("/") || word.starts_with("~/") || word.contains("/")
+        word.starts_with("./")
+            || word.starts_with("/")
+            || word.starts_with("~/")
+            || word.contains("/")
     }
 
     fn get_command_candidates(prefix: &str) -> Vec<RushCandidate> {

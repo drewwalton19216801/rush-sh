@@ -7,7 +7,8 @@ use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
 const BUILTINS: &[&str] = &[
-    "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset", "pushd", "popd", "dirs",
+    "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset", "pushd", "popd",
+    "dirs",
 ];
 
 const BUILTIN_DESCRIPTIONS: &[(&str, &str)] = &[
@@ -147,7 +148,8 @@ pub fn execute_builtin(
             // Attempt to write the header, handling potential errors
             if writeln!(output_writer, "Rush Shell v{}", env!("CARGO_PKG_VERSION")).is_err()
                 || writeln!(output_writer, "").is_err()
-                || writeln!(output_writer, "Available built-in commands:").is_err() {
+                || writeln!(output_writer, "Available built-in commands:").is_err()
+            {
                 return 1; // Return error if header write fails
             }
 
@@ -258,7 +260,11 @@ pub fn execute_builtin(
                 let current_dir = match env::current_dir() {
                     Ok(path) => path.to_string_lossy().to_string(),
                     Err(e) => {
-                        let _ = writeln!(output_writer, "pushd: failed to get current directory: {}", e);
+                        let _ = writeln!(
+                            output_writer,
+                            "pushd: failed to get current directory: {}",
+                            e
+                        );
                         return 1;
                     }
                 };
