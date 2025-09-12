@@ -5,6 +5,57 @@ use std::process::{Command, Stdio};
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
 
+fn expand_variables_in_args(args: &[String], shell_state: &ShellState) -> Vec<String> {
+    let mut expanded_args = Vec::new();
+
+    for arg in args {
+        // Expand variables within the argument string
+        let expanded_arg = expand_variables_in_string(arg, shell_state);
+        expanded_args.push(expanded_arg);
+    }
+
+    expanded_args
+}
+
+fn expand_variables_in_string(input: &str, shell_state: &ShellState) -> String {
+    let mut result = String::new();
+    let mut chars = input.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if ch == '$' {
+            // Check if this is a variable
+            let mut var_name = String::new();
+            let mut next_ch = chars.peek();
+
+            while let Some(&c) = next_ch {
+                if c.is_alphanumeric() || c == '_' {
+                    var_name.push(c);
+                    chars.next(); // consume the character
+                    next_ch = chars.peek();
+                } else {
+                    break;
+                }
+            }
+
+            if !var_name.is_empty() {
+                if let Some(value) = shell_state.get_var(&var_name) {
+                    result.push_str(&value);
+                } else {
+                    // Variable not found, keep the literal
+                    result.push('$');
+                    result.push_str(&var_name);
+                }
+            } else {
+                result.push('$');
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
 fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
     let mut expanded_args = Vec::new();
 
@@ -135,7 +186,9 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         return 0;
     }
 
-    let expanded_args = match expand_wildcards(&cmd.args) {
+    // First expand variables, then wildcards
+    let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
+    let expanded_args = match expand_wildcards(&var_expanded_args) {
         Ok(args) => args,
         Err(_) => return 1,
     };
@@ -227,7 +280,9 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
         let is_last = i == commands.len() - 1;
 
-        let expanded_args = match expand_wildcards(&cmd.args) {
+        // First expand variables, then wildcards
+        let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
+        let expanded_args = match expand_wildcards(&var_expanded_args) {
             Ok(args) => args,
             Err(_) => return 1,
         };

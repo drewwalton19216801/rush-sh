@@ -40,6 +40,11 @@ fn is_keyword(word: &str) -> Option<Token> {
 }
 
 fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> String {
+    // If the command contains command substitution syntax, don't expand variables
+    if command.contains("$(") || command.contains('`') {
+        return command.to_string();
+    }
+
     let mut chars = command.chars().peekable();
     let mut current = String::new();
 
@@ -131,7 +136,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -142,7 +148,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -153,10 +160,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 chars.next(); // consume the quote
                 if in_double_quote {
                     // End of double quote - push the accumulated content as a word
-                    if !current.is_empty() {
-                        tokens.push(Token::Word(current.clone()));
-                        current.clear();
-                    }
+                    // Even if empty, we need to preserve it as an empty string token
+                    let word = expand_variables_in_command(&current, shell_state);
+                    tokens.push(Token::Word(word));
+                    current.clear();
                     in_double_quote = false;
                 } else {
                     // Start of double quote - push any accumulated content first
@@ -164,7 +171,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         if let Some(keyword) = is_keyword(&current) {
                             tokens.push(keyword);
                         } else {
-                            tokens.push(Token::Word(current.clone()));
+                            let word = expand_variables_in_command(&current, shell_state);
+                            tokens.push(Token::Word(word));
                         }
                         current.clear();
                     }
@@ -173,6 +181,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             }
             '\'' => {
                 if in_single_quote {
+                    // End of single quote - preserve even empty strings
                     tokens.push(Token::Word(current.clone()));
                     current.clear();
                     in_single_quote = false;
@@ -181,7 +190,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         if let Some(keyword) = is_keyword(&current) {
                             tokens.push(keyword);
                         } else {
-                            tokens.push(Token::Word(current.clone()));
+                            let word = expand_variables_in_command(&current, shell_state);
+                            tokens.push(Token::Word(word));
                         }
                         current.clear();
                     }
@@ -246,21 +256,34 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else {
                     // Variable expansion - collect var name without consuming the terminating character
                     let mut var_name = String::new();
-                    while let Some(&ch) = chars.peek() {
-                        if ch.is_alphanumeric() || ch == '_' {
+
+                    // Check for special variables first
+                    if let Some(&ch) = chars.peek() {
+                        if ch == '?' || ch == '$' || ch.is_ascii_digit() {
+                            // Special variable
+                            var_name.push(ch);
+                            chars.next();
+                        } else if ch == '#' || ch == '@' || ch == '*' || ch == '!' {
+                            // Other special variables (not yet fully implemented)
                             var_name.push(ch);
                             chars.next();
                         } else {
-                            break;
+                            // Regular variable name
+                            while let Some(&ch) = chars.peek() {
+                                if ch.is_alphanumeric() || ch == '_' {
+                                    var_name.push(ch);
+                                    chars.next();
+                                } else {
+                                    break;
+                                }
+                            }
                         }
                     }
+
                     if !var_name.is_empty() {
-                        if let Some(val) = shell_state.get_var(&var_name) {
-                            current.push_str(&val);
-                        } else {
-                            current.push('$');
-                            current.push_str(&var_name);
-                        }
+                        // For now, keep all variables as literals - they will be expanded during execution
+                        current.push('$');
+                        current.push_str(&var_name);
                     } else {
                         current.push('$');
                     }
@@ -271,7 +294,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -291,7 +315,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -312,7 +337,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -324,7 +350,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -336,7 +363,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -348,7 +376,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -397,7 +426,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        tokens.push(Token::Word(current.clone()));
+                        let word = expand_variables_in_command(&current, shell_state);
+                        tokens.push(Token::Word(word));
                     }
                     current.clear();
                 }
@@ -431,7 +461,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
         if let Some(keyword) = is_keyword(&current) {
             tokens.push(keyword);
         } else {
-            tokens.push(Token::Word(current));
+            let word = expand_variables_in_command(&current, shell_state);
+            tokens.push(Token::Word(word));
         }
     }
     Ok(tokens)

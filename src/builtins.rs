@@ -5,6 +5,7 @@ use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
 mod builtin_alias;
+mod builtin_bracket;
 mod builtin_cd;
 mod builtin_dirs;
 mod builtin_echo;
@@ -16,6 +17,7 @@ mod builtin_popd;
 mod builtin_pushd;
 mod builtin_pwd;
 mod builtin_source;
+mod builtin_test;
 mod builtin_unalias;
 mod builtin_unset;
 
@@ -46,6 +48,8 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_dirs::DirsBuiltin),
         Box::new(builtin_alias::AliasBuiltin),
         Box::new(builtin_unalias::UnaliasBuiltin),
+        Box::new(builtin_test::TestBuiltin),
+        Box::new(builtin_bracket::BracketBuiltin),
     ]
 }
 
@@ -123,6 +127,8 @@ mod tests {
         assert!(is_builtin("help"));
         assert!(is_builtin("alias"));
         assert!(is_builtin("unalias"));
+        assert!(is_builtin("test"));
+        assert!(is_builtin("["));
         assert!(!is_builtin("ls"));
         assert!(!is_builtin("grep"));
     }
@@ -170,7 +176,9 @@ mod tests {
         assert!(commands.contains(&"dirs".to_string()));
         assert!(commands.contains(&"alias".to_string()));
         assert!(commands.contains(&"unalias".to_string()));
-        assert_eq!(commands.len(), 14);
+        assert!(commands.contains(&"test".to_string()));
+        assert!(commands.contains(&"[".to_string()));
+        assert_eq!(commands.len(), 16);
     }
 
     #[test]

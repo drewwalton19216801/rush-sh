@@ -153,6 +153,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
                 i += 1;
             }
+
+            // If we didn't find a matching fi, include all remaining tokens
+            // This handles the case where the if statement is incomplete
         } else if tokens[i] == Token::Case {
             // For case statements, find the matching esac
             while i < tokens.len() {
@@ -164,13 +167,48 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             }
         } else {
             // For simple commands, stop at newline or semicolon
-            while i < tokens.len() && tokens[i] != Token::Newline && tokens[i] != Token::Semicolon {
+            // But check if the next token after newline is a control flow keyword
+            while i < tokens.len() {
+                if tokens[i] == Token::Newline || tokens[i] == Token::Semicolon {
+                    // Look ahead to see if the next non-newline token is else/elif/fi
+                    let mut j = i + 1;
+                    while j < tokens.len() && tokens[j] == Token::Newline {
+                        j += 1;
+                    }
+                    // If we find else/elif/fi, this is likely part of an if statement that wasn't properly detected
+                    if j < tokens.len()
+                        && (tokens[j] == Token::Else
+                            || tokens[j] == Token::Elif
+                            || tokens[j] == Token::Fi)
+                    {
+                        // Skip this token and continue - it will be handled as a parse error
+                        i = j + 1;
+                        continue;
+                    }
+                    break;
+                }
                 i += 1;
             }
         }
 
         let command_tokens = &tokens[start..i];
         if !command_tokens.is_empty() {
+            // Don't try to parse orphaned else/elif/fi tokens
+            if command_tokens.len() == 1 {
+                match command_tokens[0] {
+                    Token::Else | Token::Elif | Token::Fi => {
+                        // Skip orphaned control flow tokens
+                        if i < tokens.len()
+                            && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon)
+                        {
+                            i += 1;
+                        }
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
+
             let ast = parse_slice(command_tokens)?;
             commands.push(ast);
         }
@@ -273,16 +311,26 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
     let mut branches = Vec::new();
 
     loop {
-        // Parse condition until ; or newline
+        // Parse condition until ; or newline or then
         let mut cond_tokens = Vec::new();
-        while i < tokens.len() && tokens[i] != Token::Semicolon && tokens[i] != Token::Newline {
+        while i < tokens.len()
+            && tokens[i] != Token::Semicolon
+            && tokens[i] != Token::Newline
+            && tokens[i] != Token::Then
+        {
             cond_tokens.push(tokens[i].clone());
             i += 1;
         }
-        if i >= tokens.len() || (tokens[i] != Token::Semicolon && tokens[i] != Token::Newline) {
-            return Err("Expected ; after if/elif condition".to_string());
+
+        // Skip ; or newline if present
+        if i < tokens.len() && (tokens[i] == Token::Semicolon || tokens[i] == Token::Newline) {
+            i += 1;
         }
-        i += 1; // Skip ; or newline
+
+        // Skip any additional newlines
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
 
         if i >= tokens.len() || tokens[i] != Token::Then {
             return Err("Expected then after if/elif condition".to_string());
@@ -293,31 +341,72 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
         while i < tokens.len() && tokens[i] == Token::Newline {
             i += 1;
         }
-        // Parse then branch until ; or newline or else or elif or fi
+
+        // Parse then branch - collect all tokens until we hit else/elif/fi
+        // We need to handle nested structures properly
         let mut then_tokens = Vec::new();
-        while i < tokens.len()
-            && tokens[i] != Token::Semicolon
-            && tokens[i] != Token::Newline
-            && tokens[i] != Token::Else
-            && tokens[i] != Token::Elif
-            && tokens[i] != Token::Fi
-        {
-            then_tokens.push(tokens[i].clone());
+        let mut depth = 0;
+        while i < tokens.len() {
+            match &tokens[i] {
+                Token::If => {
+                    depth += 1;
+                    then_tokens.push(tokens[i].clone());
+                }
+                Token::Fi => {
+                    if depth > 0 {
+                        depth -= 1;
+                        then_tokens.push(tokens[i].clone());
+                    } else {
+                        break; // This fi closes our if
+                    }
+                }
+                Token::Else | Token::Elif if depth == 0 => {
+                    break; // These belong to our if, not nested ones
+                }
+                Token::Newline => {
+                    // Skip newlines but check what comes after
+                    let mut j = i + 1;
+                    while j < tokens.len() && tokens[j] == Token::Newline {
+                        j += 1;
+                    }
+                    if j < tokens.len()
+                        && depth == 0
+                        && (tokens[j] == Token::Else
+                            || tokens[j] == Token::Elif
+                            || tokens[j] == Token::Fi)
+                    {
+                        i = j; // Skip to the keyword
+                        break;
+                    }
+                    // Otherwise it's just a newline in the middle of commands
+                    then_tokens.push(tokens[i].clone());
+                }
+                _ => {
+                    then_tokens.push(tokens[i].clone());
+                }
+            }
             i += 1;
         }
-        // Skip any newlines after the then branch
+
+        // Skip any trailing newlines
         while i < tokens.len() && tokens[i] == Token::Newline {
             i += 1;
         }
 
-        let then_ast = parse_slice(&then_tokens)?;
+        let then_ast = if then_tokens.is_empty() {
+            // Empty then branch - create a no-op
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }])
+        } else {
+            parse_commands_sequentially(&then_tokens)?
+        };
+
         let condition = parse_slice(&cond_tokens)?;
         branches.push((Box::new(condition), Box::new(then_ast)));
-
-        // Skip the ; or newline after then branch if present
-        if i < tokens.len() && (tokens[i] == Token::Semicolon || tokens[i] == Token::Newline) {
-            i += 1;
-        }
 
         // Check next
         if i < tokens.len() && tokens[i] == Token::Elif {
@@ -329,24 +418,61 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
 
     let else_ast = if i < tokens.len() && tokens[i] == Token::Else {
         i += 1; // Skip else
-                // Skip any newlines after else
+
+        // Skip any newlines after else
         while i < tokens.len() && tokens[i] == Token::Newline {
             i += 1;
         }
+
         let mut else_tokens = Vec::new();
-        while i < tokens.len()
-            && tokens[i] != Token::Semicolon
-            && tokens[i] != Token::Newline
-            && tokens[i] != Token::Fi
-        {
-            else_tokens.push(tokens[i].clone());
+        let mut depth = 0;
+        while i < tokens.len() {
+            match &tokens[i] {
+                Token::If => {
+                    depth += 1;
+                    else_tokens.push(tokens[i].clone());
+                }
+                Token::Fi => {
+                    if depth > 0 {
+                        depth -= 1;
+                        else_tokens.push(tokens[i].clone());
+                    } else {
+                        break; // This fi closes our if
+                    }
+                }
+                Token::Newline => {
+                    // Skip newlines but check what comes after
+                    let mut j = i + 1;
+                    while j < tokens.len() && tokens[j] == Token::Newline {
+                        j += 1;
+                    }
+                    if j < tokens.len() && depth == 0 && tokens[j] == Token::Fi {
+                        i = j; // Skip to fi
+                        break;
+                    }
+                    // Otherwise it's just a newline in the middle of commands
+                    else_tokens.push(tokens[i].clone());
+                }
+                _ => {
+                    else_tokens.push(tokens[i].clone());
+                }
+            }
             i += 1;
         }
-        // Skip ; or newlines after else branch
-        while i < tokens.len() && (tokens[i] == Token::Semicolon || tokens[i] == Token::Newline) {
-            i += 1;
-        }
-        Some(Box::new(parse_slice(&else_tokens)?))
+
+        let else_ast = if else_tokens.is_empty() {
+            // Empty else branch - create a no-op
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }])
+        } else {
+            parse_commands_sequentially(&else_tokens)?
+        };
+
+        Some(Box::new(else_ast))
     } else {
         None
     };

@@ -74,52 +74,63 @@ fn main() {
             }
         }
     } else {
-        // Interactive mode
-        println!("Rush shell started. Type 'exit' to quit.");
-        let mut rl = Editor::<completion::RushCompleter, FileHistory>::new().unwrap();
-        rl.set_helper(Some(completion::RushCompleter::new()));
+        // Check if stdin is a TTY (interactive) or piped input
+        use std::io::IsTerminal;
+        if std::io::stdin().is_terminal() {
+            // Interactive mode
+            println!("Rush shell started. Type 'exit' to quit.");
+            let mut rl = Editor::<completion::RushCompleter, FileHistory>::new().unwrap();
+            rl.set_helper(Some(completion::RushCompleter::new()));
 
-        // Configure rustyline to handle signals gracefully
-        // With signal-hook feature enabled, this helps coordinate with our signal handler
-        rl.bind_sequence(
-            rustyline::KeyEvent::new('\x03', rustyline::Modifiers::NONE),
-            rustyline::Cmd::Interrupt,
-        );
+            // Configure rustyline to handle signals gracefully
+            // With signal-hook feature enabled, this helps coordinate with our signal handler
+            rl.bind_sequence(
+                rustyline::KeyEvent::new('\x03', rustyline::Modifiers::NONE),
+                rustyline::Cmd::Interrupt,
+            );
 
-        loop {
-            if SHUTDOWN.load(Ordering::Relaxed) {
-                println!("\nReceived SIGTERM, exiting gracefully.");
-                break;
-            }
-            let prompt = format!("{} $ ", shell_state.get_condensed_cwd());
-            let readline = rl.readline(&prompt);
-            match readline {
-                Ok(line) => {
-                    let _ = rl.add_history_entry(line.as_str());
-                    if line == "exit" {
-                        break;
-                    }
-                    execute_line(&line, &mut shell_state);
+            loop {
+                if SHUTDOWN.load(Ordering::Relaxed) {
+                    println!("\nReceived SIGTERM, exiting gracefully.");
+                    break;
                 }
-                Err(err) => {
-                    // Check if it's a signal-related error or if shutdown was requested
-                    if SHUTDOWN.load(Ordering::Relaxed) {
-                        println!("\nReceived SIGTERM, exiting gracefully.");
-                        break;
-                    } else {
-                        // Check if this is a signal interruption (SIGINT)
-                        let err_str = format!("{}", err);
-                        if err_str.contains("Interrupted") {
-                            // SIGINT should just interrupt the current input line
-                            // Continue the loop to show a new prompt
+                let prompt = format!("{} $ ", shell_state.get_condensed_cwd());
+                let readline = rl.readline(&prompt);
+                match readline {
+                    Ok(line) => {
+                        let _ = rl.add_history_entry(line.as_str());
+                        if line == "exit" {
+                            break;
+                        }
+                        execute_line(&line, &mut shell_state);
+                    }
+                    Err(err) => {
+                        // Check if it's a signal-related error or if shutdown was requested
+                        if SHUTDOWN.load(Ordering::Relaxed) {
+                            println!("\nReceived SIGTERM, exiting gracefully.");
+                            break;
+                        } else {
+                            // Check if this is a signal interruption (SIGINT)
+                            let err_str = format!("{}", err);
+                            if err_str.contains("Interrupted") {
+                                // SIGINT should just interrupt the current input line
+                                // Continue the loop to show a new prompt
+                                continue;
+                            }
+                            // For other errors, print and continue (don't break)
+                            eprintln!("Readline error: {}", err);
+                            // Continue instead of breaking to keep shell running
                             continue;
                         }
-                        // For other errors, print and continue (don't break)
-                        eprintln!("Readline error: {}", err);
-                        // Continue instead of breaking to keep shell running
-                        continue;
                     }
                 }
+            }
+        } else {
+            // Non-interactive mode (piped input)
+            use std::io::{self, Read};
+            let mut input = String::new();
+            if let Ok(_) = io::stdin().read_to_string(&mut input) {
+                execute_script(&input, &mut shell_state);
             }
         }
     }
@@ -157,17 +168,28 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
 }
 
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
+    // Process the entire script at once to handle multi-line constructs
+    let mut script_content = String::new();
+
     for line in content.lines() {
-        let line = line.trim();
-        // Skip shebang lines and empty lines
-        if line.is_empty() || line.starts_with("#!") {
+        // Skip shebang lines
+        if line.starts_with("#!") {
             continue;
         }
-        // Skip comment lines
-        if line.starts_with("#") {
+        // Skip pure comment lines (but not inline comments)
+        if line.trim_start().starts_with("#")
+            && !line.contains(|c: char| !c.is_whitespace() && c != '#')
+        {
             continue;
         }
-        execute_line(line, shell_state);
+        // Add the line to our script content
+        script_content.push_str(line);
+        script_content.push('\n');
+    }
+
+    // Now execute the entire script content as one unit
+    if !script_content.trim().is_empty() {
+        execute_line(&script_content, shell_state);
     }
 }
 
