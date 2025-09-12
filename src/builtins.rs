@@ -7,7 +7,7 @@ use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
 const BUILTINS: &[&str] = &[
-    "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset",
+    "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset", "pushd", "popd", "dirs",
 ];
 
 const BUILTIN_DESCRIPTIONS: &[(&str, &str)] = &[
@@ -20,6 +20,9 @@ const BUILTIN_DESCRIPTIONS: &[(&str, &str)] = &[
     ("source", "Execute a script file with rush"),
     ("export", "Export variables to environment"),
     ("unset", "Unset shell variables"),
+    ("pushd", "Push directory onto stack and change to it"),
+    ("popd", "Pop directory from stack and change to it"),
+    ("dirs", "Display directory stack"),
 ];
 
 pub fn is_builtin(cmd: &str) -> bool {
@@ -28,6 +31,20 @@ pub fn is_builtin(cmd: &str) -> bool {
 
 pub fn get_builtin_commands() -> Vec<String> {
     BUILTINS.iter().map(|s| s.to_string()).collect()
+}
+
+fn print_dir_stack<W: Write>(shell_state: &ShellState, writer: &mut W) {
+    // Get current directory
+    if let Ok(current) = env::current_dir() {
+        let current_str = current.to_string_lossy().to_string();
+        // Print current directory first
+        let _ = write!(writer, "{}", current_str);
+        // Then print stack in reverse order (top of stack first)
+        for dir in shell_state.dir_stack.iter().rev() {
+            let _ = write!(writer, " {}", dir);
+        }
+        let _ = writeln!(writer);
+    }
 }
 
 pub fn execute_builtin(
@@ -225,6 +242,62 @@ pub fn execute_builtin(
                 0
             }
         }
+        "pushd" => {
+            if cmd.args.len() < 2 {
+                let _ = writeln!(output_writer, "pushd: missing directory operand");
+                1
+            } else {
+                let dir = &cmd.args[1];
+                let path = if dir == "~" {
+                    env::var("HOME").unwrap_or_else(|_| "/".to_string())
+                } else {
+                    dir.clone()
+                };
+
+                // Get current directory before changing
+                let current_dir = match env::current_dir() {
+                    Ok(path) => path.to_string_lossy().to_string(),
+                    Err(e) => {
+                        let _ = writeln!(output_writer, "pushd: failed to get current directory: {}", e);
+                        return 1;
+                    }
+                };
+
+                // Change to new directory
+                if let Err(e) = env::set_current_dir(Path::new(&path)) {
+                    let _ = writeln!(output_writer, "pushd: {}: {}", path, e);
+                    1
+                } else {
+                    // Push old directory to stack
+                    shell_state.dir_stack.push(current_dir);
+                    // Print the stack
+                    print_dir_stack(shell_state, &mut output_writer);
+                    0
+                }
+            }
+        }
+        "popd" => {
+            if shell_state.dir_stack.is_empty() {
+                let _ = writeln!(output_writer, "popd: directory stack empty");
+                1
+            } else {
+                // Pop directory from stack
+                let dir = shell_state.dir_stack.pop().unwrap();
+                // Change to that directory
+                if let Err(e) = env::set_current_dir(Path::new(&dir)) {
+                    let _ = writeln!(output_writer, "popd: {}: {}", dir, e);
+                    1
+                } else {
+                    // Print the stack
+                    print_dir_stack(shell_state, &mut output_writer);
+                    0
+                }
+            }
+        }
+        "dirs" => {
+            print_dir_stack(shell_state, &mut output_writer);
+            0
+        }
         _ => 1,
     }
 }
@@ -283,6 +356,58 @@ mod tests {
         assert!(commands.contains(&"source".to_string()));
         assert!(commands.contains(&"export".to_string()));
         assert!(commands.contains(&"unset".to_string()));
-        assert_eq!(commands.len(), 9);
+        assert!(commands.contains(&"pushd".to_string()));
+        assert!(commands.contains(&"popd".to_string()));
+        assert!(commands.contains(&"dirs".to_string()));
+        assert_eq!(commands.len(), 12);
+    }
+
+    #[test]
+    fn test_execute_builtin_pushd() {
+        let original_dir = std::env::current_dir().unwrap();
+        let cmd = ShellCommand {
+            args: vec!["pushd".to_string(), "/tmp".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+        // Should have pushed original dir to stack
+        assert_eq!(shell_state.dir_stack.len(), 1);
+        assert_eq!(shell_state.dir_stack[0], original_dir.to_string_lossy());
+        // Note: We don't test actual directory change as it may not work in test environment
+    }
+
+    #[test]
+    fn test_execute_builtin_popd() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.dir_stack.push("/tmp".to_string());
+
+        let cmd = ShellCommand {
+            args: vec!["popd".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+        // Should have popped from stack
+        assert_eq!(shell_state.dir_stack.len(), 0);
+        // Note: We don't test actual directory change as it may not work in test environment
+    }
+
+    #[test]
+    fn test_execute_builtin_dirs() {
+        let cmd = ShellCommand {
+            args: vec!["dirs".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
     }
 }

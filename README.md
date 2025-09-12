@@ -24,6 +24,9 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `export`: Export variables to child processes
   - `unset`: Remove variables
   - `source`: Execute a script file with rush (bypasses shebang)
+  - `pushd`: Push directory onto stack and change to it
+  - `popd`: Pop directory from stack and change to it
+  - `dirs`: Display directory stack
   - `help`: Show available commands
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
   - **Command Completion**: Built-in commands and executables from PATH
@@ -112,6 +115,46 @@ case $filename in
 esac
 ```
 
+### Directory Stack Support (pushd/popd/dirs)
+
+Rush now supports directory stack management with the classic Unix `pushd`, `popd`, and `dirs` commands:
+
+- **`pushd <directory>`**: Changes to the specified directory and pushes the current directory onto the stack
+- **`popd`**: Pops the top directory from the stack and changes to it
+- **`dirs`**: Displays the current directory stack
+
+Example usage:
+```bash
+# Start in home directory
+pwd
+# /home/user
+
+# Push to /tmp and see stack
+pushd /tmp
+# /tmp /home/user
+
+# Push to another directory
+pushd /var
+# /var /tmp /home/user
+
+# See current stack
+dirs
+# /var /tmp /home/user
+
+# Pop back to /tmp
+popd
+# /tmp /home/user
+
+# Pop back to home
+popd
+# /home/user
+```
+
+This feature is particularly useful for:
+- Quickly switching between multiple working directories
+- Maintaining context when working on different parts of a project
+- Scripting scenarios that require directory navigation
+
 ## Installation
 
 ### Prerequisites
@@ -189,6 +232,10 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Redirect output: `echo "Hello" > hello.txt`
 - Change directory: `cd /tmp`
 - Print working directory: `pwd`
+- Directory stack management:
+  - Push directory: `pushd /tmp`
+  - Pop directory: `popd`
+  - Show stack: `dirs`
 - Execute a script: `source script.sh`
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
 - Execute elif example script: `source examples/elif_example.sh`
@@ -221,7 +268,7 @@ Rush consists of the following components:
 - **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
 - **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, and environment variable inheritance.
-- **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), and current directory.
+- **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, and directory stack.
 - **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`).
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
 
@@ -268,7 +315,7 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset)
+- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
 - Environment variable support (assignment, expansion, export, special variables)
