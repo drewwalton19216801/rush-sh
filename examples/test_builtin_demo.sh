@@ -1,4 +1,5 @@
-#!/usr/bin/env rush
+#!/usr/bin/env rush-sh
+
 # Test Builtin Demonstration Script
 # This script demonstrates the usage of the new test and [ builtins
 # with various options and conditional logic
