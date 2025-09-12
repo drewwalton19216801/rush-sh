@@ -139,6 +139,18 @@ impl ShellState {
         }
     }
 
+    /// Get the user@hostname string for the prompt
+    pub fn get_user_hostname(&self) -> String {
+        let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
+        let hostname = env::var("HOSTNAME").unwrap_or_else(|_| "hostname".to_string());
+        format!("{}@{}", user, hostname)
+    }
+
+    /// Get the full prompt string
+    pub fn get_prompt(&self) -> String {
+        format!("{}:{} $ ", self.get_user_hostname(), self.get_condensed_cwd())
+    }
+
     /// Set an alias
     pub fn set_alias(&mut self, name: &str, value: String) {
         self.aliases.insert(name.to_string(), value);
@@ -214,5 +226,22 @@ mod tests {
 
         assert!(!state.variables.contains_key("UNSET_VAR"));
         assert!(!state.exported.contains("UNSET_VAR"));
+    }
+
+    #[test]
+    fn test_get_user_hostname() {
+        let state = ShellState::new();
+        let user_hostname = state.get_user_hostname();
+        // Should contain @ since it's user@hostname format
+        assert!(user_hostname.contains('@'));
+    }
+
+    #[test]
+    fn test_get_prompt() {
+        let state = ShellState::new();
+        let prompt = state.get_prompt();
+        // Should end with $ and contain @
+        assert!(prompt.ends_with(" $ "));
+        assert!(prompt.contains('@'));
     }
 }

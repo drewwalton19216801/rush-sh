@@ -94,7 +94,7 @@ fn main() {
                     println!("\nReceived SIGTERM, exiting gracefully.");
                     break;
                 }
-                let prompt = format!("{} $ ", shell_state.get_condensed_cwd());
+                let prompt = shell_state.get_prompt();
                 let readline = rl.readline(&prompt);
                 match readline {
                     Ok(line) => {
