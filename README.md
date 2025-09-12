@@ -200,7 +200,6 @@ Example prompt displays:
 
 This feature provides context about your current location while keeping the prompt concise.
 
-## Installation
 ```bash
 # Basic command substitution
 echo "Current directory: $(pwd)"
