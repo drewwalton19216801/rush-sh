@@ -8,7 +8,6 @@ mod builtin_alias;
 mod builtin_bracket;
 mod builtin_cd;
 mod builtin_dirs;
-mod builtin_echo;
 mod builtin_env;
 mod builtin_exit;
 mod builtin_export;
@@ -35,7 +34,6 @@ pub trait Builtin {
 fn get_builtins() -> Vec<Box<dyn Builtin>> {
     vec![
         Box::new(builtin_cd::CdBuiltin),
-        Box::new(builtin_echo::EchoBuiltin),
         Box::new(builtin_pwd::PwdBuiltin),
         Box::new(builtin_env::EnvBuiltin),
         Box::new(builtin_exit::ExitBuiltin),
@@ -120,7 +118,6 @@ mod tests {
     #[test]
     fn test_is_builtin() {
         assert!(is_builtin("cd"));
-        assert!(is_builtin("echo"));
         assert!(is_builtin("pwd"));
         assert!(is_builtin("env"));
         assert!(is_builtin("exit"));
@@ -131,19 +128,7 @@ mod tests {
         assert!(is_builtin("["));
         assert!(!is_builtin("ls"));
         assert!(!is_builtin("grep"));
-    }
-
-    #[test]
-    fn test_execute_builtin_echo() {
-        let cmd = ShellCommand {
-            args: vec!["echo".to_string(), "hello".to_string(), "world".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        };
-        let mut shell_state = crate::state::ShellState::new();
-        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
-        assert_eq!(exit_code, 0);
+        assert!(!is_builtin("echo"));
     }
 
     #[test]
@@ -163,7 +148,6 @@ mod tests {
     fn test_get_builtin_commands() {
         let commands = get_builtin_commands();
         assert!(commands.contains(&"cd".to_string()));
-        assert!(commands.contains(&"echo".to_string()));
         assert!(commands.contains(&"pwd".to_string()));
         assert!(commands.contains(&"env".to_string()));
         assert!(commands.contains(&"exit".to_string()));
@@ -178,7 +162,7 @@ mod tests {
         assert!(commands.contains(&"unalias".to_string()));
         assert!(commands.contains(&"test".to_string()));
         assert!(commands.contains(&"[".to_string()));
-        assert_eq!(commands.len(), 16);
+        assert_eq!(commands.len(), 15);
     }
 
     #[test]

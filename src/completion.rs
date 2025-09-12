@@ -287,7 +287,6 @@ mod tests {
     fn test_builtin_commands() {
         let commands = RushCompleter::get_builtin_commands();
         assert!(commands.contains(&"cd".to_string()));
-        assert!(commands.contains(&"echo".to_string()));
         assert!(commands.contains(&"pwd".to_string()));
         assert!(commands.contains(&"exit".to_string()));
         assert!(commands.contains(&"help".to_string()));
@@ -297,9 +296,8 @@ mod tests {
     #[test]
     fn test_get_command_candidates() {
         let candidates = RushCompleter::get_command_candidates("e");
-        // Should include echo, env, exit
+        // Should include env, exit
         let displays: Vec<String> = candidates.iter().map(|c| c.display.clone()).collect();
-        assert!(displays.contains(&"echo".to_string()));
         assert!(displays.contains(&"env".to_string()));
         assert!(displays.contains(&"exit".to_string()));
     }

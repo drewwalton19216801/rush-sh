@@ -33,7 +33,6 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Built-in Commands**:
   - `cd`: Change directory
   - `exit`: Exit the shell
-  - `echo`: Print text
   - `pwd`: Print working directory
   - `env`: List environment variables
   - `export`: Export variables to child processes
@@ -508,7 +507,7 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
   - With pipes: `$(echo hello | grep ll) > output.txt`
   - Multiple commands: `echo "Output: $(echo 'First'; echo 'Second')"`
 - Tab completion:
-  - Complete commands: `cd` → `cd `, `e` → `echo `, `env `, `exit `
+  - Complete commands: `cd` → `cd `, `env `, `exit `
   - Complete files: `cat f` → `cat file.txt `
   - Complete directories: `cd src/` → `cd src/main/`
   - Complete from PATH: `l` → `ls `, `g` → `grep `
@@ -568,7 +567,7 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs, alias, unalias, test, [)
+- Built-in command functionality (cd, pwd, env, exit, help, source, export, unset, pushd, popd, dirs, alias, unalias, test, [)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)

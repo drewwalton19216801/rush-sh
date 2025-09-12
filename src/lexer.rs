@@ -64,10 +64,18 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
             } else {
                 // Variable expansion
                 let mut var_name = String::new();
-                
+
                 // Check for special single-character variables first
                 if let Some(&ch) = chars.peek() {
-                    if ch == '?' || ch == '$' || ch == '0' || ch == '#' || ch == '@' || ch == '*' || ch == '!' || ch.is_ascii_digit() {
+                    if ch == '?'
+                        || ch == '$'
+                        || ch == '0'
+                        || ch == '#'
+                        || ch == '@'
+                        || ch == '*'
+                        || ch == '!'
+                        || ch.is_ascii_digit()
+                    {
                         var_name.push(ch);
                         chars.next();
                     } else {
@@ -78,7 +86,7 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
                             .collect();
                     }
                 }
-                
+
                 if !var_name.is_empty() {
                     if let Some(val) = shell_state.get_var(&var_name) {
                         current.push_str(&val);
@@ -110,10 +118,18 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
             if ch == '$' {
                 chars.next(); // consume $
                 let mut var_name = String::new();
-                
+
                 // Check for special single-character variables first
                 if let Some(&ch) = chars.peek() {
-                    if ch == '?' || ch == '$' || ch == '0' || ch == '#' || ch == '@' || ch == '*' || ch == '!' || ch.is_ascii_digit() {
+                    if ch == '?'
+                        || ch == '$'
+                        || ch == '0'
+                        || ch == '#'
+                        || ch == '@'
+                        || ch == '*'
+                        || ch == '!'
+                        || ch.is_ascii_digit()
+                    {
                         var_name.push(ch);
                         chars.next();
                     } else {
@@ -124,7 +140,7 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
                             .collect();
                     }
                 }
-                
+
                 if !var_name.is_empty() {
                     if let Some(val) = shell_state.get_var(&var_name) {
                         final_result.push_str(&val);
@@ -578,11 +594,11 @@ mod tests {
     #[test]
     fn test_redirections() {
         let shell_state = crate::state::ShellState::new();
-        let result = lex("echo hello > output.txt", &shell_state).unwrap();
+        let result = lex("printf hello > output.txt", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
-                Token::Word("echo".to_string()),
+                Token::Word("printf".to_string()),
                 Token::Word("hello".to_string()),
                 Token::RedirOut,
                 Token::Word("output.txt".to_string())
@@ -593,11 +609,11 @@ mod tests {
     #[test]
     fn test_append_redirection() {
         let shell_state = crate::state::ShellState::new();
-        let result = lex("echo hello >> output.txt", &shell_state).unwrap();
+        let result = lex("printf hello >> output.txt", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
-                Token::Word("echo".to_string()),
+                Token::Word("printf".to_string()),
                 Token::Word("hello".to_string()),
                 Token::RedirAppend,
                 Token::Word("output.txt".to_string())
@@ -752,7 +768,7 @@ mod tests {
     #[test]
     fn test_if_tokens() {
         let shell_state = crate::state::ShellState::new();
-        let result = lex("if true; then echo yes; fi", &shell_state).unwrap();
+        let result = lex("if true; then printf yes; fi", &shell_state).unwrap();
         assert_eq!(
             result,
             vec![
@@ -760,7 +776,7 @@ mod tests {
                 Token::Word("true".to_string()),
                 Token::Semicolon,
                 Token::Then,
-                Token::Word("echo".to_string()),
+                Token::Word("printf".to_string()),
                 Token::Word("yes".to_string()),
                 Token::Semicolon,
                 Token::Fi,
