@@ -144,7 +144,7 @@ dependencies = [
 
 [[package]]
 name = "rush-sh"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "glob",
  "libc",
