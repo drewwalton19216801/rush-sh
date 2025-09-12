@@ -15,6 +15,8 @@ pub struct ShellState {
     pub script_name: String,
     /// Directory stack for pushd/popd
     pub dir_stack: Vec<String>,
+    /// Command aliases
+    pub aliases: HashMap<String, String>,
 }
 
 impl ShellState {
@@ -27,6 +29,7 @@ impl ShellState {
             shell_pid,
             script_name: "rush".to_string(),
             dir_stack: Vec::new(),
+            aliases: HashMap::new(),
         }
     }
 
@@ -134,6 +137,26 @@ impl ShellState {
             }
             Err(_) => "/?".to_string(), // fallback if can't get cwd
         }
+    }
+
+    /// Set an alias
+    pub fn set_alias(&mut self, name: &str, value: String) {
+        self.aliases.insert(name.to_string(), value);
+    }
+
+    /// Get an alias value
+    pub fn get_alias(&self, name: &str) -> Option<&String> {
+        self.aliases.get(name)
+    }
+
+    /// Remove an alias
+    pub fn remove_alias(&mut self, name: &str) {
+        self.aliases.remove(name);
+    }
+
+    /// Get all aliases
+    pub fn get_all_aliases(&self) -> &HashMap<String, String> {
+        &self.aliases
     }
 }
 

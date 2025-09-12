@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 
 use super::state::ShellState;
@@ -434,6 +435,50 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
         }
     }
     Ok(tokens)
+}
+
+/// Expand aliases in the token stream
+pub fn expand_aliases(
+    tokens: Vec<Token>,
+    shell_state: &ShellState,
+    expanded: &mut HashSet<String>,
+) -> Result<Vec<Token>, String> {
+    if tokens.is_empty() {
+        return Ok(tokens);
+    }
+
+    // Check if the first token is a word that could be an alias
+    if let Token::Word(ref word) = tokens[0] {
+        if let Some(alias_value) = shell_state.get_alias(word) {
+            // Check for recursion
+            if expanded.contains(word) {
+                return Err(format!("Alias '{}' recursion detected", word));
+            }
+
+            // Add to expanded set
+            expanded.insert(word.clone());
+
+            // Lex the alias value
+            let alias_tokens = lex(alias_value, shell_state)?;
+
+            // Expand aliases in the alias tokens recursively
+            let expanded_alias_tokens = expand_aliases(alias_tokens, shell_state, expanded)?;
+
+            // Remove from expanded set after processing
+            expanded.remove(word);
+
+            // Replace the first token with the expanded alias tokens
+            let mut result = expanded_alias_tokens;
+            result.extend_from_slice(&tokens[1..]);
+            Ok(result)
+        } else {
+            // No alias, return as is
+            Ok(tokens)
+        }
+    } else {
+        // Not a word, return as is
+        Ok(tokens)
+    }
 }
 
 #[cfg(test)]
@@ -897,5 +942,62 @@ mod tests {
                 Token::Word("\\n".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn test_expand_aliases_simple() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("ll", "ls -l".to_string());
+        let tokens = vec![Token::Word("ll".to_string())];
+        let result =
+            expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("ls".to_string()), Token::Word("-l".to_string())]
+        );
+    }
+
+    #[test]
+    fn test_expand_aliases_with_args() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("ll", "ls -l".to_string());
+        let tokens = vec![
+            Token::Word("ll".to_string()),
+            Token::Word("/tmp".to_string()),
+        ];
+        let result =
+            expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("ls".to_string()),
+                Token::Word("-l".to_string()),
+                Token::Word("/tmp".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_expand_aliases_no_alias() {
+        let shell_state = crate::state::ShellState::new();
+        let tokens = vec![Token::Word("ls".to_string())];
+        let result = expand_aliases(
+            tokens.clone(),
+            &shell_state,
+            &mut std::collections::HashSet::new(),
+        )
+        .unwrap();
+        assert_eq!(result, tokens);
+    }
+
+    #[test]
+    fn test_expand_aliases_recursion() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("a", "b".to_string());
+        shell_state.set_alias("b", "a".to_string());
+        let tokens = vec![Token::Word("a".to_string())];
+        let result = expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("recursion"));
     }
 }

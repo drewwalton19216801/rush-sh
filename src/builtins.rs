@@ -8,7 +8,7 @@ use crate::state::ShellState;
 
 const BUILTINS: &[&str] = &[
     "cd", "echo", "pwd", "env", "exit", "help", "source", "export", "unset", "pushd", "popd",
-    "dirs",
+    "dirs", "alias", "unalias",
 ];
 
 const BUILTIN_DESCRIPTIONS: &[(&str, &str)] = &[
@@ -24,6 +24,8 @@ const BUILTIN_DESCRIPTIONS: &[(&str, &str)] = &[
     ("pushd", "Push directory onto stack and change to it"),
     ("popd", "Pop directory from stack and change to it"),
     ("dirs", "Display directory stack"),
+    ("alias", "Define or display aliases"),
+    ("unalias", "Remove alias definitions"),
 ];
 
 pub fn is_builtin(cmd: &str) -> bool {
@@ -304,6 +306,59 @@ pub fn execute_builtin(
             print_dir_stack(shell_state, &mut output_writer);
             0
         }
+        "alias" => {
+            if cmd.args.len() == 1 {
+                // List all aliases
+                let aliases = shell_state.get_all_aliases();
+                if aliases.is_empty() {
+                    let _ = writeln!(output_writer);
+                } else {
+                    for (name, value) in aliases {
+                        let _ = writeln!(output_writer, "alias {}='{}'", name, value);
+                    }
+                }
+                0
+            } else if cmd.args.len() == 2 {
+                let arg = &cmd.args[1];
+                if let Some(eq_pos) = arg.find('=') {
+                    // Set alias: alias name=value
+                    let name = arg[..eq_pos].to_string();
+                    let value = arg[eq_pos + 1..].to_string();
+                    shell_state.set_alias(&name, value);
+                    0
+                } else {
+                    // Show specific alias
+                    if let Some(value) = shell_state.get_alias(arg) {
+                        let _ = writeln!(output_writer, "alias {}='{}'", arg, value);
+                        0
+                    } else {
+                        let _ = writeln!(output_writer, "alias: {}: not found", arg);
+                        1
+                    }
+                }
+            } else {
+                let _ = writeln!(output_writer, "alias: too many arguments");
+                1
+            }
+        }
+        "unalias" => {
+            if cmd.args.len() < 2 {
+                let _ = writeln!(output_writer, "unalias: missing alias name");
+                1
+            } else if cmd.args.len() > 2 {
+                let _ = writeln!(output_writer, "unalias: too many arguments");
+                1
+            } else {
+                let name = &cmd.args[1];
+                if shell_state.get_alias(name).is_some() {
+                    shell_state.remove_alias(name);
+                    0
+                } else {
+                    let _ = writeln!(output_writer, "unalias: {}: not found", name);
+                    1
+                }
+            }
+        }
         _ => 1,
     }
 }
@@ -320,6 +375,8 @@ mod tests {
         assert!(is_builtin("env"));
         assert!(is_builtin("exit"));
         assert!(is_builtin("help"));
+        assert!(is_builtin("alias"));
+        assert!(is_builtin("unalias"));
         assert!(!is_builtin("ls"));
         assert!(!is_builtin("grep"));
     }
@@ -365,7 +422,9 @@ mod tests {
         assert!(commands.contains(&"pushd".to_string()));
         assert!(commands.contains(&"popd".to_string()));
         assert!(commands.contains(&"dirs".to_string()));
-        assert_eq!(commands.len(), 12);
+        assert!(commands.contains(&"alias".to_string()));
+        assert!(commands.contains(&"unalias".to_string()));
+        assert_eq!(commands.len(), 14);
     }
 
     #[test]
@@ -417,5 +476,128 @@ mod tests {
         let mut shell_state = crate::state::ShellState::new();
         let exit_code = execute_builtin(&cmd, &mut shell_state, None);
         assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_set() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string(), "ll=ls -l".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_alias("ll"), Some(&"ls -l".to_string()));
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_list() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("ll", "ls -l".to_string());
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_show() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string(), "ll".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("ll", "ls -l".to_string());
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_show_not_found() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string(), "nonexistent".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("test_alias", "ls -l".to_string());
+
+        // Verify alias exists
+        assert_eq!(
+            shell_state.get_alias("test_alias"),
+            Some(&"ls -l".to_string())
+        );
+
+        // Remove the alias
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "test_alias".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+
+        // Verify alias is removed
+        assert_eq!(shell_state.get_alias("test_alias"), None);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_not_found() {
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "nonexistent".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_no_args() {
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_too_many_args() {
+        let cmd = ShellCommand {
+            args: vec![
+                "unalias".to_string(),
+                "arg1".to_string(),
+                "arg2".to_string(),
+            ],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 1);
     }
 }

@@ -128,14 +128,23 @@ fn main() {
 fn execute_line(line: &str, shell_state: &mut state::ShellState) {
     match lexer::lex(line, shell_state) {
         Ok(tokens) => {
-            match parser::parse(tokens) {
-                Ok(ast) => {
-                    let exit_code = executor::execute(ast, shell_state);
-                    shell_state.set_last_exit_code(exit_code);
-                    // TODO: For now, no printing of AST
+            match lexer::expand_aliases(tokens, shell_state, &mut std::collections::HashSet::new())
+            {
+                Ok(expanded_tokens) => {
+                    match parser::parse(expanded_tokens) {
+                        Ok(ast) => {
+                            let exit_code = executor::execute(ast, shell_state);
+                            shell_state.set_last_exit_code(exit_code);
+                            // TODO: For now, no printing of AST
+                        }
+                        Err(e) => {
+                            eprintln!("Parse error: {}", e);
+                            shell_state.set_last_exit_code(1);
+                        }
+                    }
                 }
                 Err(e) => {
-                    eprintln!("Parse error: {}", e);
+                    eprintln!("Alias expansion error: {}", e);
                     shell_state.set_last_exit_code(1);
                 }
             }
