@@ -148,12 +148,17 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 tokens.push(Token::Newline);
                 chars.next();
             }
-            '"' => {
+            '"' if !in_single_quote => {
+                chars.next(); // consume the quote
                 if in_double_quote {
-                    tokens.push(Token::Word(current.clone()));
-                    current.clear();
+                    // End of double quote - push the accumulated content as a word
+                    if !current.is_empty() {
+                        tokens.push(Token::Word(current.clone()));
+                        current.clear();
+                    }
                     in_double_quote = false;
-                } else if !in_single_quote {
+                } else {
+                    // Start of double quote - push any accumulated content first
                     if !current.is_empty() {
                         if let Some(keyword) = is_keyword(&current) {
                             tokens.push(keyword);
@@ -164,7 +169,6 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                     in_double_quote = true;
                 }
-                chars.next();
             }
             '\'' => {
                 if in_single_quote {
@@ -239,11 +243,16 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         current.push(')');
                     }
                 } else {
-                    // Variable expansion
-                    let var_name: String = chars
-                        .by_ref()
-                        .take_while(|c| c.is_alphanumeric() || *c == '_')
-                        .collect();
+                    // Variable expansion - collect var name without consuming the terminating character
+                    let mut var_name = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch.is_alphanumeric() || ch == '_' {
+                            var_name.push(ch);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
                     if !var_name.is_empty() {
                         if let Some(val) = shell_state.get_var(&var_name) {
                             current.push_str(&val);
@@ -256,7 +265,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                 }
             }
-            '|' => {
+            '|' if !in_double_quote && !in_single_quote => {
                 if !current.is_empty() {
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
@@ -267,6 +276,14 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
                 tokens.push(Token::Pipe);
                 chars.next();
+                // Skip any whitespace after the pipe
+                while let Some(&ch) = chars.peek() {
+                    if ch == ' ' || ch == '\t' {
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
             }
             '>' => {
                 if !current.is_empty() {
@@ -862,5 +879,23 @@ mod tests {
         assert!(matches!(result[0], Token::Word(_)));
         assert_eq!(result[1], Token::RedirOut);
         assert_eq!(result[2], Token::Word("output.txt".to_string()));
+    }
+
+    #[test]
+    fn test_variable_in_quotes_with_pipe() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_var("PATH", "/usr/bin:/bin".to_string());
+        let result = lex("echo \"$PATH\" | tr ':' '\\n'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("/usr/bin:/bin".to_string()),
+                Token::Pipe,
+                Token::Word("tr".to_string()),
+                Token::Word(":".to_string()),
+                Token::Word("\\n".to_string())
+            ]
+        );
     }
 }
