@@ -13,6 +13,8 @@ pub struct ShellState {
     pub shell_pid: u32,
     /// Script name or command ($0)
     pub script_name: String,
+    /// Directory stack for pushd/popd
+    pub dir_stack: Vec<String>,
 }
 
 impl ShellState {
@@ -24,6 +26,7 @@ impl ShellState {
             last_exit_code: 0,
             shell_pid,
             script_name: "rush".to_string(),
+            dir_stack: Vec::new(),
         }
     }
 
