@@ -168,17 +168,26 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
 }
 
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
+    // Process the entire script at once to handle multi-line constructs
+    let mut script_content = String::new();
+
     for line in content.lines() {
-        let line = line.trim();
-        // Skip shebang lines and empty lines
-        if line.is_empty() || line.starts_with("#!") {
+        // Skip shebang lines
+        if line.starts_with("#!") {
             continue;
         }
-        // Skip comment lines
-        if line.starts_with("#") {
+        // Skip pure comment lines (but not inline comments)
+        if line.trim_start().starts_with("#") && !line.contains(|c: char| !c.is_whitespace() && c != '#') {
             continue;
         }
-        execute_line(line, shell_state);
+        // Add the line to our script content
+        script_content.push_str(line);
+        script_content.push('\n');
+    }
+
+    // Now execute the entire script content as one unit
+    if !script_content.trim().is_empty() {
+        execute_line(&script_content, shell_state);
     }
 }
 
