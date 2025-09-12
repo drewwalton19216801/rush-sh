@@ -377,7 +377,9 @@ mod tests {
         // Should have pushed original dir to stack
         assert_eq!(shell_state.dir_stack.len(), 1);
         assert_eq!(shell_state.dir_stack[0], original_dir.to_string_lossy());
-        // Note: We don't test actual directory change as it may not work in test environment
+
+        // Restore original directory for test cleanup
+        let _ = std::env::set_current_dir(&original_dir);
     }
 
     #[test]
