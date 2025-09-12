@@ -2,6 +2,10 @@
 name = "rush-sh"
 version = "0.1.0"
 edition = "2021"
+description = "A POSIX sh-compatible shell written in Rust"
+license-file = "LICENSE.txt"
+documentation = "https://github.com/drewwalton19216801/rush-sh"
+repository = "https://github.com/drewwalton19216801/rush-sh"
 
 [dependencies]
 rustyline = { version = "17.0.1", features = ["signal-hook"] }
