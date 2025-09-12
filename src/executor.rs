@@ -5,6 +5,39 @@ use std::process::{Command, Stdio};
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
 
+fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
+    let mut expanded_args = Vec::new();
+
+    for arg in args {
+        if arg.contains('*') || arg.contains('?') || arg.contains('[') {
+            // Try to expand wildcard
+            match glob::glob(arg) {
+                Ok(paths) => {
+                    let mut matches: Vec<String> = paths
+                        .filter_map(|p| p.ok())
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect();
+                    if matches.is_empty() {
+                        // No matches, keep literal
+                        expanded_args.push(arg.clone());
+                    } else {
+                        // Sort for consistent behavior
+                        matches.sort();
+                        expanded_args.extend(matches);
+                    }
+                }
+                Err(_e) => {
+                    // Invalid pattern, keep literal
+                    expanded_args.push(arg.clone());
+                }
+            }
+        } else {
+            expanded_args.push(arg.clone());
+        }
+    }
+    Ok(expanded_args)
+}
+
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
@@ -80,11 +113,27 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         return 0;
     }
 
-    if crate::builtins::is_builtin(&cmd.args[0]) {
-        crate::builtins::execute_builtin(cmd, shell_state, None)
+    let expanded_args = match expand_wildcards(&cmd.args) {
+        Ok(args) => args,
+        Err(_) => return 1,
+    };
+
+    if expanded_args.is_empty() {
+        return 0;
+    }
+
+    if crate::builtins::is_builtin(&expanded_args[0]) {
+        // Create a temporary ShellCommand with expanded args
+        let temp_cmd = ShellCommand {
+            args: expanded_args,
+            input: cmd.input.clone(),
+            output: cmd.output.clone(),
+            append: cmd.append.clone(),
+        };
+        crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
     } else {
-        let mut command = Command::new(&cmd.args[0]);
-        command.args(&cmd.args[1..]);
+        let mut command = Command::new(&expanded_args[0]);
+        command.args(&expanded_args[1..]);
 
         // Set environment for child process
         let child_env = shell_state.get_env_for_child();
@@ -156,9 +205,24 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
         let is_last = i == commands.len() - 1;
 
-        if crate::builtins::is_builtin(&cmd.args[0]) {
+        let expanded_args = match expand_wildcards(&cmd.args) {
+            Ok(args) => args,
+            Err(_) => return 1,
+        };
+
+        if expanded_args.is_empty() {
+            continue;
+        }
+
+        if crate::builtins::is_builtin(&expanded_args[0]) {
             // Built-ins in pipelines are tricky - for now, execute them separately
             // This is not perfect but better than nothing
+            let temp_cmd = ShellCommand {
+                args: expanded_args,
+                input: cmd.input.clone(),
+                output: cmd.output.clone(),
+                append: cmd.append.clone(),
+            };
             if !is_last {
                 // Create a safe pipe
                 let (reader, writer) = match pipe() {
@@ -170,17 +234,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 };
                 // Execute builtin with writer for output capture
                 exit_code =
-                    crate::builtins::execute_builtin(cmd, shell_state, Some(Box::new(writer)));
+                    crate::builtins::execute_builtin(&temp_cmd, shell_state, Some(Box::new(writer)));
                 // Use reader for next command's stdin
                 previous_stdout = Some(Stdio::from(reader));
             } else {
                 // Last command: no need to pipe output
-                exit_code = crate::builtins::execute_builtin(cmd, shell_state, None);
+                exit_code = crate::builtins::execute_builtin(&temp_cmd, shell_state, None);
                 previous_stdout = None;
             }
         } else {
-            let mut command = Command::new(&cmd.args[0]);
-            command.args(&cmd.args[1..]);
+            let mut command = Command::new(&expanded_args[0]);
+            command.args(&expanded_args[1..]);
 
             // Set environment for child process
             let child_env = shell_state.get_env_for_child();
