@@ -44,6 +44,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `dirs`: Display directory stack
   - `alias`: Define or display aliases
   - `unalias`: Remove alias definitions
+  - `test` / `[`: POSIX-compatible test builtin with string and file tests
   - `help`: Show available commands
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
   - **Command Completion**: Built-in commands and executables from PATH
@@ -316,6 +317,77 @@ alias mkcd='mkdir -p "$1" && cd "$1"'  # Note: $1 won't work as expected
 - Built-in protection against infinite recursion
 - Aliases work in all execution modes (interactive, script, command)
 
+### Test Builtin with Conditional Logic
+
+Rush now provides comprehensive support for the POSIX `test` builtin command and its `[` bracket syntax, enabling powerful conditional logic in shell scripts:
+
+- **String Tests**: Check if strings are empty (`-z`) or non-empty (`-n`)
+- **File Tests**: Test file existence (`-e`), regular files (`-f`), and directories (`-d`)
+- **Dual Syntax Support**: Both `test` and `[` syntax work identically
+- **POSIX Compliance**: Full compatibility with standard test command behavior
+- **Error Handling**: Proper exit codes (0=true, 1=false, 2=error)
+- **Integration**: Seamless integration with shell control structures
+
+Example usage:
+
+```bash
+# String tests
+if test -z ""; then echo "Empty string"; fi
+if [ -n "hello" ]; then echo "Non-empty string"; fi
+
+# File tests
+if test -e "/tmp/file.txt"; then echo "File exists"; fi
+if [ -d "/tmp" ]; then echo "Is directory"; fi
+if test -f "/etc/passwd"; then echo "Is regular file"; fi
+
+# Complex conditions
+if [ -n "$MY_VAR" ] && test -e "$CONFIG_FILE"; then
+    echo "Variable set and config file exists"
+fi
+
+# Error handling
+test -x "invalid_option"  # Returns exit code 2
+exit_code=$?
+if [ $exit_code -eq 2 ]; then echo "Invalid option used"; fi
+```
+
+**Key Features:**
+
+- **String Operations**: `-z` (zero length) and `-n` (non-zero length) tests
+- **File Operations**: `-e` (exists), `-f` (regular file), `-d` (directory)
+- **Bracket Syntax**: `[ condition ]` works identically to `test condition`
+- **Exit Codes**: 0 (true), 1 (false), 2 (error/invalid usage)
+- **Variable Expansion**: Variables are properly expanded in test conditions
+- **Nested Conditions**: Works with complex if/elif/else structures
+
+**Advanced Usage:**
+
+```bash
+# Variable existence checks
+MY_VAR="hello world"
+if test -n "$MY_VAR"; then
+    echo "MY_VAR is set to: $MY_VAR"
+fi
+
+# Safe file operations
+TARGET_FILE="/tmp/safe_file.txt"
+if test -e "$TARGET_FILE"; then
+    echo "File exists, backing up..."
+    mv "$TARGET_FILE" "$TARGET_FILE.backup"
+fi
+
+# Directory creation with checks
+TARGET_DIR="/tmp/test_dir"
+if test -d "$TARGET_DIR"; then
+    echo "Directory already exists"
+else
+    mkdir -p "$TARGET_DIR"
+    echo "Directory created"
+fi
+```
+
+The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
+
 ## Installation
 
 ### Prerequisites
@@ -422,6 +494,11 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
     - Glob patterns: `case file.txt in *.txt) echo "Text file" ;; *.jpg) echo "Image" ;; *) echo "Other" ;; esac`
     - Multiple patterns: `case file in *.txt|*.md) echo "Document" ;; *.exe|*.bin) echo "Executable" ;; *) echo "Other" ;; esac`
     - Character classes: `case letter in [abc]) echo "A, B, or C" ;; *) echo "Other letter" ;; esac`
+- Test builtin for conditional logic:
+  - String tests: `if test -z "$VAR"; then echo "Variable is empty"; fi`
+  - File tests: `if [ -f "/etc/passwd" ]; then echo "File exists"; fi`
+  - Combined conditions: `if test -n "$NAME" && [ -d "/tmp" ]; then echo "Ready"; fi`
+  - Error handling: `test -x "invalid"; echo "Exit code: $?"`
 - Command substitution:
   - Basic substitution: `echo "Current dir: $(pwd)"`
   - Backtick syntax: `echo "Files: `ls | wc -l`"`
@@ -491,7 +568,7 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs, alias, unalias)
+- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs, alias, unalias, test, [)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
