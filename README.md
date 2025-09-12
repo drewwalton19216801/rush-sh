@@ -42,6 +42,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `pushd`: Push directory onto stack and change to it
   - `popd`: Pop directory from stack and change to it
   - `dirs`: Display directory stack
+  - `alias`: Define or display aliases
+  - `unalias`: Remove alias definitions
   - `help`: Show available commands
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
   - **Command Completion**: Built-in commands and executables from PATH
@@ -58,6 +60,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 Rush now provides comprehensive environment variable support with full POSIX compliance:
 
 - **Variable Assignment**: Support for both simple and quoted assignments
+
   ```bash
   MY_VAR=hello
   MY_VAR="hello world"
@@ -65,12 +68,14 @@ Rush now provides comprehensive environment variable support with full POSIX com
   ```
 
 - **Variable Expansion**: Expand variables in commands with `$VAR` syntax
+
   ```bash
   echo "Hello $NAME"
   echo "Current directory: $PWD"
   ```
 
 - **Special Variables**: Built-in support for special shell variables
+
   ```bash
   echo "Last exit code: $?"
   echo "Shell PID: $$"
@@ -78,12 +83,14 @@ Rush now provides comprehensive environment variable support with full POSIX com
   ```
 
 - **Export Mechanism**: Export variables to child processes
+
   ```bash
   export MY_VAR
   export NEW_VAR=value
   ```
 
 - **Variable Management**: Full lifecycle management with `unset`
+
   ```bash
   unset MY_VAR
   ```
@@ -94,6 +101,7 @@ Rush now provides comprehensive environment variable support with full POSIX com
   - Command string mode: Variables work in `-c` command strings
 
 Example usage:
+
 ```bash
 # Set and use variables
 MY_VAR="Hello from Rush"
@@ -120,6 +128,7 @@ Rush now supports advanced case statements with full glob pattern matching capab
 - **Performance**: Efficient pattern matching using the `glob` crate
 
 Example usage:
+
 ```bash
 case $filename in
     *.txt|*.md) echo "Text file" ;;
@@ -139,6 +148,7 @@ Rush now supports directory stack management with the classic Unix `pushd`, `pop
 - **`dirs`**: Displays the current directory stack
 
 Example usage:
+
 ```bash
 # Start in home directory
 pwd
@@ -166,6 +176,7 @@ popd
 ```
 
 This feature is particularly useful for:
+
 - Quickly switching between multiple working directories
 - Maintaining context when working on different parts of a project
 - Scripting scenarios that require directory navigation
@@ -192,6 +203,7 @@ Rush now displays a condensed version of the current working directory in the in
 - **Dynamic Updates**: The prompt updates automatically when changing directories
 
 Example prompt displays:
+
 ```bash
 /h/d/p/r/rush $
 /u/b/s/project $
@@ -222,10 +234,87 @@ echo "Combined output: $(echo 'Hello'; echo 'World')"
 ```
 
 Command substitution works seamlessly with:
+
 - **Pipes and Redirections**: `$(echo hello | grep ll) > output.txt`
 - **Variable Expansion**: `echo $(echo $HOME)`
 - **Quoted Strings**: `echo "Path: $(pwd)"`
 - **Complex Commands**: `$(find . -name "*.rs" -exec wc -l {} \;)`
+
+### Built-in Alias Support
+
+Rush now provides comprehensive built-in alias support, allowing you to create shortcuts for frequently used commands:
+
+- **Create Aliases**: Define shortcuts with `alias name=value` syntax
+- **List Aliases**: View all defined aliases with `alias` command
+- **Show Specific Alias**: Display a single alias with `alias name`
+- **Remove Aliases**: Delete aliases with `unalias name`
+- **Automatic Expansion**: Aliases are expanded automatically during command execution
+- **Recursion Prevention**: Built-in protection against infinite alias loops
+
+Example usage:
+
+```bash
+# Create aliases
+alias ll='ls -l'
+alias la='ls -la'
+alias ..='cd ..'
+alias grep='grep --color=auto'
+
+# List all aliases
+alias
+# Output:
+# alias ll='ls -l'
+# alias la='ls -la'
+# alias ..='cd ..'
+# alias grep='grep --color=auto'
+
+# Show specific alias
+alias ll
+# Output: alias ll='ls -l'
+
+# Use aliases (they expand automatically)
+ll
+la /tmp
+..
+
+# Remove aliases
+unalias ll
+alias  # ll is no longer listed
+
+# Error handling
+unalias nonexistent  # Shows: unalias: nonexistent: not found
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Follows standard alias syntax and behavior
+- **Session Persistence**: Aliases persist throughout the shell session
+- **Complex Commands**: Support for multi-word commands and pipelines
+- **Variable Expansion**: Variables in aliases are expanded when defined
+- **Safety**: Automatic detection and prevention of recursive aliases
+
+**Advanced Usage:**
+
+```bash
+# Complex aliases with pipes and redirections
+alias backup='cp -r ~/Documents ~/Documents.backup && echo "Backup completed"'
+alias count='find . -name "*.rs" | wc -l'
+
+# Aliases with variables (expanded at definition time)
+MY_DIR="/tmp"
+alias cleanup="rm -rf $MY_DIR/*"
+
+# Function-like aliases
+alias mkcd='mkdir -p "$1" && cd "$1"'  # Note: $1 won't work as expected
+```
+
+**Implementation Details:**
+
+- Aliases are expanded after lexing but before parsing
+- Only the first word of a command can be an alias
+- Expansion is recursive (aliases can reference other aliases)
+- Built-in protection against infinite recursion
+- Aliases work in all execution modes (interactive, script, command)
 
 ## Installation
 
@@ -314,6 +403,12 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Execute case example script: `source examples/case_example.sh`
 - Execute variables example script: `source examples/variables_example.sh`
 - Execute complex example script with command substitution: `source examples/complex_example.sh`
+- Alias management:
+  - Create aliases: `alias ll='ls -l'; alias la='ls -la'`
+  - List aliases: `alias`
+  - Show specific alias: `alias ll`
+  - Remove aliases: `unalias ll`
+  - Use aliases: `ll /tmp`
 - Environment variables:
   - Set variables: `MY_VAR=hello; echo $MY_VAR`
   - Export variables: `export MY_VAR=value; env | grep MY_VAR`
@@ -346,11 +441,11 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 
 Rush consists of the following components:
 
-- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion and command substitution (`$(...)` and `` `...` `` syntax).
+- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion, command substitution (`$(...)` and `` `...` `` syntax), and alias expansion.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
 - **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, and command substitution execution.
-- **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, and directory stack.
-- **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`).
+- **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, directory stack, and command aliases.
+- **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`) and alias management (`alias`, `unalias`).
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
 
 ## Dependencies
@@ -396,7 +491,7 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs)
+- Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs, alias, unalias)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
