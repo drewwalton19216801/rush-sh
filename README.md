@@ -1,4 +1,6 @@
-# Rush Shell
+# Rush - A Unix shell written in Rust
+
+<img src="images/rush_logo.png" alt="Rush Logo" width="50%" style="display: block; margin: 20px auto;">
 
 Rush is a POSIX sh-compatible shell implemented in Rust. It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports basic shell features like command execution, pipes, redirections, environment variables, and built-in commands.
 
