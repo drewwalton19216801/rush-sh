@@ -344,7 +344,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error spawning command '{}': {}", cmd.args[0], e);
+                    eprintln!("Error spawning command '{}': {}", expanded_args[0], e);
                     exit_code = 1;
                 }
             }
