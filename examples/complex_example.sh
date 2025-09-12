@@ -1,6 +1,4 @@
-#!/usr/bin/env rush
-
-#!/usr/bin/env rush
+#!/usr/bin/env rush-sh
 
 # Complex example for Rush shell
 # This script demonstrates multiple features: variables, pipes, redirections,

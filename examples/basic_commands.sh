@@ -1,4 +1,4 @@
-#!/usr/bin/env rush
+#!/usr/bin/env rush-sh
 
 # Basic commands example for Rush shell
 # This script tests built-in commands

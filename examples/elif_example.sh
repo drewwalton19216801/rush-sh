@@ -1,4 +1,4 @@
-#!/usr/bin/env rush
+#!/usr/bin/env rush-sh
 
 # Elif example for Rush shell
 

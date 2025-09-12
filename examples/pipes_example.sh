@@ -1,4 +1,4 @@
-#!/usr/bin/env rush
+#!/usr/bin/env rush-sh
 
 # Pipes example for Rush shell
 # This script tests piping commands

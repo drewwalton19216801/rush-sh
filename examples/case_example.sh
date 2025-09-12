@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env rush-sh
+
 # Example case statement with glob patterns
 
 echo "Testing case with glob patterns"
