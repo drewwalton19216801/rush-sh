@@ -81,8 +81,66 @@ impl super::Builtin for TestBuiltin {
                 }
             }
         } else {
-            // No option provided - invalid usage for now
-            // In a full implementation, this might handle other test forms
+            // Check for numeric comparison operators
+            if args.len() >= 3 {
+                if let Some(operator) = args[1].strip_prefix('-') {
+                    match operator {
+                        "eq" => {
+                            let left = args[0].parse::<i32>();
+                            let right = args[2].parse::<i32>();
+                            match (left, right) {
+                                (Ok(l), Ok(r)) => return if l == r { 0 } else { 1 },
+                                _ => return 2, // Invalid numeric arguments
+                            }
+                        }
+                        "ne" => {
+                            let left = args[0].parse::<i32>();
+                            let right = args[2].parse::<i32>();
+                            match (left, right) {
+                                (Ok(l), Ok(r)) => return if l != r { 0 } else { 1 },
+                                _ => return 2, // Invalid numeric arguments
+                            }
+                        }
+                        "lt" => {
+                            let left = args[0].parse::<i32>();
+                            let right = args[2].parse::<i32>();
+                            match (left, right) {
+                                (Ok(l), Ok(r)) => return if l < r { 0 } else { 1 },
+                                _ => return 2, // Invalid numeric arguments
+                            }
+                        }
+                        "le" => {
+                            let left = args[0].parse::<i32>();
+                            let right = args[2].parse::<i32>();
+                            match (left, right) {
+                                (Ok(l), Ok(r)) => return if l <= r { 0 } else { 1 },
+                                _ => return 2, // Invalid numeric arguments
+                            }
+                        }
+                        "gt" => {
+                            let left = args[0].parse::<i32>();
+                            let right = args[2].parse::<i32>();
+                            match (left, right) {
+                                (Ok(l), Ok(r)) => return if l > r { 0 } else { 1 },
+                                _ => return 2, // Invalid numeric arguments
+                            }
+                        }
+                        "ge" => {
+                            let left = args[0].parse::<i32>();
+                            let right = args[2].parse::<i32>();
+                            match (left, right) {
+                                (Ok(l), Ok(r)) => return if l >= r { 0 } else { 1 },
+                                _ => return 2, // Invalid numeric arguments
+                            }
+                        }
+                        _ => {
+                            // Invalid operator
+                            return 2;
+                        }
+                    }
+                }
+            }
+            // No valid option or numeric comparison found
             return 2;
         }
     }
@@ -335,5 +393,260 @@ mod tests {
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
         assert_eq!(exit_code, 1); // No arguments should return false (1)
+    }
+
+    #[test]
+    fn test_eq_equal() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-eq".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 2 == 2 should return true (0)
+    }
+
+    #[test]
+    fn test_eq_not_equal() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-eq".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // 2 == 3 should return false (1)
+    }
+
+    #[test]
+    fn test_ne_equal() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-ne".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // 2 != 2 should return false (1)
+    }
+
+    #[test]
+    fn test_ne_not_equal() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-ne".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 2 != 3 should return true (0)
+    }
+
+    #[test]
+    fn test_lt_less() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-lt".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 2 < 3 should return true (0)
+    }
+
+    #[test]
+    fn test_lt_greater() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "3".to_string(), "-lt".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // 3 < 2 should return false (1)
+    }
+
+    #[test]
+    fn test_le_less() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-le".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 2 <= 3 should return true (0)
+    }
+
+    #[test]
+    fn test_le_equal() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-le".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 2 <= 2 should return true (0)
+    }
+
+    #[test]
+    fn test_le_greater() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "3".to_string(), "-le".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // 3 <= 2 should return false (1)
+    }
+
+    #[test]
+    fn test_gt_greater() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "3".to_string(), "-gt".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 3 > 2 should return true (0)
+    }
+
+    #[test]
+    fn test_gt_less() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-gt".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // 2 > 3 should return false (1)
+    }
+
+    #[test]
+    fn test_ge_greater() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "3".to_string(), "-ge".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 3 >= 2 should return true (0)
+    }
+
+    #[test]
+    fn test_ge_equal() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-ge".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // 2 >= 2 should return true (0)
+    }
+
+    #[test]
+    fn test_ge_less() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-ge".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // 2 >= 3 should return false (1)
+    }
+
+    #[test]
+    fn test_numeric_invalid_left_operand() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "abc".to_string(), "-eq".to_string(), "2".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 2); // Invalid left operand should return error (2)
+    }
+
+    #[test]
+    fn test_numeric_invalid_right_operand() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-eq".to_string(), "abc".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 2); // Invalid right operand should return error (2)
+    }
+
+    #[test]
+    fn test_numeric_invalid_operator() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "2".to_string(), "-invalid".to_string(), "3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 2); // Invalid operator should return error (2)
     }
 }

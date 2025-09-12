@@ -168,28 +168,59 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
 }
 
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
-    // Process the entire script at once to handle multi-line constructs
-    let mut script_content = String::new();
-
+    let mut current_block = String::new();
+    let mut in_if_block = false;
+    let mut if_depth = 0;
+    let mut in_case_block = false;
+    
     for line in content.lines() {
         // Skip shebang lines
         if line.starts_with("#!") {
             continue;
         }
-        // Skip pure comment lines (but not inline comments)
-        if line.trim_start().starts_with("#")
-            && !line.contains(|c: char| !c.is_whitespace() && c != '#')
-        {
+        
+        // Skip pure comment lines
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("#") {
             continue;
         }
-        // Add the line to our script content
-        script_content.push_str(line);
-        script_content.push('\n');
+        
+        // Check for multi-line construct keywords
+        if trimmed.starts_with("if ") || trimmed == "if" {
+            in_if_block = true;
+            if_depth += 1;
+        } else if trimmed.starts_with("case ") || trimmed == "case" {
+            in_case_block = true;
+        }
+        
+        // Add line to current block
+        if !current_block.is_empty() {
+            current_block.push('\n');
+        }
+        current_block.push_str(line);
+        
+        // Check for end of multi-line constructs
+        if in_if_block && trimmed == "fi" {
+            if_depth -= 1;
+            if if_depth == 0 {
+                in_if_block = false;
+                execute_line(&current_block, shell_state);
+                current_block.clear();
+            }
+        } else if in_case_block && trimmed == "esac" {
+            in_case_block = false;
+            execute_line(&current_block, shell_state);
+            current_block.clear();
+        } else if !in_if_block && !in_case_block {
+            // Execute single-line commands immediately
+            execute_line(&current_block, shell_state);
+            current_block.clear();
+        }
     }
-
-    // Now execute the entire script content as one unit
-    if !script_content.trim().is_empty() {
-        execute_line(&script_content, shell_state);
+    
+    // Execute any remaining block
+    if !current_block.trim().is_empty() {
+        execute_line(&current_block, shell_state);
     }
 }
 

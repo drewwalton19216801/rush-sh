@@ -63,10 +63,22 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
                 chars.next();
             } else {
                 // Variable expansion
-                let var_name: String = chars
-                    .by_ref()
-                    .take_while(|c| c.is_alphanumeric() || *c == '_')
-                    .collect();
+                let mut var_name = String::new();
+                
+                // Check for special single-character variables first
+                if let Some(&ch) = chars.peek() {
+                    if ch == '?' || ch == '$' || ch == '0' || ch == '#' || ch == '@' || ch == '*' || ch == '!' || ch.is_ascii_digit() {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
+                        // Regular variable name
+                        var_name = chars
+                            .by_ref()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect();
+                    }
+                }
+                
                 if !var_name.is_empty() {
                     if let Some(val) = shell_state.get_var(&var_name) {
                         current.push_str(&val);
@@ -97,10 +109,22 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
         while let Some(&ch) = chars.peek() {
             if ch == '$' {
                 chars.next(); // consume $
-                let var_name: String = chars
-                    .by_ref()
-                    .take_while(|c| c.is_alphanumeric() || *c == '_')
-                    .collect();
+                let mut var_name = String::new();
+                
+                // Check for special single-character variables first
+                if let Some(&ch) = chars.peek() {
+                    if ch == '?' || ch == '$' || ch == '0' || ch == '#' || ch == '@' || ch == '*' || ch == '!' || ch.is_ascii_digit() {
+                        var_name.push(ch);
+                        chars.next();
+                    } else {
+                        // Regular variable name
+                        var_name = chars
+                            .by_ref()
+                            .take_while(|c| c.is_alphanumeric() || *c == '_')
+                            .collect();
+                    }
+                }
+                
                 if !var_name.is_empty() {
                     if let Some(val) = shell_state.get_var(&var_name) {
                         final_result.push_str(&val);
