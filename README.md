@@ -7,6 +7,11 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Command Execution**: Execute external commands and built-in commands.
 - **Pipes**: Chain commands using the `|` operator.
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
+- **Command Substitution**: Execute commands and substitute their output inline.
+  - `$(command)` syntax: `echo "Current dir: $(pwd)"`
+  - `` `command` `` syntax: `echo "Files: `ls | wc -l`"`
+  - Variable expansion within substitutions: `echo $(echo $HOME)`
+  - Error handling with fallback to literal syntax
 - **Environment Variables**: Full support for variable assignment, expansion, and export.
   - Variable assignment: `VAR=value` and `VAR="quoted value"`
   - Variable expansion: `$VAR` and special variables (`$?`, `$$`, `$0`)
@@ -155,6 +160,45 @@ This feature is particularly useful for:
 - Maintaining context when working on different parts of a project
 - Scripting scenarios that require directory navigation
 
+### Command Substitution
+
+Rush now supports comprehensive command substitution with both `$(...)` and `` `...` `` syntax:
+
+- **Dual Syntax Support**: Both `$(command)` and `` `command` `` work identically
+- **Immediate Execution**: Commands are executed during lexing and output is substituted inline
+- **Variable Expansion**: Variables within substituted commands are properly expanded
+- **Error Handling**: Failed commands fall back to literal syntax preservation
+- **Environment Integration**: Child processes inherit shell environment variables
+- **Multi-line Support**: Handles commands with multiple lines and special characters
+
+Example usage:
+```bash
+# Basic command substitution
+echo "Current directory: $(pwd)"
+echo "Files in directory: `ls | wc -l`"
+
+# Variable assignments with substitutions
+PROJECT_DIR="$(pwd)/src"
+FILE_COUNT="$(ls *.rs 2>/dev/null | wc -l)"
+
+# Complex expressions
+echo "Rust version: $(rustc --version | cut -d' ' -f2)"
+echo "Files modified today: $(find . -name '*.rs' -mtime -1 | wc -l)"
+
+# Error handling
+NONEXISTENT="$(nonexistent_command 2>/dev/null || echo 'command failed')"
+echo "Result: $NONEXISTENT"
+
+# Multiple commands
+echo "Combined output: $(echo 'Hello'; echo 'World')"
+```
+
+Command substitution works seamlessly with:
+- **Pipes and Redirections**: `$(echo hello | grep ll) > output.txt`
+- **Variable Expansion**: `echo $(echo $HOME)`
+- **Quoted Strings**: `echo "Path: $(pwd)"`
+- **Complex Commands**: `$(find . -name "*.rs" -exec wc -l {} \;)`
+
 ## Installation
 
 ### Prerequisites
@@ -241,6 +285,7 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 - Execute elif example script: `source examples/elif_example.sh`
 - Execute case example script: `source examples/case_example.sh`
 - Execute variables example script: `source examples/variables_example.sh`
+- Execute complex example script with command substitution: `source examples/complex_example.sh`
 - Environment variables:
   - Set variables: `MY_VAR=hello; echo $MY_VAR`
   - Export variables: `export MY_VAR=value; env | grep MY_VAR`
@@ -254,6 +299,14 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
     - Glob patterns: `case file.txt in *.txt) echo "Text file" ;; *.jpg) echo "Image" ;; *) echo "Other" ;; esac`
     - Multiple patterns: `case file in *.txt|*.md) echo "Document" ;; *.exe|*.bin) echo "Executable" ;; *) echo "Other" ;; esac`
     - Character classes: `case letter in [abc]) echo "A, B, or C" ;; *) echo "Other letter" ;; esac`
+- Command substitution:
+  - Basic substitution: `echo "Current dir: $(pwd)"`
+  - Backtick syntax: `echo "Files: `ls | wc -l`"`
+  - Variable assignments: `PROJECT_DIR="$(pwd)/src"`
+  - Complex commands: `echo "Rust version: $(rustc --version | cut -d' ' -f2)"`
+  - Error handling: `RESULT="$(nonexistent_command 2>/dev/null || echo 'failed')"`
+  - With pipes: `$(echo hello | grep ll) > output.txt`
+  - Multiple commands: `echo "Output: $(echo 'First'; echo 'Second')"`
 - Tab completion:
   - Complete commands: `cd` → `cd `, `e` → `echo `, `env `, `exit `
   - Complete files: `cat f` → `cat file.txt `
@@ -265,9 +318,9 @@ Unlike script mode (running `./target/release/rush script.sh`), the `source` com
 
 Rush consists of the following components:
 
-- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion.
+- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion and command substitution (`$(...)` and `` `...` `` syntax).
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
-- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, and environment variable inheritance.
+- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, and command substitution execution.
 - **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, and directory stack.
 - **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`).
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
@@ -286,11 +339,11 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 
 ### Test Structure
 
-- **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, and edge cases.
+- **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, command substitution, and edge cases.
 - **Parser Tests** AST construction for single commands, pipelines, redirections, if-elif-else statements, case statements with glob patterns, and error cases.
-- **Executor Tests** Built-in commands, external command execution, pipelines, redirections, case statement execution with glob matching, and error handling.
+- **Executor Tests** Built-in commands, external command execution, pipelines, redirections, case statement execution with glob matching, command substitution execution, and error handling.
 - **Completion Tests** Tab-completion for commands, files, directories, path traversal, and edge cases.
-- **Integration Tests** End-to-end command execution, including pipelines, redirections, variable expansion, and case statements.
+- **Integration Tests** End-to-end command execution, including pipelines, redirections, variable expansion, case statements, and command substitution.
 - **Main Tests** Error handling for invalid directory changes.
 
 ### Running Tests
@@ -318,6 +371,7 @@ The test suite provides extensive coverage of:
 - Built-in command functionality (cd, echo, pwd, env, exit, help, source, export, unset, pushd, popd, dirs)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
+- Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
 - Environment variable support (assignment, expansion, export, special variables)
 - Variable scoping and inheritance
 - Tab-completion for commands, files, and directories

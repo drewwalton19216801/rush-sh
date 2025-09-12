@@ -41,7 +41,29 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
-            shell_state.set_var(&var, value);
+            // Expand substitutions in the value
+            let tokens = crate::lexer::lex(&value, shell_state).unwrap_or_else(|_| vec![]);
+            let expanded_value = if !tokens.is_empty() {
+                // Collect all Word tokens and join them with spaces
+                let words: Vec<String> = tokens
+                    .iter()
+                    .filter_map(|token| {
+                        if let crate::lexer::Token::Word(word) = token {
+                            Some(word.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if !words.is_empty() {
+                    words.join(" ")
+                } else {
+                    value
+                }
+            } else {
+                value
+            };
+            shell_state.set_var(&var, expanded_value);
             0
         }
         Ast::Pipeline(commands) => {
@@ -233,8 +255,11 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                     }
                 };
                 // Execute builtin with writer for output capture
-                exit_code =
-                    crate::builtins::execute_builtin(&temp_cmd, shell_state, Some(Box::new(writer)));
+                exit_code = crate::builtins::execute_builtin(
+                    &temp_cmd,
+                    shell_state,
+                    Some(Box::new(writer)),
+                );
                 // Use reader for next command's stdin
                 previous_stdout = Some(Stdio::from(reader));
             } else {
