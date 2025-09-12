@@ -55,6 +55,10 @@ impl RushCompleter {
         words_before.is_empty() || (words_before.len() == 1 && !before_cursor.ends_with(' '))
     }
 
+    fn looks_like_file_path(word: &str) -> bool {
+        word.starts_with("./") || word.starts_with("/") || word.starts_with("~/") || word.contains("/")
+    }
+
     fn get_command_candidates(prefix: &str) -> Vec<RushCandidate> {
         let mut candidates = Vec::new();
 
@@ -247,9 +251,13 @@ impl Completer for RushCompleter {
         let prefix = &line[..pos];
         let last_space = prefix.rfind(' ').unwrap_or(0);
         let start = if last_space > 0 { last_space + 1 } else { 0 };
+        let current_word = &line[start..pos];
 
-        let candidates = if Self::is_first_word(line, pos) {
-            Self::get_command_candidates(&line[start..pos])
+        let is_first = Self::is_first_word(line, pos);
+        let is_file_path = Self::looks_like_file_path(current_word);
+
+        let candidates = if is_first && !is_file_path {
+            Self::get_command_candidates(current_word)
         } else {
             Self::get_file_candidates(line, pos)
         };
