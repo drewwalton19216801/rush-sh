@@ -22,7 +22,12 @@ mod builtin_unset;
 pub trait Builtin {
     fn name(&self) -> &'static str;
     fn description(&self) -> &'static str;
-    fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32;
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32;
 }
 
 fn get_builtins() -> Vec<Box<dyn Builtin>> {
@@ -49,7 +54,10 @@ pub fn is_builtin(cmd: &str) -> bool {
 }
 
 pub fn get_builtin_commands() -> Vec<String> {
-    get_builtins().iter().map(|b| b.name().to_string()).collect()
+    get_builtins()
+        .iter()
+        .map(|b| b.name().to_string())
+        .collect()
 }
 
 pub fn execute_builtin(
