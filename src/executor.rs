@@ -425,7 +425,7 @@ mod tests {
     #[test]
     fn test_execute_single_command_builtin() {
         let cmd = ShellCommand {
-            args: vec!["echo".to_string(), "test".to_string()],
+            args: vec!["true".to_string()],
             input: None,
             output: None,
             append: None,
@@ -466,7 +466,7 @@ mod tests {
     fn test_execute_pipeline() {
         let commands = vec![
             ShellCommand {
-                args: vec!["echo".to_string(), "hello".to_string()],
+                args: vec!["printf".to_string(), "hello".to_string()],
                 input: None,
                 output: None,
                 append: None,

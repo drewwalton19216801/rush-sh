@@ -37,7 +37,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It supports interactive
 
    - Environment variables: std::collections::HashMap<String, String>
    - Current working directory: managed via built-in cd
-   - Built-ins: cd (change dir), exit (quit), echo (print), pwd (print dir), env (list vars)
+   - Built-ins: cd (change dir), exit (quit), pwd (print dir), env (list vars)
 
 5. **Main Loop**:
 

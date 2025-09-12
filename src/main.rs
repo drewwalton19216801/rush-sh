@@ -172,19 +172,19 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut in_if_block = false;
     let mut if_depth = 0;
     let mut in_case_block = false;
-    
+
     for line in content.lines() {
         // Skip shebang lines
         if line.starts_with("#!") {
             continue;
         }
-        
+
         // Skip pure comment lines
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with("#") {
             continue;
         }
-        
+
         // Check for multi-line construct keywords
         if trimmed.starts_with("if ") || trimmed == "if" {
             in_if_block = true;
@@ -192,13 +192,13 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
         } else if trimmed.starts_with("case ") || trimmed == "case" {
             in_case_block = true;
         }
-        
+
         // Add line to current block
         if !current_block.is_empty() {
             current_block.push('\n');
         }
         current_block.push_str(line);
-        
+
         // Check for end of multi-line constructs
         if in_if_block && trimmed == "fi" {
             if_depth -= 1;
@@ -217,7 +217,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             current_block.clear();
         }
     }
-    
+
     // Execute any remaining block
     if !current_block.trim().is_empty() {
         execute_line(&current_block, shell_state);
@@ -261,18 +261,8 @@ mod tests {
     }
 
     #[test]
-    fn test_integration_echo() {
-        let line = "echo hello world";
-        let mut shell_state = state::ShellState::new();
-        let tokens = lexer::lex(line, &shell_state).unwrap();
-        let ast = parser::parse(tokens).unwrap();
-        let exit_code = executor::execute(ast, &mut shell_state);
-        assert_eq!(exit_code, 0);
-    }
-
-    #[test]
     fn test_integration_pipeline() {
-        let line = "echo hello | cat";
+        let line = "printf hello | cat";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
@@ -283,7 +273,7 @@ mod tests {
     #[test]
     fn test_integration_redirection_output() {
         let temp_file = "/tmp/rush_test_output.txt";
-        let line = &format!("echo test > {}", temp_file);
+        let line = &format!("printf test > {}", temp_file);
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
@@ -311,7 +301,7 @@ mod tests {
     #[test]
     fn test_integration_variable_expansion() {
         std::env::set_var("TEST_INTEGRATION_VAR", "expanded");
-        let line = "echo $TEST_INTEGRATION_VAR";
+        let line = "printf $TEST_INTEGRATION_VAR";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();

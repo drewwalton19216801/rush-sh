@@ -675,7 +675,7 @@ mod tests {
     #[test]
     fn test_output_redirection() {
         let tokens = vec![
-            Token::Word("echo".to_string()),
+            Token::Word("printf".to_string()),
             Token::Word("hello".to_string()),
             Token::RedirOut,
             Token::Word("output.txt".to_string()),
@@ -684,7 +684,7 @@ mod tests {
         assert_eq!(
             result,
             Ast::Pipeline(vec![ShellCommand {
-                args: vec!["echo".to_string(), "hello".to_string()],
+                args: vec!["printf".to_string(), "hello".to_string()],
                 input: None,
                 output: Some("output.txt".to_string()),
                 append: None,
@@ -695,7 +695,7 @@ mod tests {
     #[test]
     fn test_append_redirection() {
         let tokens = vec![
-            Token::Word("echo".to_string()),
+            Token::Word("printf".to_string()),
             Token::Word("hello".to_string()),
             Token::RedirAppend,
             Token::Word("output.txt".to_string()),
@@ -704,7 +704,7 @@ mod tests {
         assert_eq!(
             result,
             Ast::Pipeline(vec![ShellCommand {
-                args: vec!["echo".to_string(), "hello".to_string()],
+                args: vec!["printf".to_string(), "hello".to_string()],
                 input: None,
                 output: None,
                 append: Some("output.txt".to_string()),
@@ -812,7 +812,7 @@ mod tests {
             Token::Word("true".to_string()),
             Token::Semicolon,
             Token::Then,
-            Token::Word("echo".to_string()),
+            Token::Word("printf".to_string()),
             Token::Word("yes".to_string()),
             Token::Semicolon,
             Token::Fi,
@@ -831,7 +831,7 @@ mod tests {
                 panic!("condition not pipeline");
             }
             if let Ast::Pipeline(cmds) = &**then_branch {
-                assert_eq!(cmds[0].args, vec!["echo", "yes"]);
+                assert_eq!(cmds[0].args, vec!["printf", "yes"]);
             } else {
                 panic!("then_branch not pipeline");
             }
@@ -848,14 +848,14 @@ mod tests {
             Token::Word("false".to_string()),
             Token::Semicolon,
             Token::Then,
-            Token::Word("echo".to_string()),
+            Token::Word("printf".to_string()),
             Token::Word("no".to_string()),
             Token::Semicolon,
             Token::Elif,
             Token::Word("true".to_string()),
             Token::Semicolon,
             Token::Then,
-            Token::Word("echo".to_string()),
+            Token::Word("printf".to_string()),
             Token::Word("yes".to_string()),
             Token::Semicolon,
             Token::Fi,
@@ -867,21 +867,21 @@ mod tests {
         } = result
         {
             assert_eq!(branches.len(), 2);
-            // First branch: false -> echo no
+            // First branch: false -> printf no
             let (condition1, then1) = &branches[0];
             if let Ast::Pipeline(cmds) = &**condition1 {
                 assert_eq!(cmds[0].args, vec!["false"]);
             }
             if let Ast::Pipeline(cmds) = &**then1 {
-                assert_eq!(cmds[0].args, vec!["echo", "no"]);
+                assert_eq!(cmds[0].args, vec!["printf", "no"]);
             }
-            // Second branch: true -> echo yes
+            // Second branch: true -> printf yes
             let (condition2, then2) = &branches[1];
             if let Ast::Pipeline(cmds) = &**condition2 {
                 assert_eq!(cmds[0].args, vec!["true"]);
             }
             if let Ast::Pipeline(cmds) = &**then2 {
-                assert_eq!(cmds[0].args, vec!["echo", "yes"]);
+                assert_eq!(cmds[0].args, vec!["printf", "yes"]);
             }
             assert!(else_branch.is_none());
         } else {
