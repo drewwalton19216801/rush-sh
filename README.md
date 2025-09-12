@@ -512,4 +512,4 @@ This project is licensed under the MIT License. See [LICENSE.txt](LICENSE.txt) f
 
 ## Project URL
 
-[https://github.com/drewwalton19216801/rush](https://github.com/drewwalton19216801/rush)
+[https://github.com/drewwalton19216801/rush-sh](https://github.com/drewwalton19216801/rush-sh)
