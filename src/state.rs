@@ -148,7 +148,9 @@ impl ShellState {
 
     /// Get the full prompt string
     pub fn get_prompt(&self) -> String {
-        format!("{}:{} $ ", self.get_user_hostname(), self.get_condensed_cwd())
+        let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
+        let prompt_char = if user == "root" { "#" } else { "$" };
+        format!("{}:{} {} ", self.get_user_hostname(), self.get_condensed_cwd(), prompt_char)
     }
 
     /// Set an alias
