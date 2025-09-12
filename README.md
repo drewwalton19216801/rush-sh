@@ -180,6 +180,25 @@ Rush now supports comprehensive command substitution with both `$(...)` and `` `
 - **Multi-line Support**: Handles commands with multiple lines and special characters
 
 Example usage:
+
+### Condensed Current Working Directory in Prompt
+
+Rush now displays a condensed version of the current working directory in the interactive prompt:
+
+- **Condensed Path**: Each directory except the last is abbreviated to its first letter (preserving case)
+- **Full Last Directory**: The final directory in the path is shown in full
+- **Dynamic Updates**: The prompt updates automatically when changing directories
+
+Example prompt displays:
+```bash
+/h/d/p/r/rush $
+/u/b/s/project $
+/h/u/Documents $
+```
+
+This feature provides context about your current location while keeping the prompt concise.
+
+## Installation
 ```bash
 # Basic command substitution
 echo "Current directory: $(pwd)"
@@ -239,7 +258,7 @@ Run the shell without arguments to enter interactive mode:
 ./target/release/rush
 ```
 
-You'll see a prompt `$ ` where you can type commands. Type `exit` to quit.
+You'll see a prompt showing the condensed current working directory followed by `$ ` (e.g., `/h/d/p/r/rush $ `) where you can type commands. Type `exit` to quit.
 
 ### Script Mode
 

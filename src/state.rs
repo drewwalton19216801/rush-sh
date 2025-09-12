@@ -101,6 +101,40 @@ impl ShellState {
     pub fn set_script_name(&mut self, name: &str) {
         self.script_name = name.to_string();
     }
+
+    /// Get the condensed current working directory for the prompt
+    pub fn get_condensed_cwd(&self) -> String {
+        match std::env::current_dir() {
+            Ok(path) => {
+                let path_str = path.to_string_lossy();
+                let components: Vec<&str> = path_str.split('/').collect();
+                if components.is_empty() || (components.len() == 1 && components[0].is_empty()) {
+                    return "/".to_string();
+                }
+                let mut result = String::new();
+                for (i, comp) in components.iter().enumerate() {
+                    if comp.is_empty() {
+                        continue; // skip leading empty component
+                    }
+                    if i == components.len() - 1 {
+                        result.push('/');
+                        result.push_str(comp);
+                    } else {
+                        result.push('/');
+                        if let Some(first) = comp.chars().next() {
+                            result.push(first);
+                        }
+                    }
+                }
+                if result.is_empty() {
+                    "/".to_string()
+                } else {
+                    result
+                }
+            }
+            Err(_) => "/?".to_string(), // fallback if can't get cwd
+        }
+    }
 }
 
 impl Default for ShellState {

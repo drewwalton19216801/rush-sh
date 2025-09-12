@@ -91,7 +91,8 @@ fn main() {
                 println!("\nReceived SIGTERM, exiting gracefully.");
                 break;
             }
-            let readline = rl.readline("$ ");
+            let prompt = format!("{} $ ", shell_state.get_condensed_cwd());
+            let readline = rl.readline(&prompt);
             match readline {
                 Ok(line) => {
                     let _ = rl.add_history_entry(line.as_str());
