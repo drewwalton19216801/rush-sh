@@ -246,7 +246,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else {
                     // Variable expansion - collect var name without consuming the terminating character
                     let mut var_name = String::new();
-                    
+
                     // Check for special variables first
                     if let Some(&ch) = chars.peek() {
                         if ch == '?' || ch == '$' || ch.is_ascii_digit() {
@@ -269,7 +269,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             }
                         }
                     }
-                    
+
                     if !var_name.is_empty() {
                         // For now, keep all variables as literals - they will be expanded during execution
                         current.push('$');

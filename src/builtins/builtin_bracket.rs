@@ -15,7 +15,12 @@ impl super::Builtin for BracketBuiltin {
         "Evaluate conditional expressions (same as test)"
     }
 
-    fn run(&self, cmd: &ShellCommand, _shell_state: &mut ShellState, _output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        _shell_state: &mut ShellState,
+        _output_writer: &mut dyn Write,
+    ) -> i32 {
         // Skip the command name (args[0] is "[")
         let args = &cmd.args[1..];
 
@@ -56,7 +61,11 @@ impl super::Builtin for BracketBuiltin {
                     }
                     match fs::metadata(&test_args[1]) {
                         Ok(metadata) => {
-                            if metadata.is_file() { 0 } else { 1 }
+                            if metadata.is_file() {
+                                0
+                            } else {
+                                1
+                            }
                         }
                         Err(_) => 1, // File doesn't exist
                     }
@@ -68,7 +77,11 @@ impl super::Builtin for BracketBuiltin {
                     }
                     match fs::metadata(&test_args[1]) {
                         Ok(metadata) => {
-                            if metadata.is_dir() { 0 } else { 1 }
+                            if metadata.is_dir() {
+                                0
+                            } else {
+                                1
+                            }
                         }
                         Err(_) => 1, // File doesn't exist
                     }
@@ -99,8 +112,8 @@ impl super::Builtin for BracketBuiltin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use crate::builtins::Builtin;
+    use std::fs::File;
 
     #[test]
     fn test_bracket_builtin_name() {
@@ -111,14 +124,22 @@ mod tests {
     #[test]
     fn test_bracket_builtin_description() {
         let builtin = BracketBuiltin;
-        assert_eq!(builtin.description(), "Evaluate conditional expressions (same as test)");
+        assert_eq!(
+            builtin.description(),
+            "Evaluate conditional expressions (same as test)"
+        );
     }
 
     #[test]
     fn test_bracket_z_option_empty_string() {
         let builtin = BracketBuiltin;
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-z".to_string(), "".to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-z".to_string(),
+                "".to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -133,7 +154,12 @@ mod tests {
     fn test_bracket_z_option_non_empty_string() {
         let builtin = BracketBuiltin;
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-z".to_string(), "hello".to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-z".to_string(),
+                "hello".to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -178,7 +204,12 @@ mod tests {
     fn test_bracket_n_option_empty_string() {
         let builtin = BracketBuiltin;
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-n".to_string(), "".to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-n".to_string(),
+                "".to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -193,7 +224,12 @@ mod tests {
     fn test_bracket_n_option_non_empty_string() {
         let builtin = BracketBuiltin;
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-n".to_string(), "hello".to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-n".to_string(),
+                "hello".to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -212,7 +248,12 @@ mod tests {
         File::create(temp_path).unwrap();
 
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-e".to_string(), temp_path.to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-e".to_string(),
+                temp_path.to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -230,7 +271,12 @@ mod tests {
     fn test_bracket_e_option_non_existing_file() {
         let builtin = BracketBuiltin;
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-e".to_string(), "/non/existing/file".to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-e".to_string(),
+                "/non/existing/file".to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -245,7 +291,12 @@ mod tests {
     fn test_bracket_invalid_option() {
         let builtin = BracketBuiltin;
         let cmd = ShellCommand {
-            args: vec!["[".to_string(), "-x".to_string(), "arg".to_string(), "]".to_string()],
+            args: vec![
+                "[".to_string(),
+                "-x".to_string(),
+                "arg".to_string(),
+                "]".to_string(),
+            ],
             input: None,
             output: None,
             append: None,

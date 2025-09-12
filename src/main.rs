@@ -177,7 +177,9 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             continue;
         }
         // Skip pure comment lines (but not inline comments)
-        if line.trim_start().starts_with("#") && !line.contains(|c: char| !c.is_whitespace() && c != '#') {
+        if line.trim_start().starts_with("#")
+            && !line.contains(|c: char| !c.is_whitespace() && c != '#')
+        {
             continue;
         }
         // Add the line to our script content

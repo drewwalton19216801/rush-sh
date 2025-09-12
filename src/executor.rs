@@ -5,7 +5,6 @@ use std::process::{Command, Stdio};
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
 
-
 fn expand_variables_in_args(args: &[String], shell_state: &ShellState) -> Vec<String> {
     let mut expanded_args = Vec::new();
 
