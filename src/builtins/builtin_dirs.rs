@@ -32,7 +32,12 @@ impl super::Builtin for DirsBuiltin {
         "Display directory stack"
     }
 
-    fn run(&self, _cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        _cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         print_dir_stack(shell_state, output_writer);
         0
     }

@@ -18,7 +18,12 @@ impl super::Builtin for HelpBuiltin {
         "Show this help message"
     }
 
-    fn run(&self, _cmd: &ShellCommand, _shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        _cmd: &ShellCommand,
+        _shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         // Attempt to write the header, handling potential errors
         if writeln!(output_writer, "Rush Shell v{}", env!("CARGO_PKG_VERSION")).is_err()
             || writeln!(output_writer, "").is_err()

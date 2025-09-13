@@ -19,7 +19,12 @@ impl super::Builtin for EnvBuiltin {
         "Print environment variables"
     }
 
-    fn run(&self, _cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        _cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         // Show exported shell variables first
         for var_name in &shell_state.exported {
             if let Some(value) = shell_state.variables.get(var_name) {

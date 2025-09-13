@@ -18,7 +18,12 @@ impl super::Builtin for AliasBuiltin {
         "Define or display aliases"
     }
 
-    fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         if cmd.args.len() == 1 {
             // List all aliases
             let aliases = shell_state.get_all_aliases();

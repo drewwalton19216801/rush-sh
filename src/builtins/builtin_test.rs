@@ -19,7 +19,12 @@ impl super::Builtin for TestBuiltin {
         "Evaluate conditional expressions"
     }
 
-    fn run(&self, cmd: &ShellCommand, _shell_state: &mut ShellState, _output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        _shell_state: &mut ShellState,
+        _output_writer: &mut dyn Write,
+    ) -> i32 {
         // Handle both "test" and "[" commands
         let is_bracket = cmd.args[0] == "[";
         let args = if is_bracket {
@@ -62,7 +67,11 @@ impl super::Builtin for TestBuiltin {
                     }
                     match fs::metadata(&args[1]) {
                         Ok(metadata) => {
-                            if metadata.is_file() { 0 } else { 1 }
+                            if metadata.is_file() {
+                                0
+                            } else {
+                                1
+                            }
                         }
                         Err(_) => 1, // File doesn't exist
                     }
@@ -74,7 +83,11 @@ impl super::Builtin for TestBuiltin {
                     }
                     match fs::metadata(&args[1]) {
                         Ok(metadata) => {
-                            if metadata.is_dir() { 0 } else { 1 }
+                            if metadata.is_dir() {
+                                0
+                            } else {
+                                1
+                            }
                         }
                         Err(_) => 1, // File doesn't exist
                     }
@@ -163,8 +176,8 @@ impl super::Builtin for TestBuiltin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
     use crate::builtins::Builtin;
+    use std::fs::File;
 
     #[test]
     fn test_test_builtin_name() {
@@ -294,7 +307,11 @@ mod tests {
     fn test_e_option_non_existing_file() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "-e".to_string(), "/non/existing/file".to_string()],
+            args: vec![
+                "test".to_string(),
+                "-e".to_string(),
+                "/non/existing/file".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -413,7 +430,12 @@ mod tests {
     fn test_eq_equal() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-eq".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-eq".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -428,7 +450,12 @@ mod tests {
     fn test_eq_not_equal() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-eq".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-eq".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -443,7 +470,12 @@ mod tests {
     fn test_ne_equal() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-ne".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-ne".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -458,7 +490,12 @@ mod tests {
     fn test_ne_not_equal() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-ne".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-ne".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -473,7 +510,12 @@ mod tests {
     fn test_lt_less() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-lt".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-lt".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -488,7 +530,12 @@ mod tests {
     fn test_lt_greater() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "3".to_string(), "-lt".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "3".to_string(),
+                "-lt".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -503,7 +550,12 @@ mod tests {
     fn test_le_less() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-le".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-le".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -518,7 +570,12 @@ mod tests {
     fn test_le_equal() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-le".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-le".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -533,7 +590,12 @@ mod tests {
     fn test_le_greater() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "3".to_string(), "-le".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "3".to_string(),
+                "-le".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -548,7 +610,12 @@ mod tests {
     fn test_gt_greater() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "3".to_string(), "-gt".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "3".to_string(),
+                "-gt".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -563,7 +630,12 @@ mod tests {
     fn test_gt_less() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-gt".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-gt".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -578,7 +650,12 @@ mod tests {
     fn test_ge_greater() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "3".to_string(), "-ge".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "3".to_string(),
+                "-ge".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -593,7 +670,12 @@ mod tests {
     fn test_ge_equal() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-ge".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-ge".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -608,7 +690,12 @@ mod tests {
     fn test_ge_less() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-ge".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-ge".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -623,7 +710,12 @@ mod tests {
     fn test_numeric_invalid_left_operand() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "abc".to_string(), "-eq".to_string(), "2".to_string()],
+            args: vec![
+                "test".to_string(),
+                "abc".to_string(),
+                "-eq".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -638,7 +730,12 @@ mod tests {
     fn test_numeric_invalid_right_operand() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-eq".to_string(), "abc".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-eq".to_string(),
+                "abc".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -653,7 +750,12 @@ mod tests {
     fn test_numeric_invalid_operator() {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
-            args: vec!["test".to_string(), "2".to_string(), "-invalid".to_string(), "3".to_string()],
+            args: vec![
+                "test".to_string(),
+                "2".to_string(),
+                "-invalid".to_string(),
+                "3".to_string(),
+            ],
             input: None,
             output: None,
             append: None,

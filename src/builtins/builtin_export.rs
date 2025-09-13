@@ -18,7 +18,12 @@ impl super::Builtin for ExportBuiltin {
         "Export variables to environment"
     }
 
-    fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         if cmd.args.len() < 2 {
             // Print all exported variables
             for var_name in &shell_state.exported {
@@ -80,7 +85,10 @@ mod tests {
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
         assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.get_var("NEW_VAR"), Some("new_value".to_string()));
+        assert_eq!(
+            shell_state.get_var("NEW_VAR"),
+            Some("new_value".to_string())
+        );
         assert!(shell_state.exported.contains("NEW_VAR"));
     }
 

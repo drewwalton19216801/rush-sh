@@ -21,7 +21,12 @@ impl super::Builtin for SourceBuiltin {
         "Execute a script file with rush"
     }
 
-    fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         if cmd.args.len() < 2 {
             let _ = writeln!(output_writer, "source: missing script file operand");
             return 1;
@@ -95,8 +100,14 @@ mod tests {
         assert_eq!(exit_code, 0);
 
         // Verify that variables are now available in the shell state
-        assert_eq!(shell_state.get_var("TEST_VAR_FROM_SOURCE"), Some("shared_value".to_string()));
-        assert_eq!(shell_state.get_var("ANOTHER_VAR"), Some("another_value".to_string()));
+        assert_eq!(
+            shell_state.get_var("TEST_VAR_FROM_SOURCE"),
+            Some("shared_value".to_string())
+        );
+        assert_eq!(
+            shell_state.get_var("ANOTHER_VAR"),
+            Some("another_value".to_string())
+        );
 
         // Clean up
         fs::remove_file(temp_script).unwrap();

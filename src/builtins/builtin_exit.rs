@@ -18,7 +18,12 @@ impl super::Builtin for ExitBuiltin {
         "Exit the shell"
     }
 
-    fn run(&self, _cmd: &ShellCommand, _shell_state: &mut ShellState, _output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        _cmd: &ShellCommand,
+        _shell_state: &mut ShellState,
+        _output_writer: &mut dyn Write,
+    ) -> i32 {
         // For now, just return 0; main handles exit
         0
     }

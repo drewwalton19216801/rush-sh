@@ -19,7 +19,12 @@ impl super::Builtin for PwdBuiltin {
         "Print working directory"
     }
 
-    fn run(&self, _cmd: &ShellCommand, _shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        _cmd: &ShellCommand,
+        _shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         match env::current_dir() {
             Ok(path) => {
                 let _ = writeln!(output_writer, "{}", path.display());

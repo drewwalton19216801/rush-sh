@@ -20,7 +20,12 @@ impl super::Builtin for CdBuiltin {
         "Change directory"
     }
 
-    fn run(&self, cmd: &ShellCommand, _shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        _shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         let dir = if cmd.args.len() > 1 {
             cmd.args[1].clone()
         } else {

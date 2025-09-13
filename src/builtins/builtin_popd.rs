@@ -34,7 +34,12 @@ impl super::Builtin for PopdBuiltin {
         "Pop directory from stack and change to it"
     }
 
-    fn run(&self, _cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        _cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         if shell_state.dir_stack.is_empty() {
             let _ = writeln!(output_writer, "popd: directory stack empty");
             1

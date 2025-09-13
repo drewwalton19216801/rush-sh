@@ -34,7 +34,12 @@ impl super::Builtin for PushdBuiltin {
         "Push directory onto stack and change to it"
     }
 
-    fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         if cmd.args.len() < 2 {
             let _ = writeln!(output_writer, "pushd: missing directory operand");
             1

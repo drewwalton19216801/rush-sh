@@ -107,7 +107,10 @@ pub fn execute_builtin(
     };
 
     let builtins = get_builtins();
-    if let Some(builtin) = builtins.into_iter().find(|b| b.names().contains(&cmd.args[0].as_str())) {
+    if let Some(builtin) = builtins
+        .into_iter()
+        .find(|b| b.names().contains(&cmd.args[0].as_str()))
+    {
         builtin.run(cmd, shell_state, &mut *output_writer)
     } else {
         1

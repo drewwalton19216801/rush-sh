@@ -1,5 +1,5 @@
-use std::io::pipe;
 use std::fs::File;
+use std::io::pipe;
 use std::process::{Command, Stdio};
 
 use super::parser::{Ast, ShellCommand};

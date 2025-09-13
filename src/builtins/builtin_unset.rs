@@ -18,7 +18,12 @@ impl super::Builtin for UnsetBuiltin {
         "Unset shell variables"
     }
 
-    fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
         if cmd.args.len() < 2 {
             let _ = writeln!(output_writer, "unset: missing variable name");
             1
@@ -44,7 +49,10 @@ mod tests {
         };
         let mut shell_state = ShellState::new();
         shell_state.set_var("TEST_VAR", "test_value".to_string());
-        assert_eq!(shell_state.get_var("TEST_VAR"), Some("test_value".to_string()));
+        assert_eq!(
+            shell_state.get_var("TEST_VAR"),
+            Some("test_value".to_string())
+        );
         let builtin = UnsetBuiltin;
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
