@@ -1,7 +1,7 @@
 [package]
 name = "rush-sh"
 version = "0.3.0"
-edition = "2021"
+edition = "2024"
 description = "A POSIX sh-compatible shell written in Rust"
 license = "MIT"
 documentation = "https://github.com/drewwalton19216801/rush-sh"

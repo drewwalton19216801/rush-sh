@@ -39,7 +39,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     // Check if it's an assignment
     if tokens.len() == 2 {
         // Check for pattern: VAR= VALUE
-        if let (Token::Word(ref var_eq), Token::Word(ref value)) = (&tokens[0], &tokens[1]) {
+        if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1]) {
             if let Some(eq_pos) = var_eq.find('=') {
                 if eq_pos > 0 && eq_pos < var_eq.len() - 1 {
                     let var = var_eq[..eq_pos].to_string();
@@ -58,7 +58,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
 
     // Check if it's an assignment (VAR= VALUE)
     if tokens.len() == 2 {
-        if let (Token::Word(ref var_eq), Token::Word(ref value)) = (&tokens[0], &tokens[1]) {
+        if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1]) {
             if let Some(eq_pos) = var_eq.find('=') {
                 if eq_pos > 0 && eq_pos == var_eq.len() - 1 {
                     let var = var_eq[..eq_pos].to_string();

@@ -371,14 +371,14 @@ mod tests {
 
     #[test]
     fn test_integration_variable_expansion() {
-        std::env::set_var("TEST_INTEGRATION_VAR", "expanded");
+        unsafe { std::env::set_var("TEST_INTEGRATION_VAR", "expanded"); }
         let line = "printf $TEST_INTEGRATION_VAR";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
-        std::env::remove_var("TEST_INTEGRATION_VAR");
+        unsafe { std::env::remove_var("TEST_INTEGRATION_VAR"); }
     }
 
     #[test]
@@ -406,7 +406,7 @@ mod tests {
         std::fs::write(&rushrc_path, rushrc_content).unwrap();
 
         // Set HOME to temp directory
-        std::env::set_var("HOME", temp_dir);
+        unsafe { std::env::set_var("HOME", temp_dir); }
 
         // Test source_rushrc function
         let mut shell_state = state::ShellState::new();
@@ -422,6 +422,6 @@ mod tests {
         // Clean up
         std::fs::remove_file(&rushrc_path).unwrap();
         std::fs::remove_dir(temp_dir).unwrap();
-        std::env::remove_var("HOME");
+        unsafe { std::env::remove_var("HOME"); }
     }
 }
