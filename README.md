@@ -46,6 +46,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `alias`: Define or display aliases
   - `unalias`: Remove alias definitions
   - `test` / `[`: POSIX-compatible test builtin with string and file tests
+  - `set_colors`: Enable/disable color output dynamically
+  - `set_color_scheme`: Switch between color themes (default/dark/light)
   - `help`: Show available commands
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
@@ -389,6 +391,74 @@ fi
 ```
 
 The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
+
+### Color Support
+
+Rush now provides comprehensive color support for enhanced terminal output with automatic detection and flexible configuration:
+
+- **Automatic Terminal Detection**: Colors are enabled in interactive terminals and disabled for pipes/files
+- **Environment Variable Control**: Support for `NO_COLOR=1` (accessibility standard) and `RUSH_COLORS` (explicit control)
+- **Multiple Color Schemes**: Default, dark, and light themes with customizable ANSI color codes
+- **Colored Built-in Commands**: Enhanced output for `help`, `pwd`, `env` with contextual coloring
+- **Error Highlighting**: Red coloring for error messages throughout the shell
+- **Success Indicators**: Green coloring for successful operations
+- **Runtime Configuration**: Dynamic color control with `set_colors` and `set_color_scheme` builtins
+
+Example usage:
+
+```bash
+# Enable colors explicitly
+export RUSH_COLORS=on
+
+# Disable colors for accessibility
+export NO_COLOR=1
+
+# Switch color schemes
+set_color_scheme dark
+set_color_scheme light
+set_color_scheme default
+
+# Control colors dynamically
+set_colors on
+set_colors off
+set_colors status  # Show current status
+```
+
+**Key Features:**
+
+- **Smart Detection**: Automatically detects terminal capabilities and disables colors for non-interactive output
+- **Accessibility**: Respects `NO_COLOR=1` environment variable for users who prefer monochrome output
+- **Flexible Control**: `RUSH_COLORS` variable supports `auto`, `on`, `off`, `1`, `0`, `true`, `false` values
+- **Multiple Themes**: Three built-in color schemes optimized for different terminal backgrounds
+- **Contextual Coloring**: Different colors for prompts, errors, success messages, and builtin output
+- **Performance**: Minimal overhead when colors are disabled
+
+**Color Schemes:**
+
+- **Default**: Standard ANSI colors (green prompt, red errors, cyan builtins, blue directories)
+- **Dark**: Bright colors optimized for dark terminal backgrounds
+- **Light**: Darker colors optimized for light terminal backgrounds
+
+**Configuration Options:**
+
+```bash
+# Environment variables
+export NO_COLOR=1           # Disable colors (accessibility)
+export RUSH_COLORS=auto    # Auto-detect (default)
+export RUSH_COLORS=on      # Force enable
+export RUSH_COLORS=off     # Force disable
+
+# Runtime commands
+set_colors on              # Enable colors
+set_colors off             # Disable colors
+set_colors status          # Show current status
+
+set_color_scheme default   # Standard colors
+set_color_scheme dark      # Dark theme
+set_color_scheme light     # Light theme
+```
+
+The color system is designed to be both powerful and unobtrusive, providing visual enhancements while respecting user preferences and accessibility needs.
 
 ### .rushrc Configuration File
 
