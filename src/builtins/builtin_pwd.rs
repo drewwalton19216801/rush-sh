@@ -22,16 +22,36 @@ impl super::Builtin for PwdBuiltin {
     fn run(
         &self,
         _cmd: &ShellCommand,
-        _shell_state: &mut ShellState,
+        shell_state: &mut ShellState,
         output_writer: &mut dyn Write,
     ) -> i32 {
         match env::current_dir() {
             Ok(path) => {
-                let _ = writeln!(output_writer, "{}", path.display());
+                if shell_state.colors_enabled {
+                    let _ = writeln!(
+                        output_writer,
+                        "{}{}{}",
+                        shell_state.color_scheme.directory,
+                        path.display(),
+                        "\x1b[0m"
+                    );
+                } else {
+                    let _ = writeln!(output_writer, "{}", path.display());
+                }
                 0
             }
             Err(e) => {
-                let _ = writeln!(output_writer, "pwd: {}", e);
+                if shell_state.colors_enabled {
+                    let _ = writeln!(
+                        output_writer,
+                        "{}{}{}",
+                        shell_state.color_scheme.error,
+                        format!("pwd: {}", e),
+                        "\x1b[0m"
+                    );
+                } else {
+                    let _ = writeln!(output_writer, "pwd: {}", e);
+                }
                 1
             }
         }

@@ -233,7 +233,17 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     command.stdin(Stdio::from(file));
                 }
                 Err(e) => {
-                    eprintln!("Error opening input file '{}': {}", input_file, e);
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}{}{}{}",
+                            shell_state.color_scheme.error,
+                            "Error opening input file '",
+                            input_file,
+                            &format!("': {}\x1b[0m", e)
+                        );
+                    } else {
+                        eprintln!("Error opening input file '{}': {}", input_file, e);
+                    }
                     return 1;
                 }
             }
@@ -246,7 +256,17 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     command.stdout(Stdio::from(file));
                 }
                 Err(e) => {
-                    eprintln!("Error creating output file '{}': {}", output_file, e);
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}{}{}{}",
+                            shell_state.color_scheme.error,
+                            "Error creating output file '",
+                            output_file,
+                            &format!("': {}\x1b[0m", e)
+                        );
+                    } else {
+                        eprintln!("Error creating output file '{}': {}", output_file, e);
+                    }
                     return 1;
                 }
             }
@@ -256,7 +276,17 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     command.stdout(Stdio::from(file));
                 }
                 Err(e) => {
-                    eprintln!("Error opening append file '{}': {}", append_file, e);
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}{}{}{}",
+                            shell_state.color_scheme.error,
+                            "Error opening append file '",
+                            append_file,
+                            &format!("': {}\x1b[0m", e)
+                        );
+                    } else {
+                        eprintln!("Error opening append file '{}': {}", append_file, e);
+                    }
                     return 1;
                 }
             }
@@ -266,12 +296,29 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             Ok(mut child) => match child.wait() {
                 Ok(status) => status.code().unwrap_or(0),
                 Err(e) => {
-                    eprintln!("Error waiting for command: {}", e);
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}{}{}{}",
+                            shell_state.color_scheme.error,
+                            "Error waiting for command: ",
+                            e,
+                            "\x1b[0m"
+                        );
+                    } else {
+                        eprintln!("Error waiting for command: {}", e);
+                    }
                     1
                 }
             },
             Err(e) => {
-                eprintln!("Command spawn error: {}", e);
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}{}{}{}",
+                        shell_state.color_scheme.error, "Command spawn error: ", e, "\x1b[0m"
+                    );
+                } else {
+                    eprintln!("Command spawn error: {}", e);
+                }
                 1
             }
         }
@@ -314,7 +361,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 let (reader, writer) = match pipe() {
                     Ok(p) => p,
                     Err(e) => {
-                        eprintln!("Error creating pipe for builtin: {}", e);
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}{}{}{}",
+                                shell_state.color_scheme.error,
+                                "Error creating pipe for builtin: ",
+                                e,
+                                "\x1b[0m"
+                            );
+                        } else {
+                            eprintln!("Error creating pipe for builtin: {}", e);
+                        }
                         return 1;
                     }
                 };
@@ -360,7 +417,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                             command.stdin(Stdio::from(file));
                         }
                         Err(e) => {
-                            eprintln!("Error opening input file '{}': {}", input_file, e);
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}{}{}{}",
+                                    shell_state.color_scheme.error,
+                                    "Error opening input file '",
+                                    input_file,
+                                    &format!("': {}\x1b[0m", e)
+                                );
+                            } else {
+                                eprintln!("Error opening input file '{}': {}", input_file, e);
+                            }
                             return 1;
                         }
                     }
@@ -375,7 +442,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                             command.stdout(Stdio::from(file));
                         }
                         Err(e) => {
-                            eprintln!("Error creating output file '{}': {}", output_file, e);
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}{}{}{}",
+                                    shell_state.color_scheme.error,
+                                    "Error creating output file '",
+                                    output_file,
+                                    &format!("': {}\x1b[0m", e)
+                                );
+                            } else {
+                                eprintln!("Error creating output file '{}': {}", output_file, e);
+                            }
                             return 1;
                         }
                     }
@@ -385,7 +462,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                             command.stdout(Stdio::from(file));
                         }
                         Err(e) => {
-                            eprintln!("Error opening append file '{}': {}", append_file, e);
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}{}{}{}",
+                                    shell_state.color_scheme.error,
+                                    "Error opening append file '",
+                                    append_file,
+                                    &format!("': {}\x1b[0m", e)
+                                );
+                            } else {
+                                eprintln!("Error opening append file '{}': {}", append_file, e);
+                            }
                             return 1;
                         }
                     }
@@ -402,13 +489,34 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                             exit_code = status.code().unwrap_or(0);
                         }
                         Err(e) => {
-                            eprintln!("Error waiting for command: {}", e);
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}{}{}{}",
+                                    shell_state.color_scheme.error,
+                                    "Error waiting for command: ",
+                                    e,
+                                    "\x1b[0m"
+                                );
+                            } else {
+                                eprintln!("Error waiting for command: {}", e);
+                            }
                             exit_code = 1;
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Error spawning command '{}': {}", expanded_args[0], e);
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}{}{}{}{}",
+                            shell_state.color_scheme.error,
+                            "Error spawning command '",
+                            expanded_args[0],
+                            &format!("': {}\x1b[0m", e),
+                            ""
+                        );
+                    } else {
+                        eprintln!("Error spawning command '{}': {}", expanded_args[0], e);
+                    }
                     exit_code = 1;
                 }
             }

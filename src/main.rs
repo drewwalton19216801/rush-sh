@@ -57,7 +57,16 @@ fn main() {
                     execute_command_string(&args[2], &mut shell_state);
                 }
             } else {
-                eprintln!("Error: -c requires a command string");
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}{}{}",
+                        shell_state.color_scheme.error,
+                        "Error: -c requires a command string",
+                        "\x1b[0m"
+                    );
+                } else {
+                    eprintln!("Error: -c requires a command string");
+                }
                 std::process::exit(1);
             }
         } else {
@@ -69,7 +78,17 @@ fn main() {
                     execute_script(&content, &mut shell_state);
                 }
             } else {
-                eprintln!("Error: Could not read script file '{}'", args[1]);
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}{}{}{}",
+                        shell_state.color_scheme.error,
+                        "Error: Could not read script file '",
+                        args[1],
+                        "'\x1b[0m"
+                    );
+                } else {
+                    eprintln!("Error: Could not read script file '{}'", args[1]);
+                }
                 std::process::exit(1);
             }
         }
@@ -97,7 +116,15 @@ fn main() {
                     println!("\nReceived SIGTERM, exiting gracefully.");
                     break;
                 }
-                let prompt = shell_state.get_prompt();
+                let base_prompt = shell_state.get_prompt();
+                let prompt = if shell_state.colors_enabled {
+                    format!(
+                        "{}{}{}",
+                        shell_state.color_scheme.prompt, base_prompt, "\x1b[0m"
+                    )
+                } else {
+                    base_prompt
+                };
                 let readline = rl.readline(&prompt);
                 match readline {
                     Ok(line) => {
@@ -121,7 +148,17 @@ fn main() {
                                 continue;
                             }
                             // For other errors, print and continue (don't break)
-                            eprintln!("Readline error: {}", err);
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}{}{}{}",
+                                    shell_state.color_scheme.error,
+                                    "Readline error: ",
+                                    err,
+                                    "\x1b[0m"
+                                );
+                            } else {
+                                eprintln!("Readline error: {}", err);
+                            }
                             // Continue instead of breaking to keep shell running
                             continue;
                         }
@@ -152,19 +189,40 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
                             // TODO: For now, no printing of AST
                         }
                         Err(e) => {
-                            eprintln!("Parse error: {}", e);
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}{}{}{}",
+                                    shell_state.color_scheme.error, "Parse error: ", e, "\x1b[0m"
+                                );
+                            } else {
+                                eprintln!("Parse error: {}", e);
+                            }
                             shell_state.set_last_exit_code(1);
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Alias expansion error: {}", e);
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}{}{}{}",
+                            shell_state.color_scheme.error, "Alias expansion error: ", e, "\x1b[0m"
+                        );
+                    } else {
+                        eprintln!("Alias expansion error: {}", e);
+                    }
                     shell_state.set_last_exit_code(1);
                 }
             }
         }
         Err(e) => {
-            eprintln!("Lex error: {}", e);
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}{}{}{}",
+                    shell_state.color_scheme.error, "Lex error: ", e, "\x1b[0m"
+                );
+            } else {
+                eprintln!("Lex error: {}", e);
+            }
             shell_state.set_last_exit_code(1);
         }
     }

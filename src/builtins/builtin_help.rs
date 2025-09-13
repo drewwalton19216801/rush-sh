@@ -21,24 +21,55 @@ impl super::Builtin for HelpBuiltin {
     fn run(
         &self,
         _cmd: &ShellCommand,
-        _shell_state: &mut ShellState,
+        shell_state: &mut ShellState,
         output_writer: &mut dyn Write,
     ) -> i32 {
-        // Attempt to write the header, handling potential errors
-        if writeln!(output_writer, "Rush Shell v{}", env!("CARGO_PKG_VERSION")).is_err()
-            || writeln!(output_writer, "").is_err()
-            || writeln!(output_writer, "Available built-in commands:").is_err()
-        {
-            return 1; // Return error if header write fails
+        // Write header with color if enabled
+        let header = format!("Rush Shell v{}", env!("CARGO_PKG_VERSION"));
+        if shell_state.colors_enabled {
+            if writeln!(
+                output_writer,
+                "{}{}{}",
+                shell_state.color_scheme.success, header, "\x1b[0m"
+            )
+            .is_err()
+                || writeln!(output_writer).is_err()
+                || writeln!(
+                    output_writer,
+                    "{}{}{}",
+                    shell_state.color_scheme.builtin, "Available built-in commands:", "\x1b[0m"
+                )
+                .is_err()
+            {
+                return 1;
+            }
+        } else {
+            if writeln!(output_writer, "{}", header).is_err()
+                || writeln!(output_writer, "").is_err()
+                || writeln!(output_writer, "Available built-in commands:").is_err()
+            {
+                return 1;
+            }
         }
 
-        // Iterate over the complete builtins list with descriptions
+        // Iterate over builtins with color if enabled
         let builtins = super::get_builtins();
         for builtin in builtins {
-            // Use explicit formatting for better readability
             let formatted_line = format!("  {:<12} {}", builtin.name(), builtin.description());
-            if writeln!(output_writer, "{}", formatted_line).is_err() {
-                return 1; // Return error if any command write fails
+            if shell_state.colors_enabled {
+                if writeln!(
+                    output_writer,
+                    "{}{}{}",
+                    shell_state.color_scheme.builtin, formatted_line, "\x1b[0m"
+                )
+                .is_err()
+                {
+                    return 1;
+                }
+            } else {
+                if writeln!(output_writer, "{}", formatted_line).is_err() {
+                    return 1;
+                }
             }
         }
         0

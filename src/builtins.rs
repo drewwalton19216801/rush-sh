@@ -4,6 +4,27 @@ use std::io::{self, Write};
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
+/// A writer wrapper for output handling
+pub struct ColoredWriter<W: Write> {
+    inner: W,
+}
+
+impl<W: Write> ColoredWriter<W> {
+    pub fn new(inner: W) -> Self {
+        Self { inner }
+    }
+}
+
+impl<W: Write> Write for ColoredWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        self.inner.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 mod builtin_alias;
 mod builtin_cd;
 mod builtin_dirs;
@@ -14,6 +35,8 @@ mod builtin_help;
 mod builtin_popd;
 mod builtin_pushd;
 mod builtin_pwd;
+mod builtin_set_color_scheme;
+mod builtin_set_colors;
 mod builtin_source;
 mod builtin_test;
 mod builtin_unalias;
@@ -47,6 +70,8 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_alias::AliasBuiltin),
         Box::new(builtin_unalias::UnaliasBuiltin),
         Box::new(builtin_test::TestBuiltin),
+        Box::new(builtin_set_colors::SetColorsBuiltin),
+        Box::new(builtin_set_color_scheme::SetColorSchemeBuiltin),
     ]
 }
 
@@ -70,12 +95,20 @@ pub fn execute_builtin(
     shell_state: &mut ShellState,
     output_override: Option<Box<dyn std::io::Write>>,
 ) -> i32 {
+    // Helper function for colored error messages
+    let print_error = |msg: &str| {
+        if shell_state.colors_enabled {
+            eprintln!("{}{}{}", shell_state.color_scheme.error, msg, "\x1b[0m");
+        } else {
+            eprintln!("{}", msg);
+        }
+    };
     // Handle input redirection for built-ins that might need it
     let _input_content = if let Some(ref input_file) = cmd.input {
         match std::fs::read_to_string(input_file) {
             Ok(content) => Some(content),
             Err(e) => {
-                eprintln!("Error reading input file '{}': {}", input_file, e);
+                print_error(&format!("Error reading input file '{}': {}", input_file, e));
                 return 1;
             }
         }
@@ -87,23 +120,32 @@ pub fn execute_builtin(
     let mut output_writer: Box<dyn Write> = if let Some(override_writer) = output_override {
         override_writer
     } else if let Some(ref output_file) = cmd.output {
+        // Files don't get colors
         match File::create(output_file) {
             Ok(file) => Box::new(file),
             Err(e) => {
-                eprintln!("Error creating output file '{}': {}", output_file, e);
+                print_error(&format!(
+                    "Error creating output file '{}': {}",
+                    output_file, e
+                ));
                 return 1;
             }
         }
     } else if let Some(ref append_file) = cmd.append {
+        // Files don't get colors
         match File::options().append(true).create(true).open(append_file) {
             Ok(file) => Box::new(file),
             Err(e) => {
-                eprintln!("Error opening append file '{}': {}", append_file, e);
+                print_error(&format!(
+                    "Error opening append file '{}': {}",
+                    append_file, e
+                ));
                 return 1;
             }
         }
     } else {
-        Box::new(io::stdout())
+        // Terminal output
+        Box::new(ColoredWriter::new(io::stdout()))
     };
 
     let builtins = get_builtins();
@@ -170,6 +212,8 @@ mod tests {
         assert!(commands.contains(&"test".to_string()));
         assert!(commands.contains(&"[".to_string()));
         assert!(commands.contains(&".".to_string()));
-        assert_eq!(commands.len(), 16);
+        assert!(commands.contains(&"set_colors".to_string()));
+        assert!(commands.contains(&"set_color_scheme".to_string()));
+        assert_eq!(commands.len(), 18);
     }
 }
