@@ -398,8 +398,8 @@ The test builtin is fully integrated with Rush's control structures, enabling co
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/drewwalton19216801/rush.git
-   cd rush
+   git clone https://github.com/drewwalton19216801/rush-sh.git
+   cd rush-sh
    ```
 
 2. Build the project:
@@ -407,7 +407,7 @@ The test builtin is fully integrated with Rush's control structures, enabling co
    cargo build --release
    ```
 
-The binary will be available at `target/release/rush`.
+The binary will be available at `target/release/rush-sh`.
 
 ## Usage
 
@@ -416,17 +416,17 @@ The binary will be available at `target/release/rush`.
 Run the shell without arguments to enter interactive mode:
 
 ```bash
-./target/release/rush
+./target/release/rush-sh
 ```
 
-You'll see a prompt showing the condensed current working directory followed by `$ ` (e.g., `/h/d/p/r/rush $ `) where you can type commands. Type `exit` to quit.
+You'll see a prompt showing the condensed current working directory followed by `$ ` (e.g., `/h/d/p/r/rush-sh $ `) where you can type commands. Type `exit` to quit.
 
 ### Script Mode
 
 Execute commands from a file:
 
 ```bash
-./target/release/rush script.sh
+./target/release/rush-sh script.sh
 ```
 
 The shell will read and execute each line from the script file. Note that when using script mode, shebang lines (e.g., `#!/usr/bin/env bash`) are not bypassed - they are executed as regular comments.
@@ -436,7 +436,7 @@ The shell will read and execute each line from the script file. Note that when u
 Execute a command string directly:
 
 ```bash
-./target/release/rush -c "echo Hello World"
+./target/release/rush-sh -c "echo Hello World"
 ```
 
 The shell will execute the provided command string and exit.
@@ -451,11 +451,11 @@ source script.sh
 
 This is particularly useful for:
 
-- Executing scripts written for rush that contain `#!/usr/bin/env rush` shebangs
+- Executing scripts written for rush that contain `#!/usr/bin/env rush-sh` shebangs
 - Running scripts with shebangs for other shells (like `#!/usr/bin/env bash`) using rush instead
 - Ensuring consistent execution environment regardless of shebang declarations
 
-Unlike script mode (running `./target/release/rush script.sh`), the `source` command automatically skips shebang lines and executes all commands using the rush interpreter.
+Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` command automatically skips shebang lines and executes all commands using the rush interpreter.
 
 ### Examples
 
@@ -556,9 +556,13 @@ cargo test
 Run specific test modules:
 
 ```bash
-cargo test lexer
-cargo test parser
+cargo test builtins
+cargo test completion
 cargo test executor
+cargo test lexer
+cargo test main
+cargo test parser
+cargo test state
 cargo test integration
 ```
 
