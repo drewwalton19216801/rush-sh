@@ -6,20 +6,20 @@ use crate::lexer;
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
-pub struct SourceBuiltin;
+pub struct DotBuiltin;
 
-impl super::Builtin for SourceBuiltin {
+impl super::Builtin for DotBuiltin {
     fn name(&self) -> &'static str {
-        "source"
+        "."
     }
 
     fn description(&self) -> &'static str {
-        "Execute a script file with rush"
+        "Execute a script file (same as source)"
     }
 
     fn run(&self, cmd: &ShellCommand, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
         if cmd.args.len() < 2 {
-            let _ = writeln!(output_writer, "source: missing script file operand");
+            let _ = writeln!(output_writer, ".: missing script file operand");
             return 1;
         }
         let script_file = &cmd.args[1];
@@ -58,7 +58,7 @@ impl super::Builtin for SourceBuiltin {
                 exit_code
             }
             Err(e) => {
-                let _ = writeln!(output_writer, "source: {}: {}", script_file, e);
+                let _ = writeln!(output_writer, ".: {}: {}", script_file, e);
                 1
             }
         }

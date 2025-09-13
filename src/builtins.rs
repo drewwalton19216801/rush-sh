@@ -8,6 +8,7 @@ mod builtin_alias;
 mod builtin_bracket;
 mod builtin_cd;
 mod builtin_dirs;
+mod builtin_dot;
 mod builtin_env;
 mod builtin_exit;
 mod builtin_export;
@@ -39,6 +40,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_exit::ExitBuiltin),
         Box::new(builtin_help::HelpBuiltin),
         Box::new(builtin_source::SourceBuiltin),
+        Box::new(builtin_dot::DotBuiltin),
         Box::new(builtin_export::ExportBuiltin),
         Box::new(builtin_unset::UnsetBuiltin),
         Box::new(builtin_pushd::PushdBuiltin),
@@ -126,6 +128,7 @@ mod tests {
         assert!(is_builtin("unalias"));
         assert!(is_builtin("test"));
         assert!(is_builtin("["));
+        assert!(is_builtin("."));
         assert!(!is_builtin("ls"));
         assert!(!is_builtin("grep"));
         assert!(!is_builtin("echo"));
@@ -162,7 +165,8 @@ mod tests {
         assert!(commands.contains(&"unalias".to_string()));
         assert!(commands.contains(&"test".to_string()));
         assert!(commands.contains(&"[".to_string()));
-        assert_eq!(commands.len(), 15);
+        assert!(commands.contains(&".".to_string()));
+        assert_eq!(commands.len(), 16);
     }
 
     #[test]
@@ -337,5 +341,59 @@ mod tests {
         let mut shell_state = crate::state::ShellState::new();
         let exit_code = execute_builtin(&cmd, &mut shell_state, None);
         assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_source_variable_sharing() {
+        use std::fs;
+
+        // Create a temporary script file
+        let temp_script = "/tmp/test_source_vars.sh";
+        let script_content = "TEST_VAR_FROM_SOURCE=shared_value\nANOTHER_VAR=another_value";
+        fs::write(temp_script, script_content).unwrap();
+
+        let cmd = ShellCommand {
+            args: vec!["source".to_string(), temp_script.to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+
+        // Verify that variables are now available in the shell state
+        assert_eq!(shell_state.get_var("TEST_VAR_FROM_SOURCE"), Some("shared_value".to_string()));
+        assert_eq!(shell_state.get_var("ANOTHER_VAR"), Some("another_value".to_string()));
+
+        // Clean up
+        fs::remove_file(temp_script).unwrap();
+    }
+
+    #[test]
+    fn test_execute_builtin_dot_variable_sharing() {
+        use std::fs;
+
+        // Create a temporary script file
+        let temp_script = "/tmp/test_dot_vars.sh";
+        let script_content = "DOT_TEST_VAR=dot_shared\nDOT_VAR2=dot_value";
+        fs::write(temp_script, script_content).unwrap();
+
+        let cmd = ShellCommand {
+            args: vec![".".to_string(), temp_script.to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute_builtin(&cmd, &mut shell_state, None);
+        assert_eq!(exit_code, 0);
+
+        // Verify that variables are now available in the shell state
+        assert_eq!(shell_state.get_var("DOT_TEST_VAR"), Some("dot_shared".to_string()));
+        assert_eq!(shell_state.get_var("DOT_VAR2"), Some("dot_value".to_string()));
+
+        // Clean up
+        fs::remove_file(temp_script).unwrap();
     }
 }
