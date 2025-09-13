@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{self, Write};
 
 use crate::parser::ShellCommand;
-use crate::state::{ColorScheme, ShellState};
+use crate::state::ShellState;
 
 /// A writer wrapper for output handling
 pub struct ColoredWriter<W: Write> {
