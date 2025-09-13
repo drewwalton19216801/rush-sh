@@ -78,6 +78,9 @@ fn main() {
         use std::io::IsTerminal;
         if std::io::stdin().is_terminal() {
             // Interactive mode
+            // Source .rushrc file if it exists
+            source_rushrc(&mut shell_state);
+
             println!("Rush shell started. Type 'exit' to quit.");
             let mut rl = Editor::<completion::RushCompleter, FileHistory>::new().unwrap();
             rl.set_helper(Some(completion::RushCompleter::new()));
@@ -234,6 +237,74 @@ fn execute_command_string(command_string: &str, shell_state: &mut state::ShellSt
     }
 }
 
+fn source_rushrc(shell_state: &mut state::ShellState) {
+    // Get the home directory
+    if let Ok(home_dir) = env::var("HOME") {
+        let rushrc_path = format!("{}/.rushrc", home_dir);
+
+        // Try to read the .rushrc file
+        if let Ok(content) = fs::read_to_string(&rushrc_path) {
+            // Process the content similar to execute_script
+            let mut current_block = String::new();
+            let mut in_if_block = false;
+            let mut if_depth = 0;
+            let mut in_case_block = false;
+
+            for line in content.lines() {
+                // Skip shebang lines
+                if line.starts_with("#!") {
+                    continue;
+                }
+
+                // Skip pure comment lines
+                let trimmed = line.trim();
+                if trimmed.is_empty() || trimmed.starts_with("#") {
+                    continue;
+                }
+
+                // Check for multi-line construct keywords
+                if trimmed.starts_with("if ") || trimmed == "if" {
+                    in_if_block = true;
+                    if_depth += 1;
+                } else if trimmed.starts_with("case ") || trimmed == "case" {
+                    in_case_block = true;
+                }
+
+                // Add line to current block
+                if !current_block.is_empty() {
+                    current_block.push('\n');
+                }
+                current_block.push_str(line);
+
+                // Check for end of multi-line constructs
+                if in_if_block && trimmed == "fi" {
+                    if_depth -= 1;
+                    if if_depth == 0 {
+                        in_if_block = false;
+                        execute_line(&current_block, shell_state);
+                        current_block.clear();
+                    }
+                } else if in_case_block && trimmed == "esac" {
+                    in_case_block = false;
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
+                } else if !in_if_block && !in_case_block {
+                    // Execute single-line commands immediately
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
+                }
+            }
+
+            // Execute any remaining block
+            if !current_block.trim().is_empty() {
+                execute_line(&current_block, shell_state);
+            }
+        }
+        // If file doesn't exist or can't be read, silently continue
+    }
+    // If HOME is not set, silently continue
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +392,36 @@ mod tests {
         assert_eq!(exit_code, 0);
         assert_eq!(std::env::current_dir().unwrap(), Path::new("/tmp"));
         std::env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_source_rushrc_functionality() {
+        // Create a temporary .rushrc file
+        let temp_dir = "/tmp/rush_test_home";
+        let rushrc_path = format!("{}/.rushrc", temp_dir);
+        let rushrc_content = "TEST_RUSHRC_VAR=test_value\nexport TEST_RUSHRC_VAR";
+
+        // Create temp directory and file
+        std::fs::create_dir_all(temp_dir).unwrap();
+        std::fs::write(&rushrc_path, rushrc_content).unwrap();
+
+        // Set HOME to temp directory
+        std::env::set_var("HOME", temp_dir);
+
+        // Test source_rushrc function
+        let mut shell_state = state::ShellState::new();
+        source_rushrc(&mut shell_state);
+
+        // Verify variable was set
+        assert_eq!(shell_state.get_var("TEST_RUSHRC_VAR"), Some("test_value".to_string()));
+
+        // Verify variable is exported
+        let child_env = shell_state.get_env_for_child();
+        assert_eq!(child_env.get("TEST_RUSHRC_VAR"), Some(&"test_value".to_string()));
+
+        // Clean up
+        std::fs::remove_file(&rushrc_path).unwrap();
+        std::fs::remove_dir(temp_dir).unwrap();
+        std::env::remove_var("HOME");
     }
 }
