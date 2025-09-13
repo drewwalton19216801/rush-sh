@@ -1,5 +1,32 @@
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::io::IsTerminal;
+
+#[derive(Debug, Clone)]
+pub struct ColorScheme {
+    /// ANSI color code for prompt
+    pub prompt: String,
+    /// ANSI color code for error messages
+    pub error: String,
+    /// ANSI color code for success messages
+    pub success: String,
+    /// ANSI color code for builtin command output
+    pub builtin: String,
+    /// ANSI color code for directory listings
+    pub directory: String,
+}
+
+impl Default for ColorScheme {
+    fn default() -> Self {
+        Self {
+            prompt: "\x1b[32m".to_string(),     // Green
+            error: "\x1b[31m".to_string(),      // Red
+            success: "\x1b[32m".to_string(),    // Green
+            builtin: "\x1b[36m".to_string(),    // Cyan
+            directory: "\x1b[34m".to_string(),  // Blue
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ShellState {
@@ -17,11 +44,31 @@ pub struct ShellState {
     pub dir_stack: Vec<String>,
     /// Command aliases
     pub aliases: HashMap<String, String>,
+    /// Whether colors are enabled
+    pub colors_enabled: bool,
+    /// Current color scheme
+    pub color_scheme: ColorScheme,
 }
 
 impl ShellState {
     pub fn new() -> Self {
         let shell_pid = std::process::id();
+
+        // Check NO_COLOR environment variable (respects standard)
+        let no_color = std::env::var("NO_COLOR").is_ok();
+
+        // Check RUSH_COLORS environment variable for explicit control
+        let rush_colors = std::env::var("RUSH_COLORS")
+            .map(|v| v.to_lowercase())
+            .unwrap_or_else(|_| "auto".to_string());
+
+        let colors_enabled = match rush_colors.as_str() {
+            "1" | "true" | "on" | "enable" => !no_color && std::io::stdout().is_terminal(),
+            "0" | "false" | "off" | "disable" => false,
+            "auto" => !no_color && std::io::stdout().is_terminal(),
+            _ => !no_color && std::io::stdout().is_terminal(),
+        };
+
         Self {
             variables: HashMap::new(),
             exported: HashSet::new(),
@@ -30,6 +77,8 @@ impl ShellState {
             script_name: "rush".to_string(),
             dir_stack: Vec::new(),
             aliases: HashMap::new(),
+            colors_enabled,
+            color_scheme: ColorScheme::default(),
         }
     }
 

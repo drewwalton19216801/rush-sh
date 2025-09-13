@@ -28,13 +28,29 @@ impl super::Builtin for EnvBuiltin {
         // Show exported shell variables first
         for var_name in &shell_state.exported {
             if let Some(value) = shell_state.variables.get(var_name) {
-                let _ = writeln!(output_writer, "{}={}", var_name, value);
+                if shell_state.colors_enabled {
+                    let _ = writeln!(
+                        output_writer,
+                        "{}{}{}={}",
+                        shell_state.color_scheme.success, var_name, "\x1b[0m", value
+                    );
+                } else {
+                    let _ = writeln!(output_writer, "{}={}", var_name, value);
+                }
             }
         }
         // Then show environment variables (excluding those already shown)
         for (key, value) in env::vars() {
             if !shell_state.exported.contains(&key) {
-                let _ = writeln!(output_writer, "{}={}", key, value);
+                if shell_state.colors_enabled {
+                    let _ = writeln!(
+                        output_writer,
+                        "{}{}{}={}",
+                        shell_state.color_scheme.builtin, key, "\x1b[0m", value
+                    );
+                } else {
+                    let _ = writeln!(output_writer, "{}={}", key, value);
+                }
             }
         }
         0
