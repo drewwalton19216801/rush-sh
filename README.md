@@ -2,7 +2,6 @@
 
 [![](https://tokei.rs/b1/github/drewwalton19216801/rush-sh)](https://github.com/drewwalton19216801/rush-sh) [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
-
 <img src="images/rush_logo.png" alt="Rush Logo" width="50%" style="display: block; margin: 20px auto;">
 
 Rush is a POSIX sh-compatible shell implemented in Rust. It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports basic shell features like command execution, pipes, redirections, environment variables, and built-in commands.
@@ -441,7 +440,15 @@ echo "Type 'help' for available commands."
 
 ### Prerequisites
 
-- Rust (edition 2021 or later)
+- Rust (edition 2024 or later)
+
+### Cargo Installation
+
+1. Install rush-sh from crates.io:
+
+   ```bash
+   cargo install rush-sh
+   ```
 
 ### Build
 
@@ -469,6 +476,12 @@ Run the shell without arguments to enter interactive mode:
 ./target/release/rush-sh
 ```
 
+or
+
+```bash
+rush-sh
+```
+
 You'll see a prompt showing the condensed current working directory followed by `$ ` (e.g., `/h/d/p/r/rush-sh $ `) where you can type commands. Type `exit` to quit.
 
 **Configuration**: Rush automatically sources `~/.rushrc` on startup if it exists, allowing you to set up aliases, environment variables, and other customizations.
@@ -481,6 +494,12 @@ Execute commands from a file:
 ./target/release/rush-sh script.sh
 ```
 
+or
+
+```bash
+rush-sh script.sh
+```
+
 The shell will read and execute each line from the script file. Note that when using script mode, shebang lines (e.g., `#!/usr/bin/env bash`) are not bypassed - they are executed as regular comments.
 
 ### Command Mode
@@ -489,6 +508,12 @@ Execute a command string directly:
 
 ```bash
 ./target/release/rush-sh -c "echo Hello World"
+```
+
+or
+
+```bash
+rush-sh -c "echo Hello World"
 ```
 
 The shell will execute the provided command string and exit.
