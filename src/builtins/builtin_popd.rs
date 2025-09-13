@@ -49,3 +49,29 @@ impl super::Builtin for PopdBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_execute_builtin_popd() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.dir_stack.push("/tmp".to_string());
+
+        let cmd = ShellCommand {
+            args: vec!["popd".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let builtin = PopdBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        // Should have popped from stack
+        assert_eq!(shell_state.dir_stack.len(), 0);
+        // Note: We don't test actual directory change as it may not work in test environment
+    }
+}

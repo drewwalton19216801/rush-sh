@@ -50,3 +50,72 @@ impl super::Builtin for AliasBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_execute_builtin_alias_set() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string(), "ll=ls -l".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = AliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_alias("ll"), Some(&"ls -l".to_string()));
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_list() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("ll", "ls -l".to_string());
+        let builtin = AliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_show() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string(), "ll".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("ll", "ls -l".to_string());
+        let builtin = AliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_builtin_alias_show_not_found() {
+        let cmd = ShellCommand {
+            args: vec!["alias".to_string(), "nonexistent".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = AliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1);
+    }
+}
