@@ -37,7 +37,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `env`: List environment variables
   - `export`: Export variables to child processes
   - `unset`: Remove variables
-  - `source`: Execute a script file with rush (bypasses shebang)
+  - `source` / `.`: Execute a script file with rush (bypasses shebang and comment lines)
   - `pushd`: Push directory onto stack and change to it
   - `popd`: Pop directory from stack and change to it
   - `dirs`: Display directory stack
@@ -443,10 +443,11 @@ The shell will execute the provided command string and exit.
 
 ### Source Command
 
-The `source` built-in command provides a way to execute script files while bypassing shebang lines that may specify other shells:
+The `source` (or `.`) built-in command provides a way to execute script files while bypassing shebang lines and comment lines that may specify other shells:
 
 ```bash
 source script.sh
+. script.sh
 ```
 
 This is particularly useful for:
@@ -454,8 +455,9 @@ This is particularly useful for:
 - Executing scripts written for rush that contain `#!/usr/bin/env rush-sh` shebangs
 - Running scripts with shebangs for other shells (like `#!/usr/bin/env bash`) using rush instead
 - Ensuring consistent execution environment regardless of shebang declarations
+- Sharing variables between the sourced script and the parent shell
 
-Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` command automatically skips shebang lines and executes all commands using the rush interpreter.
+Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` command automatically skips shebang lines and comment lines, and executes all commands using the rush interpreter. Variables set in the sourced script are available in the parent shell.
 
 ### Examples
 
@@ -469,6 +471,7 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Pop directory: `popd`
   - Show stack: `dirs`
 - Execute a script: `source script.sh`
+- Execute a script with dot: `. script.sh`
 - Execute a script with shebang bypass: `source examples/basic_commands.sh`
 - Execute elif example script: `source examples/elif_example.sh`
 - Execute case example script: `source examples/case_example.sh`
