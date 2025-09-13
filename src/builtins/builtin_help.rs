@@ -35,3 +35,28 @@ impl super::Builtin for HelpBuiltin {
         0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_help_builtin_run() {
+        let cmd = ShellCommand {
+            args: vec!["help".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let builtin = HelpBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("Rush Shell"));
+        assert!(output_str.contains("Available built-in commands"));
+        assert!(output_str.contains("help"));
+    }
+}

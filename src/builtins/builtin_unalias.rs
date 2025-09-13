@@ -33,3 +33,85 @@ impl super::Builtin for UnaliasBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_execute_builtin_unalias() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("test_alias", "ls -l".to_string());
+
+        // Verify alias exists
+        assert_eq!(
+            shell_state.get_alias("test_alias"),
+            Some(&"ls -l".to_string())
+        );
+
+        // Remove the alias
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "test_alias".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+
+        // Verify alias is removed
+        assert_eq!(shell_state.get_alias("test_alias"), None);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_not_found() {
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "nonexistent".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_no_args() {
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_too_many_args() {
+        let cmd = ShellCommand {
+            args: vec![
+                "unalias".to_string(),
+                "arg1".to_string(),
+                "arg2".to_string(),
+            ],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1);
+    }
+}

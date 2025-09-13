@@ -69,3 +69,31 @@ impl super::Builtin for PushdBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_execute_builtin_pushd() {
+        let original_dir = std::env::current_dir().unwrap();
+        let cmd = ShellCommand {
+            args: vec!["pushd".to_string(), "/tmp".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = PushdBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        // Should have pushed original dir to stack
+        assert_eq!(shell_state.dir_stack.len(), 1);
+        assert_eq!(shell_state.dir_stack[0], original_dir.to_string_lossy());
+
+        // Restore original directory for test cleanup
+        let _ = std::env::set_current_dir(&original_dir);
+    }
+}

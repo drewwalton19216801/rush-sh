@@ -39,3 +39,61 @@ impl super::Builtin for ExportBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_export_builtin_list() {
+        let cmd = ShellCommand {
+            args: vec!["export".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.set_exported_var("TEST_VAR", "test_value".to_string());
+        let builtin = ExportBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("export TEST_VAR=test_value"));
+    }
+
+    #[test]
+    fn test_export_builtin_set() {
+        let cmd = ShellCommand {
+            args: vec!["export".to_string(), "NEW_VAR=new_value".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let builtin = ExportBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("NEW_VAR"), Some("new_value".to_string()));
+        assert!(shell_state.exported.contains("NEW_VAR"));
+    }
+
+    #[test]
+    fn test_export_builtin_export_existing() {
+        let cmd = ShellCommand {
+            args: vec!["export".to_string(), "EXISTING_VAR".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("EXISTING_VAR", "existing_value".to_string());
+        let builtin = ExportBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.exported.contains("EXISTING_VAR"));
+    }
+}

@@ -28,3 +28,26 @@ impl super::Builtin for PwdBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_pwd_builtin_run() {
+        let cmd = ShellCommand {
+            args: vec!["pwd".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let builtin = PwdBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("/")); // Should contain a path separator
+    }
+}

@@ -64,3 +64,37 @@ impl super::Builtin for DotBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+    use std::fs;
+
+    #[test]
+    fn test_execute_builtin_dot_variable_sharing() {
+        // Create a temporary script file
+        let temp_script = "/tmp/test_dot_vars.sh";
+        let script_content = "DOT_TEST_VAR=dot_shared\nDOT_VAR2=dot_value";
+        fs::write(temp_script, script_content).unwrap();
+
+        let cmd = ShellCommand {
+            args: vec![".".to_string(), temp_script.to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = DotBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+
+        // Verify that variables are now available in the shell state
+        assert_eq!(shell_state.get_var("DOT_TEST_VAR"), Some("dot_shared".to_string()));
+        assert_eq!(shell_state.get_var("DOT_VAR2"), Some("dot_value".to_string()));
+
+        // Clean up
+        fs::remove_file(temp_script).unwrap();
+    }
+}

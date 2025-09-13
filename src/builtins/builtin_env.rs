@@ -31,3 +31,27 @@ impl super::Builtin for EnvBuiltin {
         0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_env_builtin_run() {
+        let cmd = ShellCommand {
+            args: vec!["env".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.set_exported_var("TEST_VAR", "test_value".to_string());
+        let builtin = EnvBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("TEST_VAR=test_value"));
+    }
+}
