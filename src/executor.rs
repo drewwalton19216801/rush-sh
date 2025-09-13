@@ -1,4 +1,4 @@
-use os_pipe::pipe;
+use std::io::pipe;
 use std::fs::File;
 use std::process::{Command, Stdio};
 
