@@ -10,6 +10,10 @@ impl super::Builtin for AliasBuiltin {
         "alias"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Define or display aliases"
     }

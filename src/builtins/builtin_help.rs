@@ -10,6 +10,10 @@ impl super::Builtin for HelpBuiltin {
         "help"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Show this help message"
     }

@@ -10,6 +10,10 @@ impl super::Builtin for ExitBuiltin {
         "exit"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Exit the shell"
     }

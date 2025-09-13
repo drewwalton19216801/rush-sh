@@ -26,6 +26,10 @@ impl super::Builtin for PushdBuiltin {
         "pushd"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Push directory onto stack and change to it"
     }
