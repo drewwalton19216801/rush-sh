@@ -11,13 +11,27 @@ impl super::Builtin for TestBuiltin {
         "test"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec!["test", "["]
+    }
+
     fn description(&self) -> &'static str {
         "Evaluate conditional expressions"
     }
 
     fn run(&self, cmd: &ShellCommand, _shell_state: &mut ShellState, _output_writer: &mut dyn Write) -> i32 {
-        // Skip the command name (args[0] is "test")
-        let args = &cmd.args[1..];
+        // Handle both "test" and "[" commands
+        let is_bracket = cmd.args[0] == "[";
+        let args = if is_bracket {
+            // For "[", skip the command name and expect closing "]"
+            if cmd.args.len() < 2 || cmd.args.last().unwrap() != "]" {
+                return 2; // Invalid usage - missing closing bracket
+            }
+            &cmd.args[1..cmd.args.len() - 1] // Skip "[" and "]"
+        } else {
+            // For "test", skip the command name
+            &cmd.args[1..]
+        };
 
         if args.is_empty() {
             // No arguments - false

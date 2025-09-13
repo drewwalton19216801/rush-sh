@@ -26,6 +26,10 @@ impl super::Builtin for PopdBuiltin {
         "popd"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Pop directory from stack and change to it"
     }

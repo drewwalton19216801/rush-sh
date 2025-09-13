@@ -13,6 +13,10 @@ impl super::Builtin for SourceBuiltin {
         "source"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec!["source", "."]
+    }
+
     fn description(&self) -> &'static str {
         "Execute a script file with rush"
     }

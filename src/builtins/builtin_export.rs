@@ -10,6 +10,10 @@ impl super::Builtin for ExportBuiltin {
         "export"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Export variables to environment"
     }

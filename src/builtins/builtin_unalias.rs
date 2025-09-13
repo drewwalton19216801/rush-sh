@@ -10,6 +10,10 @@ impl super::Builtin for UnaliasBuiltin {
         "unalias"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Remove alias definitions"
     }

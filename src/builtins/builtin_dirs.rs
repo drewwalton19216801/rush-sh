@@ -24,6 +24,10 @@ impl super::Builtin for DirsBuiltin {
         "dirs"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Display directory stack"
     }

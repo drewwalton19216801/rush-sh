@@ -5,10 +5,8 @@ use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
 mod builtin_alias;
-mod builtin_bracket;
 mod builtin_cd;
 mod builtin_dirs;
-mod builtin_dot;
 mod builtin_env;
 mod builtin_exit;
 mod builtin_export;
@@ -23,6 +21,7 @@ mod builtin_unset;
 
 pub trait Builtin {
     fn name(&self) -> &'static str;
+    fn names(&self) -> Vec<&'static str>;
     fn description(&self) -> &'static str;
     fn run(
         &self,
@@ -40,7 +39,6 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_exit::ExitBuiltin),
         Box::new(builtin_help::HelpBuiltin),
         Box::new(builtin_source::SourceBuiltin),
-        Box::new(builtin_dot::DotBuiltin),
         Box::new(builtin_export::ExportBuiltin),
         Box::new(builtin_unset::UnsetBuiltin),
         Box::new(builtin_pushd::PushdBuiltin),
@@ -49,19 +47,22 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_alias::AliasBuiltin),
         Box::new(builtin_unalias::UnaliasBuiltin),
         Box::new(builtin_test::TestBuiltin),
-        Box::new(builtin_bracket::BracketBuiltin),
     ]
 }
 
 pub fn is_builtin(cmd: &str) -> bool {
-    get_builtins().iter().any(|b| b.name() == cmd)
+    get_builtins().iter().any(|b| b.names().contains(&cmd))
 }
 
 pub fn get_builtin_commands() -> Vec<String> {
-    get_builtins()
-        .iter()
-        .map(|b| b.name().to_string())
-        .collect()
+    let builtins = get_builtins();
+    let mut commands = Vec::new();
+    for b in builtins {
+        for &name in &b.names() {
+            commands.push(name.to_string());
+        }
+    }
+    commands
 }
 
 pub fn execute_builtin(
@@ -106,7 +107,7 @@ pub fn execute_builtin(
     };
 
     let builtins = get_builtins();
-    if let Some(builtin) = builtins.into_iter().find(|b| b.name() == cmd.args[0]) {
+    if let Some(builtin) = builtins.into_iter().find(|b| b.names().contains(&cmd.args[0].as_str())) {
         builtin.run(cmd, shell_state, &mut *output_writer)
     } else {
         1

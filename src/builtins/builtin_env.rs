@@ -11,6 +11,10 @@ impl super::Builtin for EnvBuiltin {
         "env"
     }
 
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
     fn description(&self) -> &'static str {
         "Print environment variables"
     }
