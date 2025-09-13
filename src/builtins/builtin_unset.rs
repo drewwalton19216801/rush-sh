@@ -24,3 +24,44 @@ impl super::Builtin for UnsetBuiltin {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_unset_builtin_unset_variable() {
+        let cmd = ShellCommand {
+            args: vec!["unset".to_string(), "TEST_VAR".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("TEST_VAR", "test_value".to_string());
+        assert_eq!(shell_state.get_var("TEST_VAR"), Some("test_value".to_string()));
+        let builtin = UnsetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("TEST_VAR"), None);
+    }
+
+    #[test]
+    fn test_unset_builtin_no_args() {
+        let cmd = ShellCommand {
+            args: vec!["unset".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let builtin = UnsetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("unset: missing variable name"));
+    }
+}

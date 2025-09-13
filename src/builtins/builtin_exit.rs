@@ -19,3 +19,24 @@ impl super::Builtin for ExitBuiltin {
         0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_exit_builtin_run() {
+        let cmd = ShellCommand {
+            args: vec!["exit".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = ShellState::new();
+        let builtin = ExitBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+    }
+}
