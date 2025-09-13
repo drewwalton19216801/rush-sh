@@ -226,15 +226,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     current.clear();
                     in_single_quote = false;
                 } else if !in_double_quote {
-                    if !current.is_empty() {
-                        if let Some(keyword) = is_keyword(&current) {
-                            tokens.push(keyword);
-                        } else {
-                            let word = expand_variables_in_command(&current, shell_state);
-                            tokens.push(Token::Word(word));
-                        }
-                        current.clear();
-                    }
+                    // Start of single quote - don't push current word, just enter quote mode
                     in_single_quote = true;
                 }
                 chars.next();
@@ -505,6 +497,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             tokens.push(Token::Word(word));
         }
     }
+
     Ok(tokens)
 }
 

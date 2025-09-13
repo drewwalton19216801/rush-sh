@@ -45,6 +45,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `unalias`: Remove alias definitions
   - `test` / `[`: POSIX-compatible test builtin with string and file tests
   - `help`: Show available commands
+- **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
   - **Command Completion**: Built-in commands and executables from PATH
   - **File/Directory Completion**: Files and directories with relative paths
@@ -387,6 +388,52 @@ fi
 
 The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
 
+### .rushrc Configuration File
+
+Rush automatically sources a configuration file `~/.rushrc` when starting in interactive mode, similar to bash's `.bashrc`. This allows you to customize your shell environment with:
+
+- **Environment Variables**: Set default variables and export them to child processes
+- **Aliases**: Define command shortcuts that persist across the session
+- **Shell Configuration**: Customize prompt, PATH, or other shell settings
+- **Initialization Commands**: Run setup commands on shell startup
+
+Example `~/.rushrc` file:
+
+```bash
+# Set environment variables
+export EDITOR=vim
+export PATH="$HOME/bin:$PATH"
+
+# Create useful aliases
+alias ll='ls -la'
+alias ..='cd ..'
+alias grep='grep --color=auto'
+
+# Set custom variables
+MY_PROJECTS="$HOME/projects"
+WORKSPACE="$HOME/workspace"
+
+# Display welcome message
+echo "Welcome to Rush shell!"
+echo "Type 'help' for available commands."
+```
+
+**Key Features:**
+
+- **Automatic Loading**: Sourced automatically when entering interactive mode
+- **Silent Failures**: Missing or invalid `.rushrc` files don't prevent shell startup
+- **Variable Persistence**: Variables and aliases set in `.rushrc` are available throughout the session
+- **Error Resilience**: Syntax errors in `.rushrc` are handled gracefully
+- **Standard Location**: Uses `~/.rushrc` following Unix conventions
+
+**Usage Notes:**
+
+- Only loaded in interactive mode (not in script or command-line modes)
+- Variables set in `.rushrc` are available to all subsequent commands
+- Use `export` to make variables available to child processes
+- Comments (lines starting with `#`) are ignored
+- Multi-line constructs (if/fi, case/esac) are supported
+
 ## Installation
 
 ### Prerequisites
@@ -420,6 +467,8 @@ Run the shell without arguments to enter interactive mode:
 ```
 
 You'll see a prompt showing the condensed current working directory followed by `$ ` (e.g., `/h/d/p/r/rush-sh $ `) where you can type commands. Type `exit` to quit.
+
+**Configuration**: Rush automatically sources `~/.rushrc` on startup if it exists, allowing you to set up aliases, environment variables, and other customizations.
 
 ### Script Mode
 
