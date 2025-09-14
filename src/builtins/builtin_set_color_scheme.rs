@@ -55,11 +55,11 @@ impl super::Builtin for SetColorSchemeBuiltin {
             "dark" => {
                 // Dark theme: brighter colors for dark backgrounds
                 shell_state.color_scheme = ColorScheme {
-                    prompt: "\x1b[92m".to_string(),     // Bright green
-                    error: "\x1b[91m".to_string(),      // Bright red
-                    success: "\x1b[92m".to_string(),    // Bright green
-                    builtin: "\x1b[96m".to_string(),    // Bright cyan
-                    directory: "\x1b[94m".to_string(),  // Bright blue
+                    prompt: "\x1b[92m".to_string(),    // Bright green
+                    error: "\x1b[91m".to_string(),     // Bright red
+                    success: "\x1b[92m".to_string(),   // Bright green
+                    builtin: "\x1b[96m".to_string(),   // Bright cyan
+                    directory: "\x1b[94m".to_string(), // Bright blue
                 };
                 if shell_state.colors_enabled {
                     writeln!(
@@ -75,11 +75,11 @@ impl super::Builtin for SetColorSchemeBuiltin {
             "light" => {
                 // Light theme: darker colors for light backgrounds
                 shell_state.color_scheme = ColorScheme {
-                    prompt: "\x1b[32m".to_string(),     // Dark green
-                    error: "\x1b[31m".to_string(),      // Dark red
-                    success: "\x1b[32m".to_string(),    // Dark green
-                    builtin: "\x1b[36m".to_string(),    // Dark cyan
-                    directory: "\x1b[34m".to_string(),  // Dark blue
+                    prompt: "\x1b[32m".to_string(),    // Dark green
+                    error: "\x1b[31m".to_string(),     // Dark red
+                    success: "\x1b[32m".to_string(),   // Dark green
+                    builtin: "\x1b[36m".to_string(),   // Dark cyan
+                    directory: "\x1b[34m".to_string(), // Dark blue
                 };
                 if shell_state.colors_enabled {
                     writeln!(

@@ -1,3 +1,4 @@
+use clap::Parser;
 use rustyline::Editor;
 use rustyline::history::FileHistory;
 use signal_hook::{consts::SIGINT, consts::SIGTERM, iterator::Signals};
@@ -5,7 +6,6 @@ use std::env;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
-use clap::Parser;
 
 mod builtins;
 mod completion;
@@ -25,7 +25,7 @@ static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 Examples:
   rush-sh script.sh
   rush-sh -c echo hello
-  rush-sh -v"#,
+  rush-sh -v"#
 )]
 struct Args {
     #[arg(short = 'c', num_args = 1.., value_name = "COMMAND", conflicts_with = "script")]

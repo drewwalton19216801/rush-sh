@@ -19,11 +19,11 @@ pub struct ColorScheme {
 impl Default for ColorScheme {
     fn default() -> Self {
         Self {
-            prompt: "\x1b[32m".to_string(),     // Green
-            error: "\x1b[31m".to_string(),      // Red
-            success: "\x1b[32m".to_string(),    // Green
-            builtin: "\x1b[36m".to_string(),    // Cyan
-            directory: "\x1b[34m".to_string(),  // Blue
+            prompt: "\x1b[32m".to_string(),    // Green
+            error: "\x1b[31m".to_string(),     // Red
+            success: "\x1b[32m".to_string(),   // Green
+            builtin: "\x1b[36m".to_string(),   // Cyan
+            directory: "\x1b[34m".to_string(), // Blue
         }
     }
 }
