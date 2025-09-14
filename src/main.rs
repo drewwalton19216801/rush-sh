@@ -5,6 +5,7 @@ use std::env;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
+use clap::Parser;
 
 mod builtins;
 mod completion;
@@ -15,15 +16,47 @@ mod state;
 
 static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
+#[derive(Parser)]
+#[command(
+    author = "Drew Walton",
+    about = "A POSIX sh-compatible shell written in Rust",
+    long_about = r#"Rush is a POSIX-compliant shell implemented in Rust.
+
+Examples:
+  rush-sh script.sh
+  rush-sh -c echo hello
+  rush-sh -v"#,
+)]
+struct Args {
+    #[arg(short = 'c', num_args = 1.., value_name = "COMMAND", conflicts_with = "script")]
+    command: Vec<String>,
+
+    #[arg(short = 'v', long = "version", conflicts_with_all = ["command", "script"])]
+    version: bool,
+
+    #[arg(value_name = "SCRIPT", conflicts_with = "command")]
+    script: Option<String>,
+}
+
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    let args_parsed = Args::parse();
+
+    if args_parsed.version {
+        let header = format!("Rush Shell (rush-sh) v{}", env!("CARGO_PKG_VERSION"));
+        println!("{}", header);
+        println!("Copyright (C) 2025 Drew Walton");
+        println!("License MIT <https://opensource.org/license/mit>");
+        println!("\nThis is free software; you are free to change and redistribute it.");
+        println!("There is NO WARRANTY, to the extent permitted by law.");
+        std::process::exit(0);
+    }
 
     // Initialize shell state
     let mut shell_state = state::ShellState::new();
 
     // Set script name for script mode
-    if args.len() > 1 && args[1] != "-c" {
-        shell_state.set_script_name(&args[1]);
+    if let Some(ref script_path) = args_parsed.script {
+        shell_state.set_script_name(script_path);
     }
 
     // Set up signal handling
@@ -47,58 +80,35 @@ fn main() {
         }
     });
 
-    if args.len() > 1 {
-        if args[1] == "-c" {
-            // Command mode
-            if args.len() > 2 {
-                if SHUTDOWN.load(Ordering::Relaxed) {
-                    println!("\nReceived SIGTERM, exiting gracefully.");
-                } else {
-                    execute_command_string(&args[2], &mut shell_state);
-                }
-            } else {
-                if shell_state.colors_enabled {
-                    eprintln!(
-                        "{}{}{}",
-                        shell_state.color_scheme.error,
-                        "Error: -c requires a command string",
-                        "\x1b[0m"
-                    );
-                } else {
-                    eprintln!("Error: -c requires a command string");
-                }
-                std::process::exit(1);
-            }
-        } else if args[1] == "-v" || args[1] == "--version" {
-            let header = format!("Rush Shell (rush-sh) v{}", env!("CARGO_PKG_VERSION"));
-            println!("{}", header);
-            println!("Copyright (C) 2025 Drew Walton");
-            println!("License MIT <https://opensource.org/license/mit>");
-            println!("\nThis is free software; you are free to change and redistribute it.");
-            println!("There is NO WARRANTY, to the extent permitted by law.");
-            std::process::exit(0);
+    if !args_parsed.command.is_empty() {
+        // Command mode
+        let full_command = args_parsed.command.join(" ");
+        if SHUTDOWN.load(Ordering::Relaxed) {
+            println!("\nReceived SIGTERM, exiting gracefully.");
         } else {
-            // Script mode
-            if let Ok(content) = fs::read_to_string(&args[1]) {
-                if SHUTDOWN.load(Ordering::Relaxed) {
-                    println!("\nReceived SIGTERM, exiting gracefully.");
-                } else {
-                    execute_script(&content, &mut shell_state);
-                }
+            execute_command_string(&full_command, &mut shell_state);
+        }
+    } else if let Some(script_path) = args_parsed.script {
+        // Script mode
+        if let Ok(content) = fs::read_to_string(&script_path) {
+            if SHUTDOWN.load(Ordering::Relaxed) {
+                println!("\nReceived SIGTERM, exiting gracefully.");
             } else {
-                if shell_state.colors_enabled {
-                    eprintln!(
-                        "{}{}{}{}",
-                        shell_state.color_scheme.error,
-                        "Error: Could not read script file '",
-                        args[1],
-                        "'\x1b[0m"
-                    );
-                } else {
-                    eprintln!("Error: Could not read script file '{}'", args[1]);
-                }
-                std::process::exit(1);
+                execute_script(&content, &mut shell_state);
             }
+        } else {
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}{}{}{}",
+                    shell_state.color_scheme.error,
+                    "Error: Could not read script file '",
+                    script_path,
+                    "'\x1b[0m"
+                );
+            } else {
+                eprintln!("Error: Could not read script file '{}'", script_path);
+            }
+            std::process::exit(1);
         }
     } else {
         // Check if stdin is a TTY (interactive) or piped input
