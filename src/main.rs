@@ -69,6 +69,14 @@ fn main() {
                 }
                 std::process::exit(1);
             }
+        } else if args[1] == "-v" || args[1] == "--version" {
+            let header = format!("Rush Shell (rush-sh) v{}", env!("CARGO_PKG_VERSION"));
+            println!("{}", header);
+            println!("Copyright (C) 2025 Drew Walton");
+            println!("License MIT <https://opensource.org/license/mit>");
+            println!("\nThis is free software; you are free to change and redistribute it.");
+            println!("There is NO WARRANTY, to the extent permitted by law.");
+            std::process::exit(0);
         } else {
             // Script mode
             if let Ok(content) = fs::read_to_string(&args[1]) {
