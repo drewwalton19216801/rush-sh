@@ -30,12 +30,12 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### 1.5 Parameters and Variables
 - ✅ Variable assignment (VAR=value)
-- ✅ Variable expansion ($VAR)
-- ✅ Special parameters: $?, $$, $0
-- ❌ Positional parameters ($1, $2, ...)
-- ❌ Special parameters: $*, $@, $#, $!, $-
-- ❌ Parameter expansion with modifiers (${VAR:-default}, etc.)
-- ❌ Arithmetic expansion ($((...)))
+- ✅ Variable expansion (`$VAR`)
+- ✅ Special parameters: `$?`, `$$`, `$0`
+- ❌ Positional parameters (`$1`, `$2`, ...)
+- ❌ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
+- ❌ Parameter expansion with modifiers (`${VAR:-default}`, etc.)
+- ❌ Arithmetic expansion (`$((...))`)
 
 ### 1.6 Word Expansions
 - ✅ Tilde expansion (~)
