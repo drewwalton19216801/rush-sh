@@ -71,6 +71,7 @@ mod tests {
             append: None,
         };
         let mut shell_state = ShellState::new();
+        shell_state.colors_enabled = false;
         shell_state.set_exported_var("TEST_VAR", "test_value".to_string());
         let builtin = EnvBuiltin;
         let mut output = Vec::new();
