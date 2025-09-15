@@ -118,7 +118,6 @@ fn main() {
             // Source .rushrc file if it exists
             source_rushrc(&mut shell_state);
 
-            println!("Rush shell started. Type 'exit' to quit.");
             let mut rl = Editor::<completion::RushCompleter, FileHistory>::new().unwrap();
             rl.set_helper(Some(completion::RushCompleter::new()));
 
