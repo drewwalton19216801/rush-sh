@@ -15,7 +15,7 @@ impl super::Builtin for UnaliasBuiltin {
     }
 
     fn description(&self) -> &'static str {
-        "Remove alias definitions"
+        "Remove alias definitions. Use -a to remove all aliases."
     }
 
     fn run(
@@ -24,14 +24,23 @@ impl super::Builtin for UnaliasBuiltin {
         shell_state: &mut ShellState,
         output_writer: &mut dyn Write,
     ) -> i32 {
-        if cmd.args.len() < 2 {
-            let _ = writeln!(output_writer, "unalias: missing alias name");
+        let args = &cmd.args;
+        if args.len() < 2 {
+            let _ = writeln!(output_writer, "unalias: missing operand");
             1
-        } else if cmd.args.len() > 2 {
+        } else if args[1] == "-a" {
+            if args.len() > 2 {
+                let _ = writeln!(output_writer, "unalias: too many arguments");
+                1
+            } else {
+                shell_state.aliases.clear();
+                0
+            }
+        } else if args.len() > 2 {
             let _ = writeln!(output_writer, "unalias: too many arguments");
             1
         } else {
-            let name = &cmd.args[1];
+            let name = &args[1];
             if shell_state.get_alias(name).is_some() {
                 shell_state.remove_alias(name);
                 0
@@ -122,5 +131,66 @@ mod tests {
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
         assert_eq!(exit_code, 1);
+    }
+    #[test]
+    fn test_execute_builtin_unalias_all() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_alias("test_alias1", "ls -l".to_string());
+        shell_state.set_alias("test_alias2", "echo hi".to_string());
+
+        // Verify aliases exist
+        assert_eq!(shell_state.get_all_aliases().len(), 2);
+
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "-a".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        assert!(output.is_empty());
+
+        // Verify all aliases removed
+        assert!(shell_state.get_all_aliases().is_empty());
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_all_no_aliases() {
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "-a".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0);
+        assert!(output.is_empty());
+
+        // Verify still empty
+        assert!(shell_state.get_all_aliases().is_empty());
+    }
+
+    #[test]
+    fn test_execute_builtin_unalias_all_too_many_args() {
+        let cmd = ShellCommand {
+            args: vec!["unalias".to_string(), "-a".to_string(), "extra".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let builtin = UnaliasBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1);
+
+        let output_str = String::from_utf8_lossy(&output);
+        assert!(output_str.contains("too many arguments"));
     }
 }
