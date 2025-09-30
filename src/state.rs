@@ -112,7 +112,9 @@ impl ShellState {
             _ => {
                 // Handle positional parameters $1, $2, $3, etc.
                 if let Ok(index) = name.parse::<usize>()
-                    && index > 0 && index <= self.positional_params.len() {
+                    && index > 0
+                    && index <= self.positional_params.len()
+                {
                     return Some(self.positional_params[index - 1].clone());
                 }
 
@@ -358,7 +360,11 @@ mod tests {
     #[test]
     fn test_positional_parameters() {
         let mut state = ShellState::new();
-        state.set_positional_params(vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string()]);
+        state.set_positional_params(vec![
+            "arg1".to_string(),
+            "arg2".to_string(),
+            "arg3".to_string(),
+        ]);
 
         assert_eq!(state.get_var("1"), Some("arg1".to_string()));
         assert_eq!(state.get_var("2"), Some("arg2".to_string()));
@@ -383,7 +389,11 @@ mod tests {
     #[test]
     fn test_shift_positional_params() {
         let mut state = ShellState::new();
-        state.set_positional_params(vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string()]);
+        state.set_positional_params(vec![
+            "arg1".to_string(),
+            "arg2".to_string(),
+            "arg3".to_string(),
+        ]);
 
         assert_eq!(state.get_var("1"), Some("arg1".to_string()));
         assert_eq!(state.get_var("2"), Some("arg2".to_string()));

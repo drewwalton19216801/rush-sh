@@ -37,11 +37,11 @@ mod builtin_pushd;
 mod builtin_pwd;
 mod builtin_set_color_scheme;
 mod builtin_set_colors;
+mod builtin_shift;
 mod builtin_source;
 mod builtin_test;
 mod builtin_unalias;
 mod builtin_unset;
-mod builtin_shift;
 
 pub trait Builtin {
     fn name(&self) -> &'static str;

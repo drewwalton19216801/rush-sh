@@ -55,7 +55,11 @@ mod tests {
             append: None,
         };
         let mut shell_state = ShellState::new();
-        shell_state.set_positional_params(vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string()]);
+        shell_state.set_positional_params(vec![
+            "arg1".to_string(),
+            "arg2".to_string(),
+            "arg3".to_string(),
+        ]);
 
         assert_eq!(shell_state.get_positional_params().len(), 3);
         assert_eq!(shell_state.get_var("1"), Some("arg1".to_string()));
@@ -82,7 +86,12 @@ mod tests {
             append: None,
         };
         let mut shell_state = ShellState::new();
-        shell_state.set_positional_params(vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string(), "arg4".to_string()]);
+        shell_state.set_positional_params(vec![
+            "arg1".to_string(),
+            "arg2".to_string(),
+            "arg3".to_string(),
+            "arg4".to_string(),
+        ]);
 
         assert_eq!(shell_state.get_positional_params().len(), 4);
         assert_eq!(shell_state.get_var("1"), Some("arg1".to_string()));
