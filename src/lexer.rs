@@ -234,56 +234,104 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             '$' if !in_single_quote => {
                 chars.next(); // consume $
                 if let Some(&'(') = chars.peek() {
-                    // Command substitution $(...)
                     chars.next(); // consume (
-                    let mut sub_command = String::new();
-                    let mut paren_depth = 1;
-                    while let Some(&ch) = chars.peek() {
-                        if ch == '(' {
-                            paren_depth += 1;
-                            sub_command.push(ch);
-                            chars.next();
-                        } else if ch == ')' {
-                            paren_depth -= 1;
-                            if paren_depth == 0 {
-                                chars.next(); // consume )
-                                break;
+                    if let Some(&'(') = chars.peek() {
+                        // Arithmetic expansion $((...))
+                        chars.next(); // consume second (
+                        let mut arithmetic_expr = String::new();
+                        let mut paren_depth = 1;
+                        let mut found_closing = false;
+                        while let Some(&ch) = chars.peek() {
+                            if ch == '(' {
+                                paren_depth += 1;
+                                arithmetic_expr.push(ch);
+                                chars.next();
+                            } else if ch == ')' {
+                                paren_depth -= 1;
+                                if paren_depth == 0 {
+                                    // Found the matching closing ))
+                                    chars.next(); // consume the first )
+                                    chars.next(); // consume the second )
+                                    found_closing = true;
+                                    // Evaluate the arithmetic expression
+                                    match crate::arithmetic::evaluate_arithmetic_expression(&arithmetic_expr, shell_state) {
+                                        Ok(result) => {
+                                            current.push_str(&result.to_string());
+                                        }
+                                        Err(_e) => {
+                                            // On error, keep the literal
+                                            current.push_str("$(( ");
+                                            current.push_str(&arithmetic_expr);
+                                            current.push_str(" ))");
+                                        }
+                                    }
+                                    break;
+                                } else {
+                                    arithmetic_expr.push(ch);
+                                    chars.next();
+                                }
+                            } else {
+                                arithmetic_expr.push(ch);
+                                chars.next();
+                            }
+                        }
+
+                        // If we didn't find the closing )), put back the consumed characters
+                        if !found_closing {
+                            current.push_str("$(( ");
+                            current.push_str(&arithmetic_expr);
+                        }
+                    } else {
+                        // Command substitution $(...)
+                        let mut sub_command = String::new();
+                        let mut paren_depth = 1;
+                        while let Some(&ch) = chars.peek() {
+                            if ch == '(' {
+                                paren_depth += 1;
+                                sub_command.push(ch);
+                                chars.next();
+                            } else if ch == ')' {
+                                paren_depth -= 1;
+                                if paren_depth == 0 {
+                                    chars.next(); // consume )
+                                    break;
+                                } else {
+                                    sub_command.push(ch);
+                                    chars.next();
+                                }
                             } else {
                                 sub_command.push(ch);
                                 chars.next();
                             }
-                        } else {
-                            sub_command.push(ch);
-                            chars.next();
                         }
-                    }
-                    // Expand variables in the command before executing
-                    let expanded_command = expand_variables_in_command(&sub_command, shell_state);
-                    // Execute the command and substitute the output
-                    let mut command = std::process::Command::new("sh");
-                    command.arg("-c").arg(&expanded_command);
-                    let child_env = shell_state.get_env_for_child();
-                    command.env_clear();
-                    for (key, value) in child_env {
-                        command.env(key, value);
-                    }
-                    if let Ok(output) = command.output() {
-                        if output.status.success() {
-                            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                            if !stdout.is_empty() {
-                                current.push_str(&stdout);
+                        // Expand variables in the command before executing
+                        let expanded_command = expand_variables_in_command(&sub_command, shell_state);
+                        // Execute the command and substitute the output
+                        let mut command = std::process::Command::new("sh");
+                        command.arg("-c").arg(&expanded_command);
+                        let child_env = shell_state.get_env_for_child();
+                        command.env_clear();
+                        for (key, value) in child_env {
+                            command.env(key, value);
+                        }
+                        if let Ok(output) = command.output() {
+                            if output.status.success() {
+                                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                                if !stdout.is_empty() {
+                                    current.push_str(&stdout);
+                                }
+                            } else {
+                                // On failure, keep the literal
+                                current.push_str("$(");
+                                current.push_str(&sub_command);
+                                current.push(')');
                             }
                         } else {
-                            // On failure, keep the literal
+                            // On error, keep the literal
                             current.push_str("$(");
                             current.push_str(&sub_command);
                             current.push(')');
                         }
-                    } else {
-                        // On error, keep the literal
-                        current.push_str("$(");
-                        current.push_str(&sub_command);
-                        current.push(')');
                     }
                 } else {
                     // Variable expansion - collect var name without consuming the terminating character
@@ -1063,5 +1111,86 @@ mod tests {
         let result = expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("recursion"));
+    }
+
+    #[test]
+    fn test_arithmetic_expansion_simple() {
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo $((2 + 3))", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("5".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_expansion_with_variables() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_var("x", "10".to_string());
+        shell_state.set_var("y", "20".to_string());
+        let result = lex("echo $((x + y * 2))", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("50".to_string()) // 10 + 20 * 2 = 50
+            ]
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_expansion_comparison() {
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo $((5 > 3))", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("1".to_string()) // true
+            ]
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_expansion_complex() {
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.set_var("a", "3".to_string());
+        let result = lex("echo $((a * 2 + 5))", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("11".to_string()) // 3 * 2 + 5 = 11
+            ]
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_expansion_unmatched_parentheses() {
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo $((2 + 3", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("$(( 2 + 3".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_arithmetic_expansion_division_by_zero() {
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo $((5 / 0))", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("$(( 5 / 0 ))".to_string())
+            ]
+        );
     }
 }

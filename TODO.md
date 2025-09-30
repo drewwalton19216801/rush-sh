@@ -40,7 +40,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ❌ Positional parameters (`$1`, `$2`, ...)
 - ❌ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
 - ❌ Parameter expansion with modifiers (`${VAR:-default}`, etc.)
-- ❌ Arithmetic expansion (`$((...))`)
+- ✅ Arithmetic expansion (`$((...))`)
 
 ### 1.6 Word Expansions
 
@@ -49,7 +49,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Command substitution ($(...) and `...`)
 - ✅ Pathname expansion (globbing with *, ?, [...])
 - ❌ Brace expansion ({a,b,c})
-- ❌ Arithmetic expansion
+- ✅ Arithmetic expansion
 
 ### 1.7 Redirection
 
@@ -229,9 +229,9 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Medium Priority
 
-1. **Arithmetic Expansion**
-   - $((...)) syntax
-   - Arithmetic operators
+1. **Arithmetic Expansion** ✅
+    - $((...)) syntax (implemented)
+    - Arithmetic operators (implemented)
 
 2. **Brace Expansion**
    - {a,b,c} syntax
