@@ -111,10 +111,9 @@ impl ShellState {
             "#" => Some(self.positional_params.len().to_string()),
             _ => {
                 // Handle positional parameters $1, $2, $3, etc.
-                if let Ok(index) = name.parse::<usize>() {
-                    if index > 0 && index <= self.positional_params.len() {
-                        return Some(self.positional_params[index - 1].clone());
-                    }
+                if let Ok(index) = name.parse::<usize>()
+                    && index > 0 && index <= self.positional_params.len() {
+                    return Some(self.positional_params[index - 1].clone());
                 }
 
                 // Check shell variables first
@@ -260,6 +259,7 @@ impl ShellState {
     }
 
     /// Get positional parameters
+    #[allow(dead_code)]
     pub fn get_positional_params(&self) -> &[String] {
         &self.positional_params
     }
@@ -276,6 +276,7 @@ impl ShellState {
     }
 
     /// Add a positional parameter at the end
+    #[allow(dead_code)]
     pub fn push_positional_param(&mut self, param: String) {
         self.positional_params.push(param);
     }
