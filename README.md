@@ -459,6 +459,13 @@ alias mkcd='mkdir -p "$1" && cd "$1"'  # Note: $1 won't work as expected
 - Built-in protection against infinite recursion
 - Aliases work in all execution modes (interactive, script, command)
 
+**Arithmetic Implementation:**
+
+- Uses the Shunting-yard algorithm for proper operator precedence and associativity
+- Token-based parsing converts infix expressions to Reverse Polish Notation (RPN)
+- Integrated with shell state for seamless variable access during evaluation
+- Comprehensive error handling with graceful fallback to literal syntax on errors
+
 ### Test Builtin with Conditional Logic
 
 Rush now provides comprehensive support for the POSIX `test` builtin command and its `[` bracket syntax, enabling powerful conditional logic in shell scripts:
@@ -815,7 +822,12 @@ Rush consists of the following components:
 - **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion, command substitution (`$(...)` and `` `...` `` syntax), arithmetic expansion (`$((...))`), and alias expansion.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
 - **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, command substitution execution, and arithmetic expression evaluation.
-- **Arithmetic Engine**: Evaluates mathematical expressions with support for variables, operator precedence, comparisons, bitwise operations, and logical operations using the Shunting-yard algorithm.
+- **Arithmetic Engine**: A comprehensive arithmetic expression evaluator implemented in [`src/arithmetic.rs`](src/arithmetic.rs) that supports:
+  - **Token-based parsing**: Converts expressions to tokens and uses the Shunting-yard algorithm for proper operator precedence
+  - **Variable integration**: Seamlessly accesses shell variables during evaluation
+  - **Comprehensive operators**: Arithmetic, comparison, bitwise, and logical operations with correct precedence
+  - **Error handling**: Robust error reporting for syntax errors, division by zero, and undefined variables
+  - **Unary operators**: Support for both logical NOT (`!`) and bitwise NOT (`~`) operations
 - **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, directory stack, and command aliases.
 - **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`) and alias management (`alias`, `unalias`).
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
@@ -834,7 +846,7 @@ Rush includes a comprehensive test suite to ensure reliability and correctness. 
 
 ### Test Structure
 
-- **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, command substitution, and edge cases.
+- **Lexer Tests** Tokenization of commands, arguments, operators, quotes, variable expansion, command substitution, arithmetic expansion, and edge cases.
 - **Parser Tests** AST construction for single commands, pipelines, redirections, if-elif-else statements, case statements with glob patterns, and error cases.
 - **Executor Tests** Built-in commands, external command execution, pipelines, redirections, case statement execution with glob matching, command substitution execution, and error handling.
 - **Completion Tests** Tab-completion for commands, files, directories, path traversal, and edge cases.
@@ -871,6 +883,7 @@ The test suite provides extensive coverage of:
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
+- **Arithmetic expansion** (`$((...))` syntax, operator precedence, variable integration, error handling)
 - Environment variable support (assignment, expansion, export, special variables)
 - Variable scoping and inheritance
 - Tab-completion for commands, files, and directories
