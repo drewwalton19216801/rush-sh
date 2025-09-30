@@ -523,6 +523,7 @@ Several features were fully implemented but not properly documented in previous 
 **While Loops** - Full implementation with `while condition; do commands; done` syntax, supporting complex conditions, nested loops, and proper exit code handling.
 
 **Function System** - Comprehensive function implementation including:
+
 - Function definition: `name() { commands; }`
 - Function calls with arguments: `name arg1 arg2`
 - Local variable scoping: `local var=value`
@@ -1245,6 +1246,7 @@ Rush includes an extensive test suite with **100+ test cases** ensuring reliabil
 - **Feature-Specific Tests**: Dedicated test suites for arithmetic expansion, parameter expansion, and POSIX compliance
 
 **Test Coverage Areas:**
+
 - Command parsing and execution
 - Variable expansion and parameter modifiers
 - Arithmetic expression evaluation
