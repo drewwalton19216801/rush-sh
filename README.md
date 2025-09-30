@@ -35,6 +35,12 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - Variable expansion: `$VAR` and special variables (`$?`, `$$`, `$0`)
   - Export mechanism: `export VAR` and `export VAR=value`
   - Variable scoping: Shell variables vs exported environment variables
+- **Positional Parameters**: Complete support for script arguments and parameter manipulation.
+  - Individual parameters: `$1`, `$2`, `$3`, etc. for accessing script arguments
+  - All parameters: `$*` and `$@` for accessing all arguments as a single string
+  - Parameter count: `$#` returns the number of positional parameters
+  - Parameter shifting: `shift [n]` builtin to shift positional parameters
+  - Script argument passing: `./rush-sh script.sh arg1 arg2 arg3`
 - **Control Structures**:
   - `if` statements: `if condition; then commands; elif condition; then commands; else commands; fi`
   - `case` statements with glob pattern matching: `case word in pattern1|pattern2) commands ;; *.txt) commands ;; *) default ;; esac`
@@ -45,6 +51,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `env`: List environment variables
   - `export`: Export variables to child processes
   - `unset`: Remove variables
+  - `shift`: Shift positional parameters
   - `source` / `.`: Execute a script file with rush (bypasses shebang and comment lines)
   - `pushd`: Push directory onto stack and change to it
   - `popd`: Pop directory from stack and change to it
@@ -537,6 +544,148 @@ fi
 
 The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
 
+### Positional Parameters
+
+Rush now provides comprehensive support for positional parameters, enabling scripts to access and manipulate command-line arguments with full POSIX compliance:
+
+- **Individual Parameters**: Access script arguments using `$1`, `$2`, `$3`, etc.
+- **All Parameters**: `$*` and `$@` provide access to all arguments as a single string
+- **Parameter Count**: `$#` returns the number of positional parameters as a string
+- **Parameter Shifting**: `shift [n]` builtin command to manipulate parameter positions
+- **Script Integration**: Automatic argument passing when running scripts with `./rush-sh script.sh arg1 arg2`
+
+**Basic Usage:**
+
+```bash
+# Create a script that uses positional parameters
+cat > greet.sh << 'EOF'
+#!/usr/bin/env rush-sh
+echo "Hello $1!"
+echo "You provided $# arguments"
+echo "All arguments: $*"
+EOF
+
+# Make it executable and run with arguments
+chmod +x greet.sh
+./rush-sh greet.sh World
+# Output: Hello World!
+#         You provided 1 arguments
+#         All arguments: World
+```
+
+**Advanced Usage:**
+
+```bash
+# Script with multiple arguments
+cat > process.sh << 'EOF'
+#!/usr/bin/env rush-sh
+echo "Script name: $0"
+echo "First arg: $1"
+echo "Second arg: $2"
+echo "Total args: $#"
+
+# Shift parameters
+echo "Shifting..."
+shift
+echo "New first arg: $1"
+echo "New arg count: $#"
+EOF
+
+./rush-sh process.sh file1.txt file2.txt
+# Output: Script name: process.sh
+#         First arg: file1.txt
+#         Second arg: file2.txt
+#         Total args: 2
+#         Shifting...
+#         New first arg: file2.txt
+#         New arg count: 1
+
+**Running the Demo Script:**
+
+To see all positional parameter features in action, run the demonstration script with multiple arguments:
+
+```bash
+./rush-sh examples/positional_parameters_demo.sh hello world test arguments
+```
+
+This will demonstrate:
+
+- Individual parameter access (`$1`, `$2`, `$3`, `$4`)
+- Parameter counting (`$#`)
+- All parameters display (`$*`, `$@`)
+- Parameter shifting with `shift` command
+- Custom shift counts with `shift 2`
+
+The script provides comprehensive output showing how each feature works with the provided arguments.
+
+```
+
+**Parameter Manipulation:**
+
+```bash
+# Using shift with custom count
+cat > multi_shift.sh << 'EOF'
+#!/usr/bin/env rush-sh
+echo "Original args: $*"
+echo "Count: $#"
+
+# Shift by 2
+shift 2
+echo "After shift 2: $*"
+echo "New count: $#"
+EOF
+
+./rush-sh multi_shift.sh a b c d e
+# Output: Original args: a b c d e
+#         Count: 5
+#         After shift 2: c d e
+#         New count: 3
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Follows standard shell parameter expansion behavior
+- **Variable Integration**: Works seamlessly with all other shell features
+- **Error Handling**: Graceful handling of out-of-bounds parameter access
+- **Multi-Mode Support**: Available in interactive mode, scripts, and command strings
+- **Performance**: Efficient parameter storage and access
+
+**Integration with Other Features:**
+
+```bash
+# Positional parameters with control structures
+cat > check_args.sh << 'EOF'
+#!/usr/bin/env rush-sh
+if [ $# -eq 0 ]; then
+    echo "No arguments provided"
+    exit 1
+fi
+
+# Process each argument
+for arg in $*; do
+    if [ -f "$arg" ]; then
+        echo "File: $arg"
+    elif [ -d "$arg" ]; then
+        echo "Directory: $arg"
+    else
+        echo "Other: $arg"
+    fi
+done
+EOF
+
+./rush-sh check_args.sh /tmp /etc/passwd nonexistent
+# Output: Directory: /tmp
+#         File: /etc/passwd
+#         Other: nonexistent
+```
+
+**Implementation Details:**
+
+- Parameters are stored efficiently in the shell state
+- Variable expansion handles parameter access during lexing and execution
+- Shift operations modify the parameter array in place
+- All parameter operations maintain O(1) access time for individual parameters
+
 ### Color Support
 
 Rush now provides comprehensive color support for enhanced terminal output with automatic detection and flexible configuration:
@@ -770,6 +919,7 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
 - Execute case example script: `source examples/case_example.sh`
 - Execute variables example script: `source examples/variables_example.sh`
 - Execute complex example script with command substitution: `source examples/complex_example.sh`
+- Execute positional parameters demo: `source examples/positional_parameters_demo.sh`
 - Alias management:
   - Create aliases: `alias ll='ls -l'; alias la='ls -la'`
   - List aliases: `alias`
@@ -781,6 +931,12 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Export variables: `export MY_VAR=value; env | grep MY_VAR`
   - Special variables: `echo "Exit code: $?"; echo "PID: $$"`
   - Quoted values: `NAME="John Doe"; echo "Hello $NAME"`
+- Positional parameters:
+  - Access arguments: `echo "First arg: $1, Second: $2"`
+  - Argument count: `echo "You provided $# arguments"`
+  - All arguments: `echo "All args: $*"`
+  - Shift parameters: `shift; echo "New first: $1"`
+  - Custom shift: `shift 2; echo "After shift 2: $*"`
 - Use control structures:
   - If statement: `if true; then echo yes; else echo no; fi`
   - If-elif-else statement: `if false; then echo no; elif true; then echo yes; else echo maybe; fi`
@@ -879,11 +1035,12 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, pwd, env, exit, help, source, export, unset, pushd, popd, dirs, alias, unalias, test, [)
+- Built-in command functionality (cd, pwd, env, exit, help, source, export, unset, shift, pushd, popd, dirs, alias, unalias, test, [)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
 - **Arithmetic expansion** (`$((...))` syntax, operator precedence, variable integration, error handling)
+- **Positional parameters** (`$1`, `$2`, `$*`, `$@`, `$#`, `shift` command)
 - Environment variable support (assignment, expansion, export, special variables)
 - Variable scoping and inheritance
 - Tab-completion for commands, files, and directories

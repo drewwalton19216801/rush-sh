@@ -37,6 +37,9 @@ struct Args {
 
     #[arg(value_name = "SCRIPT", conflicts_with = "command")]
     script: Option<String>,
+
+    #[arg(value_name = "ARGS", help = "Arguments to pass to the script")]
+    script_args: Vec<String>,
 }
 
 fn main() {
@@ -91,6 +94,9 @@ fn main() {
         }
     } else if let Some(script_path) = args_parsed.script {
         // Script mode
+        // Set positional parameters from script arguments
+        shell_state.set_positional_params(args_parsed.script_args);
+
         if let Ok(content) = fs::read_to_string(&script_path) {
             if SHUTDOWN.load(Ordering::Relaxed) {
                 println!("\nReceived SIGTERM, exiting gracefully.");

@@ -48,6 +48,8 @@ pub struct ShellState {
     pub colors_enabled: bool,
     /// Current color scheme
     pub color_scheme: ColorScheme,
+    /// Positional parameters ($1, $2, $3, ...)
+    pub positional_params: Vec<String>,
 }
 
 impl ShellState {
@@ -79,6 +81,7 @@ impl ShellState {
             aliases: HashMap::new(),
             colors_enabled,
             color_scheme: ColorScheme::default(),
+            positional_params: Vec::new(),
         }
     }
 
@@ -89,7 +92,31 @@ impl ShellState {
             "?" => Some(self.last_exit_code.to_string()),
             "$" => Some(self.shell_pid.to_string()),
             "0" => Some(self.script_name.clone()),
+            "*" => {
+                // $* - all positional parameters as single string (space-separated)
+                if self.positional_params.is_empty() {
+                    Some("".to_string())
+                } else {
+                    Some(self.positional_params.join(" "))
+                }
+            }
+            "@" => {
+                // $@ - all positional parameters as separate words (but returns as single string for compatibility)
+                if self.positional_params.is_empty() {
+                    Some("".to_string())
+                } else {
+                    Some(self.positional_params.join(" "))
+                }
+            }
+            "#" => Some(self.positional_params.len().to_string()),
             _ => {
+                // Handle positional parameters $1, $2, $3, etc.
+                if let Ok(index) = name.parse::<usize>() {
+                    if index > 0 && index <= self.positional_params.len() {
+                        return Some(self.positional_params[index - 1].clone());
+                    }
+                }
+
                 // Check shell variables first
                 if let Some(value) = self.variables.get(name) {
                     Some(value.clone())
@@ -226,6 +253,32 @@ impl ShellState {
     pub fn get_all_aliases(&self) -> &HashMap<String, String> {
         &self.aliases
     }
+
+    /// Set positional parameters
+    pub fn set_positional_params(&mut self, params: Vec<String>) {
+        self.positional_params = params;
+    }
+
+    /// Get positional parameters
+    pub fn get_positional_params(&self) -> &[String] {
+        &self.positional_params
+    }
+
+    /// Shift positional parameters (remove first n parameters)
+    pub fn shift_positional_params(&mut self, count: usize) {
+        if count > 0 {
+            for _ in 0..count {
+                if !self.positional_params.is_empty() {
+                    self.positional_params.remove(0);
+                }
+            }
+        }
+    }
+
+    /// Add a positional parameter at the end
+    pub fn push_positional_param(&mut self, param: String) {
+        self.positional_params.push(param);
+    }
 }
 
 impl Default for ShellState {
@@ -299,5 +352,67 @@ mod tests {
         // Should end with $ and contain @
         assert!(prompt.ends_with(" $ "));
         assert!(prompt.contains('@'));
+    }
+
+    #[test]
+    fn test_positional_parameters() {
+        let mut state = ShellState::new();
+        state.set_positional_params(vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string()]);
+
+        assert_eq!(state.get_var("1"), Some("arg1".to_string()));
+        assert_eq!(state.get_var("2"), Some("arg2".to_string()));
+        assert_eq!(state.get_var("3"), Some("arg3".to_string()));
+        assert_eq!(state.get_var("4"), None);
+        assert_eq!(state.get_var("#"), Some("3".to_string()));
+        assert_eq!(state.get_var("*"), Some("arg1 arg2 arg3".to_string()));
+        assert_eq!(state.get_var("@"), Some("arg1 arg2 arg3".to_string()));
+    }
+
+    #[test]
+    fn test_positional_parameters_empty() {
+        let mut state = ShellState::new();
+        state.set_positional_params(vec![]);
+
+        assert_eq!(state.get_var("1"), None);
+        assert_eq!(state.get_var("#"), Some("0".to_string()));
+        assert_eq!(state.get_var("*"), Some("".to_string()));
+        assert_eq!(state.get_var("@"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_shift_positional_params() {
+        let mut state = ShellState::new();
+        state.set_positional_params(vec!["arg1".to_string(), "arg2".to_string(), "arg3".to_string()]);
+
+        assert_eq!(state.get_var("1"), Some("arg1".to_string()));
+        assert_eq!(state.get_var("2"), Some("arg2".to_string()));
+        assert_eq!(state.get_var("3"), Some("arg3".to_string()));
+
+        state.shift_positional_params(1);
+
+        assert_eq!(state.get_var("1"), Some("arg2".to_string()));
+        assert_eq!(state.get_var("2"), Some("arg3".to_string()));
+        assert_eq!(state.get_var("3"), None);
+        assert_eq!(state.get_var("#"), Some("2".to_string()));
+
+        state.shift_positional_params(2);
+
+        assert_eq!(state.get_var("1"), None);
+        assert_eq!(state.get_var("#"), Some("0".to_string()));
+    }
+
+    #[test]
+    fn test_push_positional_param() {
+        let mut state = ShellState::new();
+        state.set_positional_params(vec!["arg1".to_string()]);
+
+        assert_eq!(state.get_var("1"), Some("arg1".to_string()));
+        assert_eq!(state.get_var("#"), Some("1".to_string()));
+
+        state.push_positional_param("arg2".to_string());
+
+        assert_eq!(state.get_var("1"), Some("arg1".to_string()));
+        assert_eq!(state.get_var("2"), Some("arg2".to_string()));
+        assert_eq!(state.get_var("#"), Some("2".to_string()));
     }
 }

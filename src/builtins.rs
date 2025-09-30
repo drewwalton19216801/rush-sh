@@ -41,6 +41,7 @@ mod builtin_source;
 mod builtin_test;
 mod builtin_unalias;
 mod builtin_unset;
+mod builtin_shift;
 
 pub trait Builtin {
     fn name(&self) -> &'static str;
@@ -72,6 +73,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_test::TestBuiltin),
         Box::new(builtin_set_colors::SetColorsBuiltin),
         Box::new(builtin_set_color_scheme::SetColorSchemeBuiltin),
+        Box::new(builtin_shift::ShiftBuiltin),
     ]
 }
 
@@ -214,6 +216,6 @@ mod tests {
         assert!(commands.contains(&".".to_string()));
         assert!(commands.contains(&"set_colors".to_string()));
         assert!(commands.contains(&"set_color_scheme".to_string()));
-        assert_eq!(commands.len(), 18);
+        assert_eq!(commands.len(), 19);
     }
 }
