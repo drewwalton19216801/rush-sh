@@ -1,6 +1,6 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.3.4** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.4.0** - A comprehensive POSIX sh-compatible shell implementation
 
 [![Repository Statistics](https://tokei.rs/b1/github/drewwalton19216801/rush-sh)](https://github.com/drewwalton19216801/rush-sh) [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
@@ -62,7 +62,15 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Control Structures**:
   - `if` statements: `if condition; then commands; elif condition; then commands; else commands; fi`
   - `case` statements with glob pattern matching: `case word in pattern1|pattern2) commands ;; *.txt) commands ;; *) default ;; esac`
-- **Built-in Commands**:
+  - `for` loops: `for variable in item1 item2 item3; do commands; done`
+  - `while` loops: `while condition; do commands; done`
+  - **Functions**: Complete function support with definition, calls, local variables, return statements, and recursion
+    - Function definition: `name() { commands; }`
+    - Function calls: `name arg1 arg2`
+    - Local variables: `local var=value`
+    - Return statements: `return [value]`
+    - Function introspection: `declare -f [function_name]`
+- **Built-in Commands** (18 total):
   - `cd`: Change directory
   - `exit`: Exit the shell
   - `pwd`: Print working directory
@@ -79,6 +87,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `test` / `[`: POSIX-compatible test builtin with string and file tests
   - `set_colors`: Enable/disable color output dynamically
   - `set_color_scheme`: Switch between color themes (default/dark/light)
+  - `declare`: Display function definitions and list function names
   - `help`: Show available commands
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
@@ -89,15 +98,19 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Signal Handling**: Graceful handling of SIGINT (Ctrl+C) and SIGTERM.
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
-## What's New in v0.3.3
+## What's New
 
 ### 🚀 Major Feature Additions
+
+**Complete Control Structures** - Full implementation of POSIX control structures including `for` loops, `while` loops, and function definitions with local variable scoping, return statements, and recursion support.
+
+**Function System** - Comprehensive function implementation with definition, calls, local variables (`local` keyword), return statements, recursion, and function introspection (`declare -f`).
 
 **Complete POSIX Parameter Expansion** - Full implementation of `${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, and all other POSIX parameter expansion modifiers with comprehensive pattern matching and string manipulation capabilities.
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 18 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
@@ -500,6 +513,23 @@ alias mkcd='mkdir -p "$1" && cd "$1"'  # Note: $1 won't work as expected
 - Expansion is recursive (aliases can reference other aliases)
 - Built-in protection against infinite recursion
 - Aliases work in all execution modes (interactive, script, command)
+
+### Newly Documented Features (Previously Implemented)
+
+Several features were fully implemented but not properly documented in previous versions:
+
+**For Loops** - Complete implementation with `for variable in items; do commands; done` syntax, supporting variable assignment, multiple items, and integration with all shell features.
+
+**While Loops** - Full implementation with `while condition; do commands; done` syntax, supporting complex conditions, nested loops, and proper exit code handling.
+
+**Function System** - Comprehensive function implementation including:
+- Function definition: `name() { commands; }`
+- Function calls with arguments: `name arg1 arg2`
+- Local variable scoping: `local var=value`
+- Return statements: `return [value]`
+- Recursion support with configurable depth limits
+- Function introspection: `declare -f [function_name]`
+- Integration with all shell features (variables, expansions, control structures)
 
 **Arithmetic Implementation:**
 
@@ -1105,6 +1135,7 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
 - Execute variables example script: `source examples/variables_example.sh`
 - Execute complex example script with command substitution: `source examples/complex_example.sh`
 - Execute positional parameters demo: `source examples/positional_parameters_demo.sh`
+- Execute functions demo (comprehensive): `source examples/functions_demo.sh`
 - Alias management:
   - Create aliases: `alias ll='ls -l'; alias la='ls -la'`
   - List aliases: `alias`
@@ -1130,6 +1161,14 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
     - Glob patterns: `case file.txt in *.txt) echo "Text file" ;; *.jpg) echo "Image" ;; *) echo "Other" ;; esac`
     - Multiple patterns: `case file in *.txt|*.md) echo "Document" ;; *.exe|*.bin) echo "Executable" ;; *) echo "Other" ;; esac`
     - Character classes: `case letter in [abc]) echo "A, B, or C" ;; *) echo "Other letter" ;; esac`
+  - For loops: `for i in 1 2 3; do echo "Number: $i"; done`
+  - While loops: `while [ $count -lt 5 ]; do echo "Count: $count"; count=$((count + 1)); done`
+  - Functions:
+    - Define function: `myfunc() { echo "Hello $1"; }`
+    - Call function: `myfunc world`
+    - Local variables: `local var="value"`
+    - Return values: `return 42`
+    - Function introspection: `declare -f myfunc`
 - Test builtin for conditional logic:
   - String tests: `if test -z "$VAR"; then echo "Variable is empty"; fi`
   - File tests: `if [ -f "/etc/passwd" ]; then echo "File exists"; fi`
@@ -1254,9 +1293,10 @@ cargo test integration
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (cd, pwd, env, exit, help, source, export, unset, shift, pushd, popd, dirs, alias, unalias, test, [)
+- Built-in command functionality (all 18 built-in commands including cd, pwd, env, exit, help, source, export, unset, shift, pushd, popd, dirs, alias, unalias, test, [, set_colors, set_color_scheme, declare)
 - Pipeline and redirection handling
-- Control structures (if-elif-else statements, case statements with glob patterns)
+- Control structures (if-elif-else statements, case statements with glob patterns, for loops, while loops)
+- **Functions** (definition, calls, local variables, return statements, recursion, introspection)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
 - **Arithmetic expansion** (`$((...))` syntax, operator precedence, variable integration, error handling)
 - **Positional parameters** (`$1`, `$2`, `$*`, `$@`, `$#`, `shift` command)
