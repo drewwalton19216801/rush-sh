@@ -178,10 +178,16 @@ pub fn parse_parameter_expansion(content: &str) -> Result<ParameterExpansion, St
     let (final_var_name, modifier) = if var_name.starts_with('!') {
         if var_name.ends_with('*') {
             // Strip the '*' from the var_name for IndirectPrefix
-            (var_name[..var_name.len() - 1].to_string(), ParameterModifier::IndirectPrefix)
+            (
+                var_name[..var_name.len() - 1].to_string(),
+                ParameterModifier::IndirectPrefix,
+            )
         } else if var_name.ends_with('@') {
             // Strip the '@' from the var_name for IndirectPrefixAt
-            (var_name[..var_name.len() - 1].to_string(), ParameterModifier::IndirectPrefixAt)
+            (
+                var_name[..var_name.len() - 1].to_string(),
+                ParameterModifier::IndirectPrefixAt,
+            )
         } else {
             return Err("Invalid indirect expansion: must end with * or @".to_string());
         }
@@ -466,7 +472,6 @@ pub fn expand_parameter(
     Ok(value.unwrap_or_else(|| "".to_string()))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -534,7 +539,6 @@ mod tests {
             ParameterModifier::SubstringWithLength(2, 3)
         );
     }
-
 
     #[test]
     fn test_parse_remove_shortest_prefix() {
@@ -669,5 +673,4 @@ mod tests {
         let result = expand_parameter(&expansion, &shell_state).unwrap();
         assert_eq!(result, "world");
     }
-
 }

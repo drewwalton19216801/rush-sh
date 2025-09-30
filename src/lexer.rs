@@ -1,9 +1,7 @@
 use std::collections::HashSet;
 use std::env;
 
-use super::parameter_expansion::{
-    expand_parameter, parse_parameter_expansion,
-};
+use super::parameter_expansion::{expand_parameter, parse_parameter_expansion};
 use super::state::ShellState;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
