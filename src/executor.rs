@@ -126,6 +126,32 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             shell_state.set_var(&var, expanded_value);
             0
         }
+        Ast::LocalAssignment { var, value } => {
+            // Expand substitutions in the value
+            let tokens = crate::lexer::lex(&value, shell_state).unwrap_or_else(|_| vec![]);
+            let expanded_value = if !tokens.is_empty() {
+                // Collect all Word tokens and join them with spaces
+                let words: Vec<String> = tokens
+                    .iter()
+                    .filter_map(|token| {
+                        if let crate::lexer::Token::Word(word) = token {
+                            Some(word.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if !words.is_empty() {
+                    words.join(" ")
+                } else {
+                    value
+                }
+            } else {
+                value
+            };
+            shell_state.set_local_var(&var, expanded_value);
+            0
+        }
         Ast::Pipeline(commands) => {
             if commands.is_empty() {
                 return 0;
@@ -194,7 +220,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         }
         Ast::FunctionCall { name, args } => {
             if let Some(function_body) = shell_state.get_function(&name).cloned() {
-                // For Phase 1, we'll use a simpler approach without local variables
+                // Enter function context for local variable scoping
+                shell_state.enter_function();
+
                 // Set up arguments as regular variables (will be enhanced in Phase 2)
                 let old_positional = shell_state.positional_params.clone();
 
@@ -206,6 +234,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Restore old positional parameters
                 shell_state.set_positional_params(old_positional);
+
+                // Exit function context
+                shell_state.exit_function();
 
                 exit_code
             } else {
@@ -749,5 +780,115 @@ mod tests {
         };
         let exit_code = execute(call_ast, &mut shell_state);
         assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_function_with_local_variables() {
+        let mut shell_state = crate::state::ShellState::new();
+
+        // Set a global variable
+        shell_state.set_var("global_var", "global_value".to_string());
+
+        // Define a function that uses local variables
+        let define_ast = Ast::FunctionDefinition {
+            name: "test_func".to_string(),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::LocalAssignment {
+                    var: "local_var".to_string(),
+                    value: "local_value".to_string(),
+                },
+                Ast::Assignment {
+                    var: "global_var".to_string(),
+                    value: "modified_in_function".to_string(),
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["printf".to_string(), "success".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                }]),
+            ])),
+        };
+        let exit_code = execute(define_ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Global variable should not be modified during function definition
+        assert_eq!(shell_state.get_var("global_var"), Some("global_value".to_string()));
+
+        // Call the function
+        let call_ast = Ast::FunctionCall {
+            name: "test_func".to_string(),
+            args: vec![],
+        };
+        let exit_code = execute(call_ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // After function call, global variable should be modified since function assignments affect global scope
+        assert_eq!(shell_state.get_var("global_var"), Some("modified_in_function".to_string()));
+    }
+
+    #[test]
+    fn test_execute_nested_function_calls() {
+        let mut shell_state = crate::state::ShellState::new();
+
+        // Set global variable
+        shell_state.set_var("global_var", "global".to_string());
+
+        // Define outer function
+        let outer_func = Ast::FunctionDefinition {
+            name: "outer".to_string(),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "global_var".to_string(),
+                    value: "outer_modified".to_string(),
+                },
+                Ast::FunctionCall {
+                    name: "inner".to_string(),
+                    args: vec![],
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["printf".to_string(), "outer_done".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                }]),
+            ])),
+        };
+
+        // Define inner function
+        let inner_func = Ast::FunctionDefinition {
+            name: "inner".to_string(),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "global_var".to_string(),
+                    value: "inner_modified".to_string(),
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["printf".to_string(), "inner_done".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                }]),
+            ])),
+        };
+
+        // Define both functions
+        execute(outer_func, &mut shell_state);
+        execute(inner_func, &mut shell_state);
+
+        // Set initial global value
+        shell_state.set_var("global_var", "initial".to_string());
+
+        // Call outer function (which calls inner function)
+        let call_ast = Ast::FunctionCall {
+            name: "outer".to_string(),
+            args: vec![],
+        };
+        let exit_code = execute(call_ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // After nested function calls, global variable should be modified by inner function
+        // (bash behavior: function variable assignments affect global scope)
+        assert_eq!(shell_state.get_var("global_var"), Some("inner_modified".to_string()));
     }
 }

@@ -1,8 +1,9 @@
 #!/usr/bin/env rush-sh
 
 # Function Support Demo for Rush Shell
-# This script demonstrates Phase 1 of the function implementation:
-# Basic function definition and calls as outlined in FUNCTIONS_TODO.md
+# This script demonstrates Phase 1 and Phase 2 of the function implementation:
+# Phase 1: Basic function definition and calls
+# Phase 2: Local variable scoping as outlined in FUNCTIONS_TODO.md
 
 echo "=========================================="
 echo "    RUSH SHELL FUNCTION SUPPORT DEMO"
@@ -10,10 +11,101 @@ echo "=========================================="
 echo ""
 
 # =============================================================================
-# BASIC FUNCTION DEFINITION AND CALLS
+# PHASE 2: LOCAL VARIABLE SCOPING
 # =============================================================================
 
-echo "=== BASIC FUNCTION DEFINITION AND CALLS ==="
+echo "=== PHASE 2: LOCAL VARIABLE SCOPING ==="
+echo ""
+
+echo "1. Demonstrating local variable scoping:"
+echo ""
+
+# Set a global variable
+global_var="global_value"
+echo "   Global variable set: global_var = $global_var"
+
+# Define function with local variable
+demo_local() {
+    echo "   Inside function demo_local:"
+    echo "   Global var before: $global_var"
+
+    # Declare local variable (Phase 2 feature)
+    local local_var="local_value"
+    echo "   Local variable: local_var = $local_var"
+
+    # Modify global variable
+    global_var="modified_in_function"
+    echo "   Global var after modification: $global_var"
+}
+
+echo "2. Calling function with local variables:"
+demo_local
+
+echo ""
+echo "3. After function call:"
+echo "   Global variable: global_var = $global_var"
+echo "   Local variable (should be undefined): local_var = ${local_var:-'<undefined>'}"
+echo ""
+
+# =============================================================================
+# VARIABLE ISOLATION BETWEEN FUNCTIONS
+# =============================================================================
+
+echo "=== VARIABLE ISOLATION BETWEEN FUNCTIONS ==="
+echo ""
+
+func1() {
+    local my_var="func1_value"
+    echo "   func1: my_var = $my_var"
+}
+
+func2() {
+    local my_var="func2_value"
+    echo "   func2: my_var = $my_var"
+}
+
+echo "4. Testing variable isolation:"
+func1
+func2
+echo "   After both functions: my_var = ${my_var:-'<undefined>'}"
+echo ""
+
+# =============================================================================
+# NESTED FUNCTION CALLS WITH SCOPING
+# =============================================================================
+
+echo "=== NESTED FUNCTION CALLS WITH SCOPING ==="
+echo ""
+
+outer_func() {
+    local outer_var="outer_value"
+    echo "   outer_func: outer_var = $outer_var"
+
+    inner_func() {
+        local inner_var="inner_value"
+        echo "     inner_func: inner_var = $inner_var"
+        echo "     inner_func: outer_var (inherited) = $outer_var"
+
+        # Modify outer scope variable
+        outer_var="modified_by_inner"
+        echo "     inner_func: outer_var after modification = $outer_var"
+    }
+
+    echo "   outer_func before inner call: outer_var = $outer_var"
+    inner_func
+    echo "   outer_func after inner call: outer_var = $outer_var"
+    echo "   outer_func: inner_var (should be undefined) = ${inner_var:-'<undefined>'}"
+}
+
+echo "5. Calling nested functions:"
+outer_func
+echo ""
+
+# =============================================================================
+# BASIC FUNCTION DEFINITION AND CALLS (Phase 1)
+# =============================================================================
+
+echo "=== PHASE 1: BASIC FUNCTION DEFINITION AND CALLS ==="
 echo ""
 
 # Define a simple function that greets someone
@@ -197,4 +289,12 @@ echo "✓ Integration with shell variables and commands"
 echo "✓ Error handling for undefined functions"
 echo "✓ Positional parameters (\$1, \$2, \$*, \$#, \$0)"
 echo ""
-echo "All Phase 1 requirements from FUNCTIONS_TODO.md are working!"
+echo "Phase 2 Features Demonstrated:"
+echo "✓ Local variable declarations with 'local' keyword"
+echo "✓ Variable isolation between functions"
+echo "✓ Nested function calls with proper scoping"
+echo "✓ Local variables vs global variables"
+echo "✓ Variable inheritance from outer scopes"
+echo "✓ Automatic cleanup of local scopes"
+echo ""
+echo "All Phase 1 and Phase 2 requirements from FUNCTIONS_TODO.md are working!"

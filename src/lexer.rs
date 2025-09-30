@@ -26,6 +26,7 @@ pub enum Token {
     LeftBrace,
     RightBrace,
     Newline,
+    Local,
 }
 
 fn is_keyword(word: &str) -> Option<Token> {
@@ -38,6 +39,7 @@ fn is_keyword(word: &str) -> Option<Token> {
         "case" => Some(Token::Case),
         "in" => Some(Token::In),
         "esac" => Some(Token::Esac),
+        "local" => Some(Token::Local),
         _ => None,
     }
 }
@@ -1695,6 +1697,32 @@ mod tests {
             vec![
                 Token::Word("echo".to_string()),
                 Token::Word("/bin:/usr/local/bin".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_local_keyword() {
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("local myvar", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Local,
+                Token::Word("myvar".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_local_keyword_in_function() {
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("local var=value", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Local,
+                Token::Word("var=value".to_string())
             ]
         );
     }

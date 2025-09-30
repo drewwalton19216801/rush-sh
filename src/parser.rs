@@ -8,6 +8,10 @@ pub enum Ast {
         var: String,
         value: String,
     },
+    LocalAssignment {
+        var: String,
+        value: String,
+    },
     If {
         branches: Vec<(Box<Ast>, Box<Ast>)>, // (condition, then_branch)
         else_branch: Option<Box<Ast>>,
@@ -79,6 +83,19 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
         }
     }
 
+    // Also check for legacy function definition format (word with parentheses followed by brace)
+    if tokens.len() >= 2 {
+        if let Token::Word(ref word) = tokens[0] {
+            if let Some(paren_pos) = word.find('(') {
+                if word.ends_with(')') && paren_pos > 0 {
+                    if tokens[1] == Token::LeftBrace {
+                        return parse_function_definition(&tokens);
+                    }
+                }
+            }
+        }
+    }
+
     // Fall back to normal parsing
     parse_commands_sequentially(&tokens)
 }
@@ -126,6 +143,35 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         }
     }
 
+    // Check if it's a local assignment (local VAR VALUE)
+    if tokens.len() == 3 {
+        if let (Token::Local, Token::Word(var), Token::Word(value)) = (&tokens[0], &tokens[1], &tokens[2]) {
+            // Basic validation: variable name should start with letter or underscore
+            if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+                return Ok(Ast::LocalAssignment {
+                    var: var.clone(),
+                    value: value.clone(),
+                });
+            }
+        }
+    }
+
+    // Check if it's a local assignment (local VAR=VALUE)
+    if tokens.len() == 2 {
+        if let (Token::Local, Token::Word(var_eq)) = (&tokens[0], &tokens[1]) {
+            if let Some(eq_pos) = var_eq.find('=') {
+                if eq_pos > 0 && eq_pos < var_eq.len() - 1 {
+                    let var = var_eq[..eq_pos].to_string();
+                    let value = var_eq[eq_pos + 1..].to_string();
+                    // Basic validation: variable name should start with letter or underscore
+                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+                        return Ok(Ast::LocalAssignment { var, value });
+                    }
+                }
+            }
+        }
+    }
+
     // Check if it's an assignment (single token with =)
     if tokens.len() == 1 {
         if let Token::Word(ref word) = tokens[0] {
@@ -165,12 +211,16 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     }
 
     // Also check for function definition with parentheses in the word (legacy support)
-    if let Token::Word(ref word) = tokens[0] {
-        if let Some(paren_pos) = word.find('(') {
-            if word.ends_with(')') && paren_pos > 0 {
-                let func_name = &word[..paren_pos];
-                if func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_') {
-                    return parse_function_definition(tokens);
+    if tokens.len() >= 2 {
+        if let Token::Word(ref word) = tokens[0] {
+            if let Some(paren_pos) = word.find('(') {
+                if word.ends_with(')') && paren_pos > 0 {
+                    let func_name = &word[..paren_pos];
+                    if func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_') {
+                        if tokens[1] == Token::LeftBrace {
+                            return parse_function_definition(tokens);
+                        }
+                    }
                 }
             }
         }
@@ -667,34 +717,46 @@ fn parse_case(tokens: &[Token]) -> Result<Ast, String> {
 }
 
 fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
-    if tokens.len() < 4 {
+    if tokens.len() < 2 {
         return Err("Function definition too short".to_string());
     }
 
     // Extract function name from first token
     let func_name = if let Token::Word(word) = &tokens[0] {
-        word.clone()
+        // Handle legacy format with parentheses in the word (e.g., "legacyfunc()")
+        if let Some(paren_pos) = word.find('(') {
+            if word.ends_with(')') && paren_pos > 0 {
+                word[..paren_pos].to_string()
+            } else {
+                word.clone()
+            }
+        } else {
+            word.clone()
+        }
     } else {
         return Err("Function name must be a word".to_string());
     };
 
-    // Check for parentheses and opening brace
-    if tokens[1] != Token::LeftParen {
-        return Err("Expected ( after function name".to_string());
-    }
-    if tokens[2] != Token::RightParen {
-        return Err("Expected ) after function name".to_string());
-    }
-    if tokens[3] != Token::LeftBrace {
-        return Err("Expected { after function name".to_string());
-    }
+    // Find the opening brace and body
+    let brace_pos = if tokens.len() >= 4 && tokens[1] == Token::LeftParen && tokens[2] == Token::RightParen {
+        // Standard format: name() {
+        if tokens[3] != Token::LeftBrace {
+            return Err("Expected { after function name".to_string());
+        }
+        3
+    } else if tokens.len() >= 2 && tokens[1] == Token::LeftBrace {
+        // Legacy format: name() {
+        1
+    } else {
+        return Err("Expected ( after function name or { for legacy format".to_string());
+    };
 
     // Find the matching closing brace
     let mut brace_depth = 0;
     let mut body_end = 0;
     let mut found_closing = false;
 
-    for (i, token) in tokens[4..].iter().enumerate() {
+    for (i, token) in tokens[brace_pos + 1..].iter().enumerate() {
         match token {
             Token::LeftBrace => {
                 brace_depth += 1;
@@ -702,7 +764,7 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
             Token::RightBrace => {
                 if brace_depth == 0 {
                     // This is our matching closing brace
-                    body_end = 4 + i;
+                    body_end = brace_pos + 1 + i;
                     found_closing = true;
                     break;
                 } else {
@@ -718,7 +780,7 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
     }
 
     // Extract body tokens (everything between { and })
-    let body_tokens = &tokens[4..body_end];
+    let body_tokens = &tokens[brace_pos + 1..body_end];
 
     // Parse the function body using the existing parser
     let body_ast = if body_tokens.is_empty() {
@@ -1147,5 +1209,48 @@ mod tests {
         } else {
             panic!("should be parsed as function definition");
         }
+    }
+
+    #[test]
+    fn test_parse_local_assignment() {
+        let tokens = vec![
+            Token::Local,
+            Token::Word("MY_VAR=test_value".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::LocalAssignment { var, value } = result {
+            assert_eq!(var, "MY_VAR");
+            assert_eq!(value, "test_value");
+        } else {
+            panic!("should be parsed as local assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_local_assignment_separate_tokens() {
+        let tokens = vec![
+            Token::Local,
+            Token::Word("MY_VAR".to_string()),
+            Token::Word("test_value".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::LocalAssignment { var, value } = result {
+            assert_eq!(var, "MY_VAR");
+            assert_eq!(value, "test_value");
+        } else {
+            panic!("should be parsed as local assignment");
+        }
+    }
+
+    #[test]
+    fn test_parse_local_assignment_invalid_var_name() {
+        // Variable name starting with number should not be parsed as local assignment
+        let tokens = vec![
+            Token::Local,
+            Token::Word("123VAR=value".to_string()),
+        ];
+        let result = parse(tokens);
+        // Should return an error since 123VAR is not a valid variable name
+        assert!(result.is_err());
     }
 }
