@@ -187,6 +187,32 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 0
             }
         }
+        Ast::FunctionDefinition { name, body } => {
+            // Store function definition in shell state
+            shell_state.define_function(name.clone(), *body);
+            0
+        }
+        Ast::FunctionCall { name, args } => {
+            if let Some(function_body) = shell_state.get_function(&name).cloned() {
+                // For Phase 1, we'll use a simpler approach without local variables
+                // Set up arguments as regular variables (will be enhanced in Phase 2)
+                let old_positional = shell_state.positional_params.clone();
+
+                // Set positional parameters for function arguments
+                shell_state.set_positional_params(args.clone());
+
+                // Execute function body
+                let exit_code = execute(function_body, shell_state);
+
+                // Restore old positional parameters
+                shell_state.set_positional_params(old_positional);
+
+                exit_code
+            } else {
+                eprintln!("Function '{}' not found", name);
+                1
+            }
+        }
     }
 }
 
@@ -204,6 +230,16 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
     if expanded_args.is_empty() {
         return 0;
+    }
+
+    // Check if this is a function call
+    if shell_state.get_function(&expanded_args[0]).is_some() {
+        // This is a function call - create a FunctionCall AST node and execute it
+        let function_call = Ast::FunctionCall {
+            name: expanded_args[0].clone(),
+            args: expanded_args[1..].to_vec(),
+        };
+        return execute(function_call, shell_state);
     }
 
     if crate::builtins::is_builtin(&expanded_args[0]) {
@@ -609,6 +645,109 @@ mod tests {
         }]);
         let mut shell_state = crate::state::ShellState::new();
         let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_function_definition() {
+        let ast = Ast::FunctionDefinition {
+            name: "test_func".to_string(),
+            body: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "hello".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }])),
+        };
+        let mut shell_state = crate::state::ShellState::new();
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Check that function was stored
+        assert!(shell_state.get_function("test_func").is_some());
+    }
+
+    #[test]
+    fn test_execute_function_call() {
+        // First define a function
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.define_function(
+            "test_func".to_string(),
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "hello".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }]),
+        );
+
+        // Now call the function
+        let ast = Ast::FunctionCall {
+            name: "test_func".to_string(),
+            args: vec![],
+        };
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_function_call_with_args() {
+        // First define a function that uses arguments
+        let mut shell_state = crate::state::ShellState::new();
+        shell_state.define_function(
+            "test_func".to_string(),
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "arg1".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }]),
+        );
+
+        // Now call the function with arguments
+        let ast = Ast::FunctionCall {
+            name: "test_func".to_string(),
+            args: vec!["hello".to_string()],
+        };
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_execute_nonexistent_function() {
+        let mut shell_state = crate::state::ShellState::new();
+        let ast = Ast::FunctionCall {
+            name: "nonexistent".to_string(),
+            args: vec![],
+        };
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 1); // Should return error code
+    }
+
+    #[test]
+    fn test_execute_function_integration() {
+        // Test full integration: define function, then call it
+        let mut shell_state = crate::state::ShellState::new();
+
+        // First define a function
+        let define_ast = Ast::FunctionDefinition {
+            name: "hello".to_string(),
+            body: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["printf".to_string(), "Hello from function".to_string()],
+                input: None,
+                output: None,
+                append: None,
+            }])),
+        };
+        let exit_code = execute(define_ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Now call the function
+        let call_ast = Ast::FunctionCall {
+            name: "hello".to_string(),
+            args: vec![],
+        };
+        let exit_code = execute(call_ast, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
 }

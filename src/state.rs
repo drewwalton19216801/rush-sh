@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use super::parser::Ast;
 use std::env;
 use std::io::IsTerminal;
 
@@ -50,6 +51,8 @@ pub struct ShellState {
     pub color_scheme: ColorScheme,
     /// Positional parameters ($1, $2, $3, ...)
     pub positional_params: Vec<String>,
+    /// Function definitions
+    pub functions: HashMap<String, Ast>,
 }
 
 impl ShellState {
@@ -82,6 +85,7 @@ impl ShellState {
             colors_enabled,
             color_scheme: ColorScheme::default(),
             positional_params: Vec::new(),
+            functions: HashMap::new(),
         }
     }
 
@@ -281,6 +285,28 @@ impl ShellState {
     #[allow(dead_code)]
     pub fn push_positional_param(&mut self, param: String) {
         self.positional_params.push(param);
+    }
+
+    /// Define a function
+    pub fn define_function(&mut self, name: String, body: Ast) {
+        self.functions.insert(name, body);
+    }
+
+    /// Get a function definition
+    pub fn get_function(&self, name: &str) -> Option<&Ast> {
+        self.functions.get(name)
+    }
+
+    /// Remove a function definition
+    #[allow(dead_code)]
+    pub fn remove_function(&mut self, name: &str) {
+        self.functions.remove(name);
+    }
+
+    /// Get all function names
+    #[allow(dead_code)]
+    pub fn get_function_names(&self) -> Vec<&String> {
+        self.functions.keys().collect()
     }
 }
 

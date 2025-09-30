@@ -249,6 +249,8 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut in_if_block = false;
     let mut if_depth = 0;
     let mut in_case_block = false;
+    let mut in_function_block = false;
+    let mut function_depth = 0;
 
     for line in content.lines() {
         // Skip shebang lines
@@ -270,6 +272,12 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             in_case_block = true;
         }
 
+        // Check for function definition
+        if trimmed.contains("() {") || (trimmed.ends_with("()") && !in_function_block) {
+            in_function_block = true;
+            function_depth += 1;
+        }
+
         // Add line to current block
         if !current_block.is_empty() {
             current_block.push('\n');
@@ -288,7 +296,14 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             in_case_block = false;
             execute_line(&current_block, shell_state);
             current_block.clear();
-        } else if !in_if_block && !in_case_block {
+        } else if in_function_block && trimmed.ends_with("}") {
+            function_depth -= 1;
+            if function_depth == 0 {
+                in_function_block = false;
+                execute_line(&current_block, shell_state);
+                current_block.clear();
+            }
+        } else if !in_if_block && !in_case_block && !in_function_block {
             // Execute single-line commands immediately
             execute_line(&current_block, shell_state);
             current_block.clear();

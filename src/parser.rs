@@ -17,6 +17,14 @@ pub enum Ast {
         cases: Vec<(Vec<String>, Ast)>,
         default: Option<Box<Ast>>,
     },
+    FunctionDefinition {
+        name: String,
+        body: Box<Ast>,
+    },
+    FunctionCall {
+        name: String,
+        args: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +36,50 @@ pub struct ShellCommand {
 }
 
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
+    // First, try to detect and parse function definitions that span multiple lines
+    if tokens.len() >= 4 {
+        if let (Token::Word(_), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
+            (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
+        {
+            // Look for the matching RightBrace
+            let mut brace_depth = 0;
+            let mut function_end = tokens.len();
+
+            for j in 0..tokens.len() {
+                match &tokens[j] {
+                    Token::LeftBrace => {
+                        brace_depth += 1;
+                    },
+                    Token::RightBrace => {
+                        brace_depth -= 1;
+                        if brace_depth == 0 {
+                            function_end = j + 1; // Include the closing brace
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if brace_depth == 0 && function_end <= tokens.len() {
+                // We found the complete function definition
+                let function_tokens = &tokens[0..function_end];
+                let remaining_tokens = &tokens[function_end..];
+
+                let function_ast = parse_function_definition(function_tokens)?;
+
+                if remaining_tokens.is_empty() {
+                    return Ok(function_ast);
+                } else {
+                    // There are more commands after the function
+                    let remaining_ast = parse_commands_sequentially(remaining_tokens)?;
+                    return Ok(Ast::Sequence(vec![function_ast, remaining_ast]));
+                }
+            }
+        }
+    }
+
+    // Fall back to normal parsing
     parse_commands_sequentially(&tokens)
 }
 
@@ -99,6 +151,33 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     if let Token::Case = tokens[0] {
         return parse_case(tokens);
     }
+
+    // Check if it's a function definition
+    // Pattern: Word LeftParen RightParen LeftBrace
+    if tokens.len() >= 4 {
+        if let (Token::Word(word), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
+            (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
+        {
+            if word.chars().next().unwrap().is_alphabetic() || word.starts_with('_') {
+                return parse_function_definition(tokens);
+            }
+        }
+    }
+
+    // Also check for function definition with parentheses in the word (legacy support)
+    if let Token::Word(ref word) = tokens[0] {
+        if let Some(paren_pos) = word.find('(') {
+            if word.ends_with(')') && paren_pos > 0 {
+                let func_name = &word[..paren_pos];
+                if func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_') {
+                    return parse_function_definition(tokens);
+                }
+            }
+        }
+    }
+
+    // Check if it's a function call (word followed by arguments)
+    // For Phase 1, we'll parse as regular pipeline and handle function calls in executor
 
     // Otherwise, parse as pipeline
     parse_pipeline(tokens)
@@ -587,6 +666,79 @@ fn parse_case(tokens: &[Token]) -> Result<Ast, String> {
     })
 }
 
+fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
+    if tokens.len() < 4 {
+        return Err("Function definition too short".to_string());
+    }
+
+    // Extract function name from first token
+    let func_name = if let Token::Word(word) = &tokens[0] {
+        word.clone()
+    } else {
+        return Err("Function name must be a word".to_string());
+    };
+
+    // Check for parentheses and opening brace
+    if tokens[1] != Token::LeftParen {
+        return Err("Expected ( after function name".to_string());
+    }
+    if tokens[2] != Token::RightParen {
+        return Err("Expected ) after function name".to_string());
+    }
+    if tokens[3] != Token::LeftBrace {
+        return Err("Expected { after function name".to_string());
+    }
+
+    // Find the matching closing brace
+    let mut brace_depth = 0;
+    let mut body_end = 0;
+    let mut found_closing = false;
+
+    for (i, token) in tokens[4..].iter().enumerate() {
+        match token {
+            Token::LeftBrace => {
+                brace_depth += 1;
+            }
+            Token::RightBrace => {
+                if brace_depth == 0 {
+                    // This is our matching closing brace
+                    body_end = 4 + i;
+                    found_closing = true;
+                    break;
+                } else {
+                    brace_depth -= 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    if !found_closing {
+        return Err("Missing closing } for function definition".to_string());
+    }
+
+    // Extract body tokens (everything between { and })
+    let body_tokens = &tokens[4..body_end];
+
+    // Parse the function body using the existing parser
+    let body_ast = if body_tokens.is_empty() {
+        // Empty function body
+        Ast::Pipeline(vec![ShellCommand {
+            args: vec!["true".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        }])
+    } else {
+        parse_commands_sequentially(body_tokens)?
+    };
+
+    Ok(Ast::FunctionDefinition {
+        name: func_name,
+        body: Box::new(body_ast),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::lexer::Token;
@@ -922,6 +1074,78 @@ mod tests {
             assert_eq!(cmds[0].args, vec!["123VAR=value"]);
         } else {
             panic!("should be parsed as pipeline");
+        }
+    }
+
+    #[test]
+    fn test_parse_function_definition() {
+        let tokens = vec![
+            Token::Word("myfunc".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("hello".to_string()),
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::FunctionDefinition { name, body } = result {
+            assert_eq!(name, "myfunc");
+            // Body should be a pipeline with echo hello
+            if let Ast::Pipeline(cmds) = *body {
+                assert_eq!(cmds[0].args, vec!["echo", "hello"]);
+            } else {
+                panic!("function body should be a pipeline");
+            }
+        } else {
+            panic!("should be parsed as function definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_function_definition_empty() {
+        let tokens = vec![
+            Token::Word("emptyfunc".to_string()),
+            Token::LeftParen,
+            Token::RightParen,
+            Token::LeftBrace,
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::FunctionDefinition { name, body } = result {
+            assert_eq!(name, "emptyfunc");
+            // Empty body should default to true command
+            if let Ast::Pipeline(cmds) = *body {
+                assert_eq!(cmds[0].args, vec!["true"]);
+            } else {
+                panic!("function body should be a pipeline");
+            }
+        } else {
+            panic!("should be parsed as function definition");
+        }
+    }
+
+    #[test]
+    fn test_parse_function_definition_legacy_format() {
+        // Test backward compatibility with parentheses in the function name
+        let tokens = vec![
+            Token::Word("legacyfunc()".to_string()),
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("hello".to_string()),
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::FunctionDefinition { name, body } = result {
+            assert_eq!(name, "legacyfunc");
+            // Body should be a pipeline with echo hello
+            if let Ast::Pipeline(cmds) = *body {
+                assert_eq!(cmds[0].args, vec!["echo", "hello"]);
+            } else {
+                panic!("function body should be a pipeline");
+            }
+        } else {
+            panic!("should be parsed as function definition");
         }
     }
 }
