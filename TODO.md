@@ -37,8 +37,8 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Variable assignment (VAR=value)
 - ✅ Variable expansion (`$VAR`)
 - ✅ Special parameters: `$?`, `$$`, `$0`
-- ❌ Positional parameters (`$1`, `$2`, ...)
-- ❌ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
+- ✅ Positional parameters (`$1`, `$2`, ...)
+- ✅ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
 - ❌ Parameter expansion with modifiers (`${VAR:-default}`, etc.)
 - ✅ Arithmetic expansion (`$((...))`)
 
@@ -119,7 +119,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ❌ readonly (not implemented)
 - ❌ return (not implemented)
 - ❌ set (not implemented)
-- ❌ shift (not implemented)
+- ✅ shift (implemented)
 - ❌ times (not implemented)
 - ❌ trap (not implemented)
 - ❌ umask (not implemented)
@@ -128,13 +128,13 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Current Built-in Status
 
-**Implemented (16):**
+**Implemented (17):**
 
-- alias, cd, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, source, test, unalias, unset
+- alias, cd, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, shift, source, test, unalias, unset
 
-**Missing (8):**
+**Missing (7):**
 
-- :, break, continue, eval, exec, readonly, return, set, shift, times, trap, umask, wait
+- :, break, continue, eval, exec, readonly, return, set, times, trap, umask, wait
 
 ## 4. Regular Built-in Utilities
 

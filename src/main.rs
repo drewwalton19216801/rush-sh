@@ -37,6 +37,9 @@ struct Args {
 
     #[arg(value_name = "SCRIPT", conflicts_with = "command")]
     script: Option<String>,
+
+    #[arg(value_name = "ARGS", help = "Arguments to pass to the script")]
+    script_args: Vec<String>,
 }
 
 fn main() {
@@ -61,7 +64,7 @@ fn main() {
     }
 
     // Set up signal handling
-    let mut signals = Signals::new(&[SIGINT, SIGTERM]).expect("Failed to create signal handler");
+    let mut signals = Signals::new([SIGINT, SIGTERM]).expect("Failed to create signal handler");
 
     // Spawn a thread to handle signals
     thread::spawn(move || {
@@ -91,6 +94,9 @@ fn main() {
         }
     } else if let Some(script_path) = args_parsed.script {
         // Script mode
+        // Set positional parameters from script arguments
+        shell_state.set_positional_params(args_parsed.script_args);
+
         if let Ok(content) = fs::read_to_string(&script_path) {
             if SHUTDOWN.load(Ordering::Relaxed) {
                 println!("\nReceived SIGTERM, exiting gracefully.");
@@ -100,11 +106,9 @@ fn main() {
         } else {
             if shell_state.colors_enabled {
                 eprintln!(
-                    "{}{}{}{}",
+                    "{}Error: Could not read script file '{}'\x1b[0m",
                     shell_state.color_scheme.error,
-                    "Error: Could not read script file '",
-                    script_path,
-                    "'\x1b[0m"
+                    script_path
                 );
             } else {
                 eprintln!("Error: Could not read script file '{}'", script_path);
@@ -168,11 +172,9 @@ fn main() {
                             // For other errors, print and continue (don't break)
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}{}{}{}",
+                                    "{}Readline error: {}\x1b[0m",
                                     shell_state.color_scheme.error,
-                                    "Readline error: ",
-                                    err,
-                                    "\x1b[0m"
+                                    err
                                 );
                             } else {
                                 eprintln!("Readline error: {}", err);
@@ -187,7 +189,7 @@ fn main() {
             // Non-interactive mode (piped input)
             use std::io::{self, Read};
             let mut input = String::new();
-            if let Ok(_) = io::stdin().read_to_string(&mut input) {
+            if io::stdin().read_to_string(&mut input).is_ok() {
                 execute_script(&input, &mut shell_state);
             }
         }
@@ -209,8 +211,8 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
                         Err(e) => {
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}{}{}{}",
-                                    shell_state.color_scheme.error, "Parse error: ", e, "\x1b[0m"
+                                    "{}Parse error: {}\x1b[0m",
+                                    shell_state.color_scheme.error, e
                                 );
                             } else {
                                 eprintln!("Parse error: {}", e);
@@ -222,8 +224,8 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
                 Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
-                            "{}{}{}{}",
-                            shell_state.color_scheme.error, "Alias expansion error: ", e, "\x1b[0m"
+                            "{}Alias expansion error: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
                         );
                     } else {
                         eprintln!("Alias expansion error: {}", e);
@@ -235,8 +237,8 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
         Err(e) => {
             if shell_state.colors_enabled {
                 eprintln!(
-                    "{}{}{}{}",
-                    shell_state.color_scheme.error, "Lex error: ", e, "\x1b[0m"
+                    "{}Lex error: {}\x1b[0m",
+                    shell_state.color_scheme.error, e
                 );
             } else {
                 eprintln!("Lex error: {}", e);
