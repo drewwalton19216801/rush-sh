@@ -254,7 +254,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                     chars.next(); // consume the second )
                                     found_closing = true;
                                     // Evaluate the arithmetic expression
-                                    match crate::arithmetic::evaluate_arithmetic_expression(&arithmetic_expr, shell_state) {
+                                    match crate::arithmetic::evaluate_arithmetic_expression(
+                                        &arithmetic_expr,
+                                        shell_state,
+                                    ) {
                                         Ok(result) => {
                                             current.push_str(&result.to_string());
                                         }
@@ -305,7 +308,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             }
                         }
                         // Expand variables in the command before executing
-                        let expanded_command = expand_variables_in_command(&sub_command, shell_state);
+                        let expanded_command =
+                            expand_variables_in_command(&sub_command, shell_state);
                         // Execute the command and substitute the output
                         let mut command = std::process::Command::new("sh");
                         command.arg("-c").arg(&expanded_command);
@@ -316,7 +320,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                         if let Ok(output) = command.output() {
                             if output.status.success() {
-                                let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                                let stdout =
+                                    String::from_utf8_lossy(&output.stdout).trim().to_string();
                                 if !stdout.is_empty() {
                                     current.push_str(&stdout);
                                 }

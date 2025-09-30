@@ -14,28 +14,28 @@ pub enum ArithmeticToken {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArithmeticOperator {
     // Unary operators (precedence 100)
-    LogicalNot,  // !
-    BitwiseNot,  // ~
+    LogicalNot, // !
+    BitwiseNot, // ~
 
     // Binary operators in order of precedence (highest to lowest)
-    Multiply,        // *   (precedence 90)
-    Divide,          // /   (precedence 90)
-    Modulo,          // %   (precedence 90)
-    Add,             // +   (precedence 80)
-    Subtract,        // -   (precedence 80)
-    ShiftLeft,       // <<  (precedence 70)
-    ShiftRight,      // >>  (precedence 70)
-    LessThan,        // <   (precedence 60)
-    LessEqual,       // <=  (precedence 60)
-    GreaterThan,     // >   (precedence 60)
-    GreaterEqual,    // >=  (precedence 60)
-    Equal,           // ==  (precedence 50)
-    NotEqual,        // !=  (precedence 50)
-    BitwiseAnd,      // &   (precedence 40)
-    BitwiseXor,      // ^   (precedence 30)
-    BitwiseOr,       // |   (precedence 20)
-    LogicalAnd,      // &&  (precedence 10)
-    LogicalOr,       // ||  (precedence 5)
+    Multiply,     // *   (precedence 90)
+    Divide,       // /   (precedence 90)
+    Modulo,       // %   (precedence 90)
+    Add,          // +   (precedence 80)
+    Subtract,     // -   (precedence 80)
+    ShiftLeft,    // <<  (precedence 70)
+    ShiftRight,   // >>  (precedence 70)
+    LessThan,     // <   (precedence 60)
+    LessEqual,    // <=  (precedence 60)
+    GreaterThan,  // >   (precedence 60)
+    GreaterEqual, // >=  (precedence 60)
+    Equal,        // ==  (precedence 50)
+    NotEqual,     // !=  (precedence 50)
+    BitwiseAnd,   // &   (precedence 40)
+    BitwiseXor,   // ^   (precedence 30)
+    BitwiseOr,    // |   (precedence 20)
+    LogicalAnd,   // &&  (precedence 10)
+    LogicalOr,    // ||  (precedence 5)
 }
 
 impl ArithmeticOperator {
@@ -43,11 +43,15 @@ impl ArithmeticOperator {
         match self {
             ArithmeticOperator::LogicalNot | ArithmeticOperator::BitwiseNot => 100,
 
-            ArithmeticOperator::Multiply | ArithmeticOperator::Divide | ArithmeticOperator::Modulo => 90,
+            ArithmeticOperator::Multiply
+            | ArithmeticOperator::Divide
+            | ArithmeticOperator::Modulo => 90,
             ArithmeticOperator::Add | ArithmeticOperator::Subtract => 80,
             ArithmeticOperator::ShiftLeft | ArithmeticOperator::ShiftRight => 70,
-            ArithmeticOperator::LessThan | ArithmeticOperator::LessEqual |
-            ArithmeticOperator::GreaterThan | ArithmeticOperator::GreaterEqual => 60,
+            ArithmeticOperator::LessThan
+            | ArithmeticOperator::LessEqual
+            | ArithmeticOperator::GreaterThan
+            | ArithmeticOperator::GreaterEqual => 60,
             ArithmeticOperator::Equal | ArithmeticOperator::NotEqual => 50,
             ArithmeticOperator::BitwiseAnd => 40,
             ArithmeticOperator::BitwiseXor => 30,
@@ -58,9 +62,11 @@ impl ArithmeticOperator {
     }
 
     pub fn is_unary(&self) -> bool {
-        matches!(self, ArithmeticOperator::LogicalNot | ArithmeticOperator::BitwiseNot)
+        matches!(
+            self,
+            ArithmeticOperator::LogicalNot | ArithmeticOperator::BitwiseNot
+        )
     }
-
 }
 
 /// Errors that can occur during arithmetic evaluation
@@ -220,7 +226,9 @@ pub fn tokenize_expression(expr: &str) -> Result<Vec<ArithmeticToken>, Arithmeti
                 }
                 match num_str.parse::<i64>() {
                     Ok(num) => tokens.push(ArithmeticToken::Number(num)),
-                    Err(_) => return Err(ArithmeticError::SyntaxError("Invalid number".to_string())),
+                    Err(_) => {
+                        return Err(ArithmeticError::SyntaxError("Invalid number".to_string()));
+                    }
                 }
             }
 
@@ -240,7 +248,10 @@ pub fn tokenize_expression(expr: &str) -> Result<Vec<ArithmeticToken>, Arithmeti
             }
 
             _ => {
-                return Err(ArithmeticError::SyntaxError(format!("Unexpected character: {}", ch)));
+                return Err(ArithmeticError::SyntaxError(format!(
+                    "Unexpected character: {}",
+                    ch
+                )));
             }
         }
     }
@@ -261,9 +272,13 @@ pub fn parse_to_rpn(tokens: Vec<ArithmeticToken>) -> Result<Vec<ArithmeticToken>
 
             ArithmeticToken::Operator(op) => {
                 // Handle unary operators
-                if op.is_unary() && (output.is_empty() ||
-                    matches!(output.last(),
-                        Some(ArithmeticToken::Operator(_) | ArithmeticToken::LeftParen))) {
+                if op.is_unary()
+                    && (output.is_empty()
+                        || matches!(
+                            output.last(),
+                            Some(ArithmeticToken::Operator(_) | ArithmeticToken::LeftParen)
+                        ))
+                {
                     // This is a unary operator
                     while !operators.is_empty() {
                         if let Some(ArithmeticToken::Operator(top_op)) = operators.last() {
@@ -281,8 +296,9 @@ pub fn parse_to_rpn(tokens: Vec<ArithmeticToken>) -> Result<Vec<ArithmeticToken>
                     // Binary operator
                     while !operators.is_empty() {
                         if let Some(ArithmeticToken::Operator(top_op)) = operators.last() {
-                            if (top_op.precedence() > op.precedence()) ||
-                               (top_op.precedence() == op.precedence() && !op.is_unary()) {
+                            if (top_op.precedence() > op.precedence())
+                                || (top_op.precedence() == op.precedence() && !op.is_unary())
+                            {
                                 output.push(operators.pop().unwrap());
                             } else {
                                 break;
@@ -328,7 +344,10 @@ pub fn parse_to_rpn(tokens: Vec<ArithmeticToken>) -> Result<Vec<ArithmeticToken>
 }
 
 /// Evaluate an arithmetic expression in Reverse Polish Notation
-pub fn evaluate_rpn(rpn_tokens: Vec<ArithmeticToken>, shell_state: &ShellState) -> Result<i64, ArithmeticError> {
+pub fn evaluate_rpn(
+    rpn_tokens: Vec<ArithmeticToken>,
+    shell_state: &ShellState,
+) -> Result<i64, ArithmeticError> {
     let mut stack = Vec::new();
 
     for token in rpn_tokens {
@@ -351,7 +370,9 @@ pub fn evaluate_rpn(rpn_tokens: Vec<ArithmeticToken>, shell_state: &ShellState) 
             ArithmeticToken::Operator(op) => {
                 if op.is_unary() {
                     if stack.is_empty() {
-                        return Err(ArithmeticError::SyntaxError("Missing operand for unary operator".to_string()));
+                        return Err(ArithmeticError::SyntaxError(
+                            "Missing operand for unary operator".to_string(),
+                        ));
                     }
                     let operand = stack.pop().unwrap();
                     let result = match op {
@@ -362,7 +383,9 @@ pub fn evaluate_rpn(rpn_tokens: Vec<ArithmeticToken>, shell_state: &ShellState) 
                     stack.push(result);
                 } else {
                     if stack.len() < 2 {
-                        return Err(ArithmeticError::SyntaxError("Missing operands for binary operator".to_string()));
+                        return Err(ArithmeticError::SyntaxError(
+                            "Missing operands for binary operator".to_string(),
+                        ));
                     }
                     let right = stack.pop().unwrap();
                     let left = stack.pop().unwrap();
@@ -384,17 +407,65 @@ pub fn evaluate_rpn(rpn_tokens: Vec<ArithmeticToken>, shell_state: &ShellState) 
                         }
                         ArithmeticOperator::ShiftLeft => left << right,
                         ArithmeticOperator::ShiftRight => left >> right,
-                        ArithmeticOperator::LessThan => if left < right { 1 } else { 0 },
-                        ArithmeticOperator::LessEqual => if left <= right { 1 } else { 0 },
-                        ArithmeticOperator::GreaterThan => if left > right { 1 } else { 0 },
-                        ArithmeticOperator::GreaterEqual => if left >= right { 1 } else { 0 },
-                        ArithmeticOperator::Equal => if left == right { 1 } else { 0 },
-                        ArithmeticOperator::NotEqual => if left != right { 1 } else { 0 },
+                        ArithmeticOperator::LessThan => {
+                            if left < right {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        ArithmeticOperator::LessEqual => {
+                            if left <= right {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        ArithmeticOperator::GreaterThan => {
+                            if left > right {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        ArithmeticOperator::GreaterEqual => {
+                            if left >= right {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        ArithmeticOperator::Equal => {
+                            if left == right {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        ArithmeticOperator::NotEqual => {
+                            if left != right {
+                                1
+                            } else {
+                                0
+                            }
+                        }
                         ArithmeticOperator::BitwiseAnd => left & right,
                         ArithmeticOperator::BitwiseXor => left ^ right,
                         ArithmeticOperator::BitwiseOr => left | right,
-                        ArithmeticOperator::LogicalAnd => if left != 0 && right != 0 { 1 } else { 0 },
-                        ArithmeticOperator::LogicalOr => if left != 0 || right != 0 { 1 } else { 0 },
+                        ArithmeticOperator::LogicalAnd => {
+                            if left != 0 && right != 0 {
+                                1
+                            } else {
+                                0
+                            }
+                        }
+                        ArithmeticOperator::LogicalOr => {
+                            if left != 0 || right != 0 {
+                                1
+                            } else {
+                                0
+                            }
+                        }
                         _ => unreachable!(),
                     };
                     stack.push(result);
@@ -402,20 +473,27 @@ pub fn evaluate_rpn(rpn_tokens: Vec<ArithmeticToken>, shell_state: &ShellState) 
             }
 
             ArithmeticToken::LeftParen | ArithmeticToken::RightParen => {
-                return Err(ArithmeticError::SyntaxError("Unexpected parenthesis in RPN".to_string()));
+                return Err(ArithmeticError::SyntaxError(
+                    "Unexpected parenthesis in RPN".to_string(),
+                ));
             }
         }
     }
 
     if stack.len() != 1 {
-        return Err(ArithmeticError::SyntaxError("Invalid expression".to_string()));
+        return Err(ArithmeticError::SyntaxError(
+            "Invalid expression".to_string(),
+        ));
     }
 
     Ok(stack[0])
 }
 
 /// Main function to evaluate an arithmetic expression
-pub fn evaluate_arithmetic_expression(expr: &str, shell_state: &ShellState) -> Result<i64, ArithmeticError> {
+pub fn evaluate_arithmetic_expression(
+    expr: &str,
+    shell_state: &ShellState,
+) -> Result<i64, ArithmeticError> {
     if expr.trim().is_empty() {
         return Err(ArithmeticError::EmptyExpression);
     }
@@ -440,33 +518,42 @@ mod tests {
     #[test]
     fn test_tokenize_operators() {
         let tokens = tokenize_expression("2+3").unwrap();
-        assert_eq!(tokens, vec![
-            ArithmeticToken::Number(2),
-            ArithmeticToken::Operator(ArithmeticOperator::Add),
-            ArithmeticToken::Number(3)
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                ArithmeticToken::Number(2),
+                ArithmeticToken::Operator(ArithmeticOperator::Add),
+                ArithmeticToken::Number(3)
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_parentheses() {
         let tokens = tokenize_expression("(2+3)").unwrap();
-        assert_eq!(tokens, vec![
-            ArithmeticToken::LeftParen,
-            ArithmeticToken::Number(2),
-            ArithmeticToken::Operator(ArithmeticOperator::Add),
-            ArithmeticToken::Number(3),
-            ArithmeticToken::RightParen
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                ArithmeticToken::LeftParen,
+                ArithmeticToken::Number(2),
+                ArithmeticToken::Operator(ArithmeticOperator::Add),
+                ArithmeticToken::Number(3),
+                ArithmeticToken::RightParen
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_variables() {
         let tokens = tokenize_expression("x+y").unwrap();
-        assert_eq!(tokens, vec![
-            ArithmeticToken::Variable("x".to_string()),
-            ArithmeticToken::Operator(ArithmeticOperator::Add),
-            ArithmeticToken::Variable("y".to_string())
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                ArithmeticToken::Variable("x".to_string()),
+                ArithmeticToken::Operator(ArithmeticOperator::Add),
+                ArithmeticToken::Variable("y".to_string())
+            ]
+        );
     }
 
     #[test]
