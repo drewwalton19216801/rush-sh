@@ -21,9 +21,15 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
 - **Command Substitution**: Execute commands and substitute their output inline.
   - `$(command)` syntax: `echo "Current dir: $(pwd)"`
-  - `` `command` `` syntax: `echo "Files: `ls | wc -l`"`
+  - `` `command` `` syntax: `echo "Files:`ls | wc -l`"`
   - Variable expansion within substitutions: `echo $(echo $HOME)`
   - Error handling with fallback to literal syntax
+- **Arithmetic Expansion**: Evaluate mathematical expressions using `$((...))` syntax.
+  - Basic arithmetic: `echo $((2 + 3 * 4))`
+  - Variable integration: `result=$((x * y + z))`
+  - Comparison operations: `$((5 > 3))` returns 1 (true) or 0 (false)
+  - Bitwise and logical operations: `$((5 & 3))`, `$((x && y))`
+  - Operator precedence with parentheses support
 - **Environment Variables**: Full support for variable assignment, expansion, and export.
   - Variable assignment: `VAR=value` and `VAR="quoted value"`
   - Variable expansion: `$VAR` and special variables (`$?`, `$$`, `$0`)
@@ -216,6 +222,138 @@ Example prompt displays:
 ```
 
 This feature provides context about your current location while keeping the prompt concise.
+
+### Arithmetic Expansion
+
+Rush now supports comprehensive arithmetic expansion using the POSIX-standard `$((...))` syntax, enabling mathematical computations directly in shell commands and scripts:
+
+- **Basic Arithmetic**: Addition, subtraction, multiplication, division, and modulo operations
+- **Operator Precedence**: Standard mathematical precedence with parentheses support
+- **Variable Integration**: Use shell variables directly in arithmetic expressions
+- **Comparison Operations**: Less than, greater than, equal, not equal comparisons (return 1 for true, 0 for false)
+- **Bitwise Operations**: AND, OR, XOR, shift operations for bit-level computations
+- **Logical Operations**: AND, OR, NOT for boolean logic (return 1 for true, 0 for false)
+- **Error Handling**: Division by zero and undefined variable detection
+
+**Basic Syntax:**
+
+```bash
+# Simple arithmetic
+echo "Result: $((2 + 3))"
+echo "Multiplication: $((5 * 4))"
+echo "Division: $((20 / 4))"
+echo "Modulo: $((17 % 3))"
+```
+
+**Variable Usage:**
+
+```bash
+# Variables in arithmetic expressions
+x=10
+y=3
+echo "x + y = $((x + y))"
+echo "x * y = $((x * y))"
+echo "x squared = $((x * x))"
+```
+
+**Operator Precedence:**
+
+```bash
+# Standard precedence: * / % before + -
+echo "2 + 3 * 4 = $((2 + 3 * 4))"        # 14 (not 20)
+
+# Use parentheses to override precedence
+echo "(2 + 3) * 4 = $(((2 + 3) * 4))"    # 20
+
+# Complex expressions
+echo "2 * 3 + 4 * 5 = $((2 * 3 + 4 * 5))"  # 26
+```
+
+**Comparison Operations:**
+
+```bash
+# Comparisons return 1 (true) or 0 (false)
+if [ $((5 > 3)) -eq 1 ]; then echo "5 is greater than 3"; fi
+if [ $((10 == 10)) -eq 1 ]; then echo "Equal"; fi
+if [ $((7 != 5)) -eq 1 ]; then echo "Not equal"; fi
+
+# Available comparison operators:
+# ==  !=  <  <=  >  >=
+```
+
+**Bitwise and Logical Operations:**
+
+```bash
+# Bitwise operations
+echo "5 & 3 = $((5 & 3))"    # 1 (binary AND)
+echo "5 | 3 = $((5 | 3))"    # 7 (binary OR)
+echo "5 ^ 3 = $((5 ^ 3))"    # 6 (binary XOR)
+
+# Logical operations (non-zero = true)
+echo "5 && 3 = $((5 && 3))"  # 1 (both true)
+echo "5 && 0 = $((5 && 0))"  # 0 (second false)
+echo "0 || 5 = $((0 || 5))"  # 1 (second true)
+```
+
+**Real-world Examples:**
+
+```bash
+# Calculate area of rectangle
+length=10
+width=5
+area=$((length * width))
+echo "Area: $area"
+
+# Temperature conversion
+celsius=25
+fahrenheit=$((celsius * 9 / 5 + 32))
+echo "$celsius°C = ${fahrenheit}°F"
+
+# Array length calculation (simulated)
+items=8
+per_page=3
+pages=$(((items + per_page - 1) / per_page))
+echo "Pages needed: $pages"
+
+# Conditional logic with arithmetic
+count=15
+if [ $((count % 2)) -eq 0 ]; then
+    echo "Even number"
+else
+    echo "Odd number"
+fi
+```
+
+**Error Handling:**
+
+```bash
+# Division by zero produces an error
+echo "Division by zero: $((5 / 0))"
+
+# Undefined variables cause errors
+echo "Undefined var: $((undefined_var + 1))"
+```
+
+**Advanced Usage:**
+
+```bash
+# Complex mathematical expressions
+radius=5
+pi=3
+area=$((pi * radius * radius))
+echo "Circle area: $area"
+
+# Multiple operations in one expression
+result=$(( (10 + 5) * 3 / 2 ))
+echo "Complex result: $result"
+
+# Use in variable assignments
+x=10
+y=$((x + 5))  # y = 15
+z=$((y * 2))  # z = 30
+```
+
+Arithmetic expansion integrates seamlessly with all other shell features and works in interactive mode, scripts, and command strings.
 
 ```bash
 # Basic command substitution
@@ -530,6 +668,7 @@ echo "Type 'help' for available commands."
    ```
 
 2. Build the project:
+
    ```bash
    cargo build --release
    ```
@@ -552,7 +691,7 @@ or
 rush-sh
 ```
 
-You'll see a prompt showing the condensed current working directory followed by `$ ` (e.g., `/h/d/p/r/rush-sh $ `) where you can type commands. Type `exit` to quit.
+You'll see a prompt showing the condensed current working directory followed by `$` (e.g., `/h/d/p/r/rush-sh $`) where you can type commands. Type `exit` to quit.
 
 **Configuration**: Rush automatically sources `~/.rushrc` on startup if it exists, allowing you to set up aliases, environment variables, and other customizations.
 
@@ -650,26 +789,33 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Error handling: `test -x "invalid"; echo "Exit code: $?"`
 - Command substitution:
   - Basic substitution: `echo "Current dir: $(pwd)"`
-  - Backtick syntax: `echo "Files: `ls | wc -l`"`
+  - Backtick syntax: `echo "Files:`ls | wc -l`"`
   - Variable assignments: `PROJECT_DIR="$(pwd)/src"`
   - Complex commands: `echo "Rust version: $(rustc --version | cut -d' ' -f2)"`
   - Error handling: `RESULT="$(nonexistent_command 2>/dev/null || echo 'failed')"`
   - With pipes: `$(echo hello | grep ll) > output.txt`
   - Multiple commands: `echo "Output: $(echo 'First'; echo 'Second')"`
+- Arithmetic expansion:
+  - Basic arithmetic: `echo "Result: $((2 + 3 * 4))"`
+  - Variable calculations: `result=$((x * y + z))`
+  - Comparisons: `if [ $((count % 2)) -eq 0 ]; then echo "Even"; fi`
+  - Complex expressions: `area=$((length * width))`
+  - Temperature conversion: `fahrenheit=$((celsius * 9 / 5 + 32))`
 - Tab completion:
-  - Complete commands: `cd` → `cd `, `env `, `exit `
-  - Complete files: `cat f` → `cat file.txt `
+  - Complete commands: `cd` → `cd`, `env`, `exit`
+  - Complete files: `cat f` → `cat file.txt`
   - Complete directories: `cd src/` → `cd src/main/`
-  - Complete from PATH: `l` → `ls `, `g` → `grep `
+  - Complete from PATH: `l` → `ls`, `g` → `grep`
   - Complete nested paths: `ls src/m` → `ls src/main/`
 
 ## Architecture
 
 Rush consists of the following components:
 
-- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion, command substitution (`$(...)` and `` `...` `` syntax), and alias expansion.
+- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion, command substitution (`$(...)` and `` `...` `` syntax), arithmetic expansion (`$((...))`), and alias expansion.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
-- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, and command substitution execution.
+- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, command substitution execution, and arithmetic expression evaluation.
+- **Arithmetic Engine**: Evaluates mathematical expressions with support for variables, operator precedence, comparisons, bitwise operations, and logical operations using the Shunting-yard algorithm.
 - **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, directory stack, and command aliases.
 - **Built-in Commands**: Optimized detection and execution of built-in commands including variable management (`export`, `unset`, `env`) and alias management (`alias`, `unalias`).
 - **Completion**: Provides intelligent tab-completion for commands, files, and directories.
