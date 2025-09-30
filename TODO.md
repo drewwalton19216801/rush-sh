@@ -29,8 +29,8 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 - ✅ if, then, else, elif, fi
 - ✅ case, in, esac
-- ❌ while, until, for, do, done
-- ❌ function
+- ✅ while, until, for, do, done
+- ✅ function
 
 ### 1.5 Parameters and Variables
 
@@ -90,8 +90,8 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 #### 2.3.2 Conditional Constructs
 
 - ✅ if/elif/else/fi
-- ❌ while/until loops
-- ❌ for loops
+- ✅ while/until loops
+- ✅ for loops
 
 #### 2.3.3 Case Construct
 
@@ -101,9 +101,9 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### 2.4 Functions
 
-- ❌ Function definition and execution
-- ❌ Local variables in functions
-- ❌ Function export/import
+- ✅ Function definition and execution
+- ✅ Local variables in functions
+- ✅ Function introspection (declare -f)
 
 ## 3. Special Built-in Utilities
 
@@ -128,9 +128,9 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Current Built-in Status
 
-**Implemented (17):**
+**Implemented (18):**
 
-- alias, cd, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, shift, source, test, unalias, unset
+- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, shift, source, test, unalias, unset
 
 **Missing POSIX Built-ins:**
 
@@ -207,39 +207,30 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### High Priority (Core POSIX Features)
 
-1. **Control Structures**
-   - while/until loops
-   - for loops
-   - Function definitions
+1. **Redirections**
+    - Here-documents (<<)
+    - File descriptor operations (2>, >&, etc.)
 
-2. **Redirections**
-   - Here-documents (<<)
-   - File descriptor operations (2>, >&, etc.)
+2. **Missing Built-ins**
+    - set (options and positional parameters)
+    - eval
+    - exec
+    - trap
+    - readonly, return, etc.
 
-3. **Missing Built-ins**
-   - set (options and positional parameters)
-   - eval
-   - exec
-   - trap
-   - shift, readonly, return, etc.
-
-4. **Parameter Expansion**
-   - Positional parameters ($1, $2, ...)
-   - Parameter modifiers (${VAR:-default}, etc.)
-   - Special parameters ($*, $@, $#)
+3. **Parameter Expansion**
+    - Positional parameters ($1, $2, ...) - **IMPLEMENTED**
+    - Parameter modifiers (${VAR:-default}, etc.) - **IMPLEMENTED**
+    - Special parameters ($*, $@, $#) - **IMPLEMENTED**
 
 ### Medium Priority
 
-1. **Arithmetic Expansion** ✅
-    - $((...)) syntax (implemented)
-    - Arithmetic operators (implemented)
+1. **Brace Expansion**
+    - {a,b,c} syntax
 
-2. **Brace Expansion**
-   - {a,b,c} syntax
-
-3. **Job Control** (optional)
-   - Background jobs (&)
-   - Job management (bg, fg, jobs, kill)
+2. **Job Control** (optional)
+    - Background jobs (&)
+    - Job management (bg, fg, jobs, kill)
 
 ### Low Priority
 
@@ -270,9 +261,6 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ while/until loop execution
-- ❌ for loop execution
-- ❌ Function execution
 - ❌ Here-document processing
 - ❌ Advanced redirection scenarios (file descriptors, here-strings)
 - ❌ Missing built-in functionality (eval, exec, trap, etc.)
@@ -280,13 +268,13 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ## Compliance Metrics
 
-### Estimated Current Compliance: ~75%
+### Estimated Current Compliance: ~85%
 
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
-- **Control Structures**: 75% ✅ (if/elif/else, case with glob patterns implemented)
-- **Built-in Commands**: 80% ✅ (17 built-ins implemented, many common ones available)
+- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions implemented)
+- **Built-in Commands**: 85% ✅ (18 built-ins implemented, many common ones available)
 - **Expansions**: 95% ✅ (Parameter expansion and arithmetic expansion fully implemented)
 - **Redirections**: 60% ⚠️ (Basic I/O redirection implemented, advanced features missing)
 - **Job Control**: 0% ❌ (optional POSIX feature)

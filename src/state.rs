@@ -1,4 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
+use std::cell::RefCell;
+use super::parser::Ast;
 use std::env;
 use std::io::IsTerminal;
 
@@ -50,6 +53,20 @@ pub struct ShellState {
     pub color_scheme: ColorScheme,
     /// Positional parameters ($1, $2, $3, ...)
     pub positional_params: Vec<String>,
+    /// Function definitions
+    pub functions: HashMap<String, Ast>,
+    /// Local variable stack for function scoping
+    pub local_vars: Vec<HashMap<String, String>>,
+    /// Function call depth for local scope management
+    pub function_depth: usize,
+    /// Maximum allowed recursion depth
+    pub max_recursion_depth: usize,
+    /// Flag to indicate if we're currently returning from a function
+    pub returning: bool,
+    /// Return value when returning from a function
+    pub return_value: Option<i32>,
+    /// Output capture buffer for command substitution
+    pub capture_output: Option<Rc<RefCell<Vec<u8>>>>,
 }
 
 impl ShellState {
@@ -82,12 +99,19 @@ impl ShellState {
             colors_enabled,
             color_scheme: ColorScheme::default(),
             positional_params: Vec::new(),
+            functions: HashMap::new(),
+            local_vars: Vec::new(),
+            function_depth: 0,
+            max_recursion_depth: 500, // Default recursion limit (reduced to avoid Rust stack overflow)
+            returning: false,
+            return_value: None,
+            capture_output: None,
         }
     }
 
-    /// Get a variable value, checking shell variables first, then environment
+    /// Get a variable value, checking local scopes first, then shell variables, then environment
     pub fn get_var(&self, name: &str) -> Option<String> {
-        // Handle special variables
+        // Handle special variables (these are never local)
         match name {
             "?" => Some(self.last_exit_code.to_string()),
             "$" => Some(self.shell_pid.to_string()),
@@ -110,7 +134,7 @@ impl ShellState {
             }
             "#" => Some(self.positional_params.len().to_string()),
             _ => {
-                // Handle positional parameters $1, $2, $3, etc.
+                // Handle positional parameters $1, $2, $3, etc. (these are never local)
                 if let Ok(index) = name.parse::<usize>()
                     && index > 0
                     && index <= self.positional_params.len()
@@ -118,7 +142,15 @@ impl ShellState {
                     return Some(self.positional_params[index - 1].clone());
                 }
 
-                // Check shell variables first
+                // Check local scopes first, then shell variables, then environment
+                // Search local scopes from innermost to outermost
+                for scope in self.local_vars.iter().rev() {
+                    if let Some(value) = scope.get(name) {
+                        return Some(value.clone());
+                    }
+                }
+
+                // Check shell variables
                 if let Some(value) = self.variables.get(name) {
                     Some(value.clone())
                 } else {
@@ -129,8 +161,18 @@ impl ShellState {
         }
     }
 
-    /// Set a shell variable
+    /// Set a shell variable (updates local scope if variable exists there, otherwise sets globally)
     pub fn set_var(&mut self, name: &str, value: String) {
+        // Check if this variable exists in any local scope
+        // If it does, update it there instead of setting globally
+        for scope in self.local_vars.iter_mut().rev() {
+            if scope.contains_key(name) {
+                scope.insert(name.to_string(), value);
+                return;
+            }
+        }
+        
+        // Variable doesn't exist in local scopes, set it globally
         self.variables.insert(name.to_string(), value);
     }
 
@@ -282,7 +324,95 @@ impl ShellState {
     pub fn push_positional_param(&mut self, param: String) {
         self.positional_params.push(param);
     }
+
+    /// Define a function
+    pub fn define_function(&mut self, name: String, body: Ast) {
+        self.functions.insert(name, body);
+    }
+
+    /// Get a function definition
+    pub fn get_function(&self, name: &str) -> Option<&Ast> {
+        self.functions.get(name)
+    }
+
+    /// Remove a function definition
+    #[allow(dead_code)]
+    pub fn remove_function(&mut self, name: &str) {
+        self.functions.remove(name);
+    }
+
+    /// Get all function names
+    #[allow(dead_code)]
+    pub fn get_function_names(&self) -> Vec<&String> {
+        self.functions.keys().collect()
+    }
+
+    /// Push a new local variable scope
+    pub fn push_local_scope(&mut self) {
+        self.local_vars.push(HashMap::new());
+    }
+
+    /// Pop the current local variable scope
+    pub fn pop_local_scope(&mut self) {
+        if !self.local_vars.is_empty() {
+            self.local_vars.pop();
+        }
+    }
+
+    /// Set a local variable in the current scope
+    pub fn set_local_var(&mut self, name: &str, value: String) {
+        if let Some(current_scope) = self.local_vars.last_mut() {
+            current_scope.insert(name.to_string(), value);
+        } else {
+            // If no local scope exists, set as global variable
+            self.set_var(name, value);
+        }
+    }
+
+
+    /// Enter a function context (push local scope if needed)
+    pub fn enter_function(&mut self) {
+        self.function_depth += 1;
+        if self.function_depth > self.local_vars.len() {
+            self.push_local_scope();
+        }
+    }
+
+    /// Exit a function context (pop local scope if needed)
+    pub fn exit_function(&mut self) {
+        if self.function_depth > 0 {
+            self.function_depth -= 1;
+            if self.function_depth == self.local_vars.len() - 1 {
+                self.pop_local_scope();
+            }
+        }
+    }
+
+    /// Set return state for function returns
+    pub fn set_return(&mut self, value: i32) {
+        self.returning = true;
+        self.return_value = Some(value);
+    }
+
+    /// Clear return state
+    pub fn clear_return(&mut self) {
+        self.returning = false;
+        self.return_value = None;
+    }
+
+    /// Check if currently returning
+    pub fn is_returning(&self) -> bool {
+        self.returning
+    }
+
+    /// Get return value if returning
+    pub fn get_return_value(&self) -> Option<i32> {
+        self.return_value
+    }
+
+
 }
+
 
 impl Default for ShellState {
     fn default() -> Self {
@@ -425,5 +555,76 @@ mod tests {
         assert_eq!(state.get_var("1"), Some("arg1".to_string()));
         assert_eq!(state.get_var("2"), Some("arg2".to_string()));
         assert_eq!(state.get_var("#"), Some("2".to_string()));
+    }
+
+    #[test]
+    fn test_local_variable_scoping() {
+        let mut state = ShellState::new();
+
+        // Set a global variable
+        state.set_var("global_var", "global_value".to_string());
+        assert_eq!(state.get_var("global_var"), Some("global_value".to_string()));
+
+        // Push local scope
+        state.push_local_scope();
+
+        // Set a local variable with the same name
+        state.set_local_var("global_var", "local_value".to_string());
+        assert_eq!(state.get_var("global_var"), Some("local_value".to_string()));
+
+        // Set another local variable
+        state.set_local_var("local_var", "local_only".to_string());
+        assert_eq!(state.get_var("local_var"), Some("local_only".to_string()));
+
+        // Pop local scope
+        state.pop_local_scope();
+
+        // Should be back to global variable
+        assert_eq!(state.get_var("global_var"), Some("global_value".to_string()));
+        assert_eq!(state.get_var("local_var"), None);
+    }
+
+    #[test]
+    fn test_nested_local_scopes() {
+        let mut state = ShellState::new();
+
+        // Set global variable
+        state.set_var("test_var", "global".to_string());
+
+        // Push first local scope
+        state.push_local_scope();
+        state.set_local_var("test_var", "level1".to_string());
+        assert_eq!(state.get_var("test_var"), Some("level1".to_string()));
+
+        // Push second local scope
+        state.push_local_scope();
+        state.set_local_var("test_var", "level2".to_string());
+        assert_eq!(state.get_var("test_var"), Some("level2".to_string()));
+
+        // Pop second scope
+        state.pop_local_scope();
+        assert_eq!(state.get_var("test_var"), Some("level1".to_string()));
+
+        // Pop first scope
+        state.pop_local_scope();
+        assert_eq!(state.get_var("test_var"), Some("global".to_string()));
+    }
+
+    #[test]
+    fn test_variable_set_in_local_scope() {
+        let mut state = ShellState::new();
+
+        // No local scope initially
+        state.set_var("test_var", "global".to_string());
+        assert_eq!(state.get_var("test_var"), Some("global".to_string()));
+
+        // Push local scope and set local variable
+        state.push_local_scope();
+        state.set_local_var("test_var", "local".to_string());
+        assert_eq!(state.get_var("test_var"), Some("local".to_string()));
+
+        // Pop scope
+        state.pop_local_scope();
+        assert_eq!(state.get_var("test_var"), Some("global".to_string()));
     }
 }
