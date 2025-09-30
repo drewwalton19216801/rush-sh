@@ -618,8 +618,6 @@ This will demonstrate:
 
 The script provides comprehensive output showing how each feature works with the provided arguments.
 
-```
-
 **Parameter Manipulation:**
 
 ```bash
