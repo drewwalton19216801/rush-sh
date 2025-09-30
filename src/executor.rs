@@ -141,7 +141,7 @@ fn expand_variables_in_args(args: &[String], shell_state: &mut ShellState) -> Ve
     expanded_args
 }
 
-fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> String {
+pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> String {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
 
@@ -241,12 +241,11 @@ fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> Stri
                                 result.push_str("))");
                             }
                         }
-                    } else if paren_depth > 0 {
-                        // Didn't find proper closing, already added error literal above or need to add it
-                        if !arithmetic_expr.is_empty() && !result.ends_with(')') {
-                            result.push_str("$((");
-                            result.push_str(&arithmetic_expr);
-                        }
+                    } else {
+                        // Didn't find proper closing - keep as literal
+                        result.push_str("$((");
+                        result.push_str(&arithmetic_expr);
+                        // Note: we don't add closing parens since they weren't in the input
                     }
                     continue;
                 }
@@ -385,6 +384,60 @@ fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> Stri
                 } else {
                     result.push('$');
                 }
+            }
+        } else if ch == '`' {
+            // Backtick command substitution
+            let mut sub_command = String::new();
+            
+            while let Some(c) = chars.next() {
+                if c == '`' {
+                    break;
+                }
+                sub_command.push(c);
+            }
+            
+            // Execute the command substitution
+            if let Ok(tokens) = crate::lexer::lex(&sub_command, shell_state) {
+                // Expand aliases before parsing
+                let expanded_tokens = match crate::lexer::expand_aliases(
+                    tokens,
+                    shell_state,
+                    &mut std::collections::HashSet::new()
+                ) {
+                    Ok(t) => t,
+                    Err(_) => {
+                        // Alias expansion error, keep literal
+                        result.push('`');
+                        result.push_str(&sub_command);
+                        result.push('`');
+                        continue;
+                    }
+                };
+                
+                if let Ok(ast) = crate::parser::parse(expanded_tokens) {
+                    // Execute and capture output
+                    match execute_and_capture_output(ast, shell_state) {
+                        Ok(output) => {
+                            result.push_str(&output);
+                        }
+                        Err(_) => {
+                            // On failure, keep the literal
+                            result.push('`');
+                            result.push_str(&sub_command);
+                            result.push('`');
+                        }
+                    }
+                } else {
+                    // Parse error, keep literal
+                    result.push('`');
+                    result.push_str(&sub_command);
+                    result.push('`');
+                }
+            } else {
+                // Lex error, keep literal
+                result.push('`');
+                result.push_str(&sub_command);
+                result.push('`');
             }
         } else {
             result.push(ch);
@@ -773,7 +826,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
         // Handle input redirection
         if let Some(ref input_file) = cmd.input {
-            match File::open(input_file) {
+            let expanded_input = expand_variables_in_string(input_file, shell_state);
+            match File::open(&expanded_input) {
                 Ok(file) => {
                     command.stdin(Stdio::from(file));
                 }
@@ -796,7 +850,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
         // Handle output redirection
         if let Some(ref output_file) = cmd.output {
-            match File::create(output_file) {
+            let expanded_output = expand_variables_in_string(output_file, shell_state);
+            match File::create(&expanded_output) {
                 Ok(file) => {
                     command.stdout(Stdio::from(file));
                 }
@@ -816,7 +871,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 }
             }
         } else if let Some(ref append_file) = cmd.append {
-            match File::options().append(true).create(true).open(append_file) {
+            let expanded_append = expand_variables_in_string(append_file, shell_state);
+            match File::options().append(true).create(true).open(&expanded_append) {
                 Ok(file) => {
                     command.stdout(Stdio::from(file));
                 }
@@ -972,7 +1028,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             // Handle input redirection (only for first command)
             if i == 0 {
                 if let Some(ref input_file) = cmd.input {
-                    match File::open(input_file) {
+                    let expanded_input = expand_variables_in_string(input_file, shell_state);
+                    match File::open(&expanded_input) {
                         Ok(file) => {
                             command.stdin(Stdio::from(file));
                         }
@@ -997,7 +1054,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             // Handle output redirection (only for last command)
             if is_last {
                 if let Some(ref output_file) = cmd.output {
-                    match File::create(output_file) {
+                    let expanded_output = expand_variables_in_string(output_file, shell_state);
+                    match File::create(&expanded_output) {
                         Ok(file) => {
                             command.stdout(Stdio::from(file));
                         }
@@ -1017,7 +1075,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         }
                     }
                 } else if let Some(ref append_file) = cmd.append {
-                    match File::options().append(true).create(true).open(append_file) {
+                    let expanded_append = expand_variables_in_string(append_file, shell_state);
+                    match File::options().append(true).create(true).open(&expanded_append) {
                         Ok(file) => {
                             command.stdout(Stdio::from(file));
                         }
