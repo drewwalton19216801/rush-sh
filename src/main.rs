@@ -250,7 +250,11 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut if_depth = 0;
     let mut in_case_block = false;
     let mut in_function_block = false;
-    let mut function_depth = 0;
+    let mut brace_depth = 0;
+    let mut in_for_block = false;
+    let mut for_depth = 0;
+    let mut in_while_block = false;
+    let mut while_depth = 0;
 
     for line in content.lines() {
         // Skip shebang lines
@@ -264,18 +268,32 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             continue;
         }
 
-        // Check for multi-line construct keywords
-        if trimmed.starts_with("if ") || trimmed == "if" {
-            in_if_block = true;
-            if_depth += 1;
-        } else if trimmed.starts_with("case ") || trimmed == "case" {
-            in_case_block = true;
+        // Check for multi-line construct keywords (only when not in a function)
+        if !in_function_block {
+            if trimmed.starts_with("if ") || trimmed == "if" {
+                in_if_block = true;
+                if_depth += 1;
+            } else if trimmed.starts_with("case ") || trimmed == "case" {
+                in_case_block = true;
+            } else if trimmed.starts_with("for ") || trimmed == "for" {
+                in_for_block = true;
+                for_depth += 1;
+            } else if trimmed.starts_with("while ") || trimmed == "while" {
+                in_while_block = true;
+                while_depth += 1;
+            }
         }
 
         // Check for function definition
         if trimmed.contains("() {") || (trimmed.ends_with("()") && !in_function_block) {
             in_function_block = true;
-            function_depth += 1;
+            // Count opening braces on this line
+            brace_depth += trimmed.matches('{').count() as i32;
+            brace_depth -= trimmed.matches('}').count() as i32;
+        } else if in_function_block {
+            // Track braces inside function
+            brace_depth += trimmed.matches('{').count() as i32;
+            brace_depth -= trimmed.matches('}').count() as i32;
         }
 
         // Add line to current block
@@ -285,10 +303,29 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
         current_block.push_str(line);
 
         // Check for end of multi-line constructs
-        if in_if_block && trimmed == "fi" {
+        if in_function_block && brace_depth == 0 {
+            // Function is complete
+            in_function_block = false;
+            execute_line(&current_block, shell_state);
+            current_block.clear();
+        } else if in_if_block && trimmed == "fi" {
             if_depth -= 1;
             if if_depth == 0 {
                 in_if_block = false;
+                execute_line(&current_block, shell_state);
+                current_block.clear();
+            }
+        } else if in_for_block && trimmed == "done" {
+            for_depth -= 1;
+            if for_depth == 0 {
+                in_for_block = false;
+                execute_line(&current_block, shell_state);
+                current_block.clear();
+            }
+        } else if in_while_block && trimmed == "done" {
+            while_depth -= 1;
+            if while_depth == 0 {
+                in_while_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
             }
@@ -296,14 +333,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             in_case_block = false;
             execute_line(&current_block, shell_state);
             current_block.clear();
-        } else if in_function_block && trimmed.ends_with("}") {
-            function_depth -= 1;
-            if function_depth == 0 {
-                in_function_block = false;
-                execute_line(&current_block, shell_state);
-                current_block.clear();
-            }
-        } else if !in_if_block && !in_case_block && !in_function_block {
+        } else if !in_if_block && !in_case_block && !in_function_block && !in_for_block && !in_while_block {
             // Execute single-line commands immediately
             execute_line(&current_block, shell_state);
             current_block.clear();

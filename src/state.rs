@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::rc::Rc;
+use std::cell::RefCell;
 use super::parser::Ast;
 use std::env;
 use std::io::IsTerminal;
@@ -57,6 +59,14 @@ pub struct ShellState {
     pub local_vars: Vec<HashMap<String, String>>,
     /// Function call depth for local scope management
     pub function_depth: usize,
+    /// Maximum allowed recursion depth
+    pub max_recursion_depth: usize,
+    /// Flag to indicate if we're currently returning from a function
+    pub returning: bool,
+    /// Return value when returning from a function
+    pub return_value: Option<i32>,
+    /// Output capture buffer for command substitution
+    pub capture_output: Option<Rc<RefCell<Vec<u8>>>>,
 }
 
 impl ShellState {
@@ -92,6 +102,10 @@ impl ShellState {
             functions: HashMap::new(),
             local_vars: Vec::new(),
             function_depth: 0,
+            max_recursion_depth: 500, // Default recursion limit (reduced to avoid Rust stack overflow)
+            returning: false,
+            return_value: None,
+            capture_output: None,
         }
     }
 
@@ -147,8 +161,18 @@ impl ShellState {
         }
     }
 
-    /// Set a shell variable (always global unless explicitly local)
+    /// Set a shell variable (updates local scope if variable exists there, otherwise sets globally)
     pub fn set_var(&mut self, name: &str, value: String) {
+        // Check if this variable exists in any local scope
+        // If it does, update it there instead of setting globally
+        for scope in self.local_vars.iter_mut().rev() {
+            if scope.contains_key(name) {
+                scope.insert(name.to_string(), value);
+                return;
+            }
+        }
+        
+        // Variable doesn't exist in local scopes, set it globally
         self.variables.insert(name.to_string(), value);
     }
 
@@ -374,6 +398,253 @@ impl ShellState {
             }
         }
     }
+
+    /// Set return state for function returns
+    pub fn set_return(&mut self, value: i32) {
+        self.returning = true;
+        self.return_value = Some(value);
+    }
+
+    /// Clear return state
+    pub fn clear_return(&mut self) {
+        self.returning = false;
+        self.return_value = None;
+    }
+
+    /// Check if currently returning
+    pub fn is_returning(&self) -> bool {
+        self.returning
+    }
+
+    /// Get return value if returning
+    pub fn get_return_value(&self) -> Option<i32> {
+        self.return_value
+    }
+
+    /// Serialize a function to string format for export
+    pub fn serialize_function(&self, name: &str) -> Option<String> {
+        if let Some(ast) = self.get_function(name) {
+            Some(format_function_definition(name, ast))
+        } else {
+            None
+        }
+    }
+
+    /// Deserialize a function from string format for import
+    pub fn deserialize_function(&mut self, definition: &str) -> Result<(), String> {
+        // Parse the function definition
+        let tokens = match crate::lexer::lex(definition, self) {
+            Ok(t) => t,
+            Err(e) => return Err(format!("Failed to lex function definition: {}", e)),
+        };
+
+        let ast = match crate::parser::parse(tokens) {
+            Ok(a) => a,
+            Err(e) => return Err(format!("Failed to parse function definition: {}", e)),
+        };
+
+        if let crate::parser::Ast::FunctionDefinition { name, body } = ast {
+            self.define_function(name, *body);
+            Ok(())
+        } else {
+            Err("Provided definition is not a function".to_string())
+        }
+    }
+
+    /// Export all functions to a string format
+    pub fn export_functions(&self) -> String {
+        let mut result = String::new();
+        let function_names: Vec<&String> = self.get_function_names();
+
+        for name in function_names {
+            if let Some(definition) = self.serialize_function(name) {
+                result.push_str(&definition);
+                result.push('\n');
+            }
+        }
+
+        result
+    }
+
+    /// Import functions from a string format
+    pub fn import_functions(&mut self, functions_data: &str) -> Result<usize, String> {
+        let mut imported_count = 0;
+        let mut last_error = None;
+
+        // Split by newlines and process each line as a potential function definition
+        for line in functions_data.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue; // Skip empty lines and comments
+            }
+
+            match self.deserialize_function(trimmed) {
+                Ok(()) => {
+                    imported_count += 1;
+                }
+                Err(e) => {
+                    last_error = Some(e);
+                    // Continue trying to import other functions even if one fails
+                }
+            }
+        }
+
+        if imported_count == 0 && last_error.is_some() {
+            return Err(last_error.unwrap());
+        }
+
+        Ok(imported_count)
+    }
+
+}
+
+/// Helper function to format function definition
+fn format_function_definition(name: &str, ast: &crate::parser::Ast) -> String {
+    format!("{}() {{\n{}\n}}", name, format_ast_body(ast, 1))
+}
+
+/// Helper function to recursively format AST
+fn format_ast_body(ast: &crate::parser::Ast, indent_level: usize) -> String {
+    let indent = "    ".repeat(indent_level);
+
+    match ast {
+        crate::parser::Ast::Pipeline(commands) => {
+            if commands.len() == 1 {
+                format!("{} {}", indent, format_command(&commands[0]))
+            } else {
+                let mut result = String::new();
+                for (i, cmd) in commands.iter().enumerate() {
+                    if i > 0 {
+                        result.push_str(" |");
+                    }
+                    result.push('\n');
+                    result.push_str(&format!("{} {}", indent, format_command(cmd)));
+                }
+                result
+            }
+        }
+        crate::parser::Ast::Sequence(asts) => {
+            let mut result = String::new();
+            for (i, ast_node) in asts.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(";\n");
+                }
+                result.push_str(&format_ast_body(ast_node, indent_level));
+            }
+            result
+        }
+        crate::parser::Ast::Assignment { var, value } => {
+            format!("{} {}={}", indent, var, value)
+        }
+        crate::parser::Ast::LocalAssignment { var, value } => {
+            format!("{} local {}={}", indent, var, value)
+        }
+        crate::parser::Ast::If { branches, else_branch } => {
+            let mut result = String::new();
+
+            for (i, (condition, then_branch)) in branches.iter().enumerate() {
+                if i == 0 {
+                    result.push_str(&format!("{}if ", indent));
+                } else {
+                    result.push_str(&format!("\n{}elif ", indent));
+                }
+                result.push_str(&format_ast_body(condition, 0));
+                result.push_str("; then\n");
+                result.push_str(&format_ast_body(then_branch, indent_level));
+            }
+
+            if let Some(else_b) = else_branch {
+                result.push_str(&format!("\n{}else\n", indent));
+                result.push_str(&format_ast_body(else_b, indent_level));
+            }
+
+            result.push_str(&format!("\n{}fi", indent));
+            result
+        }
+        crate::parser::Ast::Case { word, cases, default } => {
+            let mut result = String::new();
+            result.push_str(&format!("{}case {} in\n", indent, word));
+
+            for (patterns, branch) in cases {
+                for pattern in patterns {
+                    result.push_str(&format!("{}    {})\n", indent, pattern));
+                }
+                result.push_str(&format_ast_body(branch, indent_level + 1));
+                result.push_str(&format!("\n{}    ;;\n", indent));
+            }
+
+            if let Some(def) = default {
+                result.push_str(&format!("{}    *)\n", indent));
+                result.push_str(&format_ast_body(def, indent_level + 1));
+                result.push_str(&format!("\n{}    ;;\n", indent));
+            }
+
+            result.push_str(&format!("{}esac", indent));
+            result
+        }
+        crate::parser::Ast::For { variable, items, body } => {
+            let mut result = String::new();
+            result.push_str(&format!("{}for {} in", indent, variable));
+            for item in items {
+                result.push_str(&format!(" {}", item));
+            }
+            result.push_str("; do\n");
+            result.push_str(&format_ast_body(body, indent_level + 1));
+            result.push_str(&format!("\n{}done", indent));
+            result
+        }
+        crate::parser::Ast::While { condition, body } => {
+            let mut result = String::new();
+            result.push_str(&format!("{}while ", indent));
+            result.push_str(&format_ast_body(condition, 0).trim());
+            result.push_str("; do\n");
+            result.push_str(&format_ast_body(body, indent_level + 1));
+            result.push_str(&format!("\n{}done", indent));
+            result
+        }
+        crate::parser::Ast::FunctionDefinition { name, body } => {
+            format!("{}() {{\n{}    {}\n{}}}\n", name, indent, format_ast_body(body, indent_level), indent)
+        }
+        crate::parser::Ast::FunctionCall { name, args } => {
+            if args.is_empty() {
+                format!("{} {}", indent, name)
+            } else {
+                format!("{} {} {}", indent, name, args.join(" "))
+            }
+        }
+        crate::parser::Ast::Return { value } => {
+            if let Some(val) = value {
+                format!("{} return {}", indent, val)
+            } else {
+                format!("{} return", indent)
+            }
+        }
+        crate::parser::Ast::And { left, right } => {
+            format!("{} && {}", format_ast_body(left, 0).trim(), format_ast_body(right, 0).trim())
+        }
+        crate::parser::Ast::Or { left, right } => {
+            format!("{} || {}", format_ast_body(left, 0).trim(), format_ast_body(right, 0).trim())
+        }
+    }
+}
+
+/// Helper function to format shell command (duplicate of the one in builtin_declare.rs)
+fn format_command(cmd: &crate::parser::ShellCommand) -> String {
+    let mut result = cmd.args.join(" ");
+
+    if let Some(ref input) = cmd.input {
+        result.push_str(&format!(" < {}", input));
+    }
+
+    if let Some(ref output) = cmd.output {
+        result.push_str(&format!(" > {}", output));
+    }
+
+    if let Some(ref append) = cmd.append {
+        result.push_str(&format!(" >> {}", append));
+    }
+
+    result
 }
 
 impl Default for ShellState {

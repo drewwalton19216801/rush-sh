@@ -1,11 +1,135 @@
 use std::fs::File;
 use std::io::pipe;
 use std::process::{Command, Stdio};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
 
-fn expand_variables_in_args(args: &[String], shell_state: &ShellState) -> Vec<String> {
+/// Execute a command and capture its output as a string
+/// This is used for command substitution $(...)
+fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
+    // Create a pipe to capture stdout
+    let (reader, writer) = pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
+    
+    // We need to capture the output, so we'll redirect stdout to our pipe
+    // For builtins, we can pass the writer directly
+    // For external commands, we need to handle them specially
+    
+    match &ast {
+        Ast::Pipeline(commands) if commands.len() == 1 => {
+            let cmd = &commands[0];
+            if cmd.args.is_empty() {
+                return Ok(String::new());
+            }
+            
+            // Expand variables and wildcards
+            let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
+            let expanded_args = expand_wildcards(&var_expanded_args)
+                .map_err(|e| format!("Wildcard expansion failed: {}", e))?;
+            
+            if expanded_args.is_empty() {
+                return Ok(String::new());
+            }
+            
+            // Check if it's a function call
+            if shell_state.get_function(&expanded_args[0]).is_some() {
+                // Save previous capture state (for nested command substitutions)
+                let previous_capture = shell_state.capture_output.clone();
+                
+                // Enable output capture mode
+                let capture_buffer = Rc::new(RefCell::new(Vec::new()));
+                shell_state.capture_output = Some(capture_buffer.clone());
+                
+                // Create a FunctionCall AST and execute it
+                let function_call_ast = Ast::FunctionCall {
+                    name: expanded_args[0].clone(),
+                    args: expanded_args[1..].to_vec(),
+                };
+                
+                let exit_code = execute(function_call_ast, shell_state);
+                
+                // Retrieve captured output
+                let captured = capture_buffer.borrow().clone();
+                let output = String::from_utf8_lossy(&captured).trim_end().to_string();
+                
+                // Restore previous capture state
+                shell_state.capture_output = previous_capture;
+                
+                if exit_code == 0 {
+                    Ok(output)
+                } else {
+                    Err(format!("Function failed with exit code {}", exit_code))
+                }
+            } else if crate::builtins::is_builtin(&expanded_args[0]) {
+                let temp_cmd = ShellCommand {
+                    args: expanded_args,
+                    input: cmd.input.clone(),
+                    output: None, // We're capturing output
+                    append: None,
+                };
+                
+                // Execute builtin with our writer
+                let exit_code = crate::builtins::execute_builtin(
+                    &temp_cmd,
+                    shell_state,
+                    Some(Box::new(writer)),
+                );
+                
+                // Read the captured output
+                drop(temp_cmd); // Ensure writer is dropped
+                let mut output = String::new();
+                use std::io::Read;
+                let mut reader = reader;
+                reader.read_to_string(&mut output)
+                    .map_err(|e| format!("Failed to read output: {}", e))?;
+                
+                if exit_code == 0 {
+                    Ok(output.trim_end().to_string())
+                } else {
+                    Err(format!("Command failed with exit code {}", exit_code))
+                }
+            } else {
+                // External command - execute with output capture
+                drop(writer); // Close writer end before spawning
+                
+                let mut command = Command::new(&expanded_args[0]);
+                command.args(&expanded_args[1..]);
+                command.stdout(Stdio::piped());
+                command.stderr(Stdio::null()); // Suppress stderr for command substitution
+                
+                // Set environment
+                let child_env = shell_state.get_env_for_child();
+                command.env_clear();
+                for (key, value) in child_env {
+                    command.env(key, value);
+                }
+                
+                let output = command.output()
+                    .map_err(|e| format!("Failed to execute command: {}", e))?;
+                
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_string())
+                } else {
+                    Err(format!("Command failed with exit code {}", output.status.code().unwrap_or(1)))
+                }
+            }
+        }
+        _ => {
+            // For complex AST nodes (sequences, pipelines, etc.), we need to execute them
+            // and capture output differently. For now, fall back to executing and capturing
+            // via a temporary approach
+            drop(writer);
+            
+            // Execute the AST normally but we can't easily capture output for complex cases
+            // This is a limitation we'll need to address for full support
+            Err("Complex command substitutions not yet fully supported".to_string())
+        }
+    }
+}
+
+fn expand_variables_in_args(args: &[String], shell_state: &mut ShellState) -> Vec<String> {
     let mut expanded_args = Vec::new();
 
     for arg in args {
@@ -17,45 +141,250 @@ fn expand_variables_in_args(args: &[String], shell_state: &ShellState) -> Vec<St
     expanded_args
 }
 
-fn expand_variables_in_string(input: &str, shell_state: &ShellState) -> String {
+fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> String {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
 
     while let Some(ch) = chars.next() {
         if ch == '$' {
-            // Check if this is a variable
-            let mut var_name = String::new();
-            let mut next_ch = chars.peek();
-
-            // Handle special single-character variables first
-            if let Some(&c) = next_ch {
-                if c == '?' || c == '$' || c == '0' {
-                    var_name.push(c);
-                    chars.next(); // consume the character
-                } else {
-                    // Regular variable name
-                    while let Some(&c) = next_ch {
-                        if c.is_alphanumeric() || c == '_' {
-                            var_name.push(c);
-                            chars.next(); // consume the character
-                            next_ch = chars.peek();
+            // Check for command substitution $(...) or arithmetic expansion $((...))
+            if let Some(&'(') = chars.peek() {
+                chars.next(); // consume first (
+                
+                // Check if this is arithmetic expansion $((...))
+                if let Some(&'(') = chars.peek() {
+                    // Arithmetic expansion $((...))
+                    chars.next(); // consume second (
+                    let mut arithmetic_expr = String::new();
+                    let mut paren_depth = 1;
+                    let mut found_closing = false;
+                    
+                    while let Some(c) = chars.next() {
+                        if c == '(' {
+                            paren_depth += 1;
+                            arithmetic_expr.push(c);
+                        } else if c == ')' {
+                            paren_depth -= 1;
+                            if paren_depth == 0 {
+                                // Found the first closing ) - check for second )
+                                if let Some(&')') = chars.peek() {
+                                    chars.next(); // consume the second )
+                                    found_closing = true;
+                                    break;
+                                } else {
+                                    // Missing second closing paren, treat as error
+                                    result.push_str("$((");
+                                    result.push_str(&arithmetic_expr);
+                                    result.push(')');
+                                    break;
+                                }
+                            }
+                            arithmetic_expr.push(c);
                         } else {
+                            arithmetic_expr.push(c);
+                        }
+                    }
+                    
+                    if found_closing {
+                        // First expand variables in the arithmetic expression
+                        // The arithmetic evaluator expects variable names without $ prefix
+                        // So we need to expand $VAR to the value before evaluation
+                        let mut expanded_expr = String::new();
+                        let mut expr_chars = arithmetic_expr.chars().peekable();
+                        
+                        while let Some(ch) = expr_chars.next() {
+                            if ch == '$' {
+                                // Expand variable
+                                let mut var_name = String::new();
+                                if let Some(&c) = expr_chars.peek() {
+                                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' {
+                                        var_name.push(c);
+                                        expr_chars.next();
+                                    } else if c.is_ascii_digit() {
+                                        var_name.push(c);
+                                        expr_chars.next();
+                                    } else {
+                                        while let Some(&c) = expr_chars.peek() {
+                                            if c.is_alphanumeric() || c == '_' {
+                                                var_name.push(c);
+                                                expr_chars.next();
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if !var_name.is_empty() {
+                                    if let Some(value) = shell_state.get_var(&var_name) {
+                                        expanded_expr.push_str(&value);
+                                    } else {
+                                        // Variable not found, use 0 for arithmetic
+                                        expanded_expr.push('0');
+                                    }
+                                } else {
+                                    expanded_expr.push('$');
+                                }
+                            } else {
+                                expanded_expr.push(ch);
+                            }
+                        }
+                        
+                        match crate::arithmetic::evaluate_arithmetic_expression(&expanded_expr, shell_state) {
+                            Ok(value) => {
+                                result.push_str(&value.to_string());
+                            }
+                            Err(_) => {
+                                // On error, keep the literal
+                                result.push_str("$((");
+                                result.push_str(&arithmetic_expr);
+                                result.push_str("))");
+                            }
+                        }
+                    } else if paren_depth > 0 {
+                        // Didn't find proper closing, already added error literal above or need to add it
+                        if !arithmetic_expr.is_empty() && !result.ends_with(')') {
+                            result.push_str("$((");
+                            result.push_str(&arithmetic_expr);
+                        }
+                    }
+                    continue;
+                }
+                
+                // Regular command substitution $(...)
+                let mut sub_command = String::new();
+                let mut paren_depth = 1;
+                
+                while let Some(c) = chars.next() {
+                    if c == '(' {
+                        paren_depth += 1;
+                        sub_command.push(c);
+                    } else if c == ')' {
+                        paren_depth -= 1;
+                        if paren_depth == 0 {
                             break;
+                        }
+                        sub_command.push(c);
+                    } else {
+                        sub_command.push(c);
+                    }
+                }
+                
+                // Execute the command substitution within the current shell context
+                // Parse and execute the command using our own lexer/parser/executor
+                if let Ok(tokens) = crate::lexer::lex(&sub_command, shell_state) {
+                    // Expand aliases before parsing
+                    let expanded_tokens = match crate::lexer::expand_aliases(
+                        tokens,
+                        shell_state,
+                        &mut std::collections::HashSet::new()
+                    ) {
+                        Ok(t) => t,
+                        Err(_) => {
+                            // Alias expansion error, keep literal
+                            result.push_str("$(");
+                            result.push_str(&sub_command);
+                            result.push(')');
+                            continue;
+                        }
+                    };
+                    
+                    if let Ok(ast) = crate::parser::parse(expanded_tokens) {
+                        // Execute within current shell context and capture output
+                        match execute_and_capture_output(ast, shell_state) {
+                            Ok(output) => {
+                                result.push_str(&output);
+                            }
+                            Err(_) => {
+                                // On failure, keep the literal
+                                result.push_str("$(");
+                                result.push_str(&sub_command);
+                                result.push(')');
+                            }
+                        }
+                    } else {
+                        // Parse error - try to handle as function call if it looks like one
+                        let tokens_str = sub_command.trim();
+                        if tokens_str.contains(' ') {
+                            // Split by spaces and check if first token looks like a function call
+                            let parts: Vec<&str> = tokens_str.split_whitespace().collect();
+                            if let Some(first_token) = parts.first() {
+                                if shell_state.get_function(first_token).is_some() {
+                                    // This is a function call, create AST manually
+                                    let function_call = Ast::FunctionCall {
+                                        name: first_token.to_string(),
+                                        args: parts[1..].iter().map(|s| s.to_string()).collect(),
+                                    };
+                                    match execute_and_capture_output(function_call, shell_state) {
+                                        Ok(output) => {
+                                            result.push_str(&output);
+                                            continue;
+                                        }
+                                        Err(_) => {
+                                            // Fall back to literal
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Keep the literal
+                        result.push_str("$(");
+                        result.push_str(&sub_command);
+                        result.push(')');
+                    }
+                } else {
+                    // Lex error, keep literal
+                    result.push_str("$(");
+                    result.push_str(&sub_command);
+                    result.push(')');
+                }
+            } else {
+                // Regular variable
+                let mut var_name = String::new();
+                let mut next_ch = chars.peek();
+
+                // Handle special single-character variables first
+                if let Some(&c) = next_ch {
+                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' {
+                        var_name.push(c);
+                        chars.next(); // consume the character
+                    } else if c.is_ascii_digit() {
+                        // Positional parameter
+                        var_name.push(c);
+                        chars.next();
+                    } else {
+                        // Regular variable name
+                        while let Some(&c) = next_ch {
+                            if c.is_alphanumeric() || c == '_' {
+                                var_name.push(c);
+                                chars.next(); // consume the character
+                                next_ch = chars.peek();
+                            } else {
+                                break;
+                            }
                         }
                     }
                 }
-            }
 
-            if !var_name.is_empty() {
-                if let Some(value) = shell_state.get_var(&var_name) {
-                    result.push_str(&value);
+                if !var_name.is_empty() {
+                    if let Some(value) = shell_state.get_var(&var_name) {
+                        result.push_str(&value);
+                    } else {
+                        // Variable not found - for positional parameters, expand to empty string
+                        // For other variables, keep the literal
+                        if var_name.chars().next().unwrap().is_ascii_digit() ||
+                           var_name == "?" || var_name == "$" || var_name == "0" ||
+                           var_name == "#" || var_name == "*" || var_name == "@" {
+                            // Expand to empty string for undefined positional parameters
+                        } else {
+                            // Keep the literal for regular variables
+                            result.push('$');
+                            result.push_str(&var_name);
+                        }
+                    }
                 } else {
-                    // Variable not found, keep the literal
                     result.push('$');
-                    result.push_str(&var_name);
                 }
-            } else {
-                result.push('$');
             }
         } else {
             result.push(ch);
@@ -101,54 +430,14 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
-            // Expand substitutions in the value
-            let tokens = crate::lexer::lex(&value, shell_state).unwrap_or_else(|_| vec![]);
-            let expanded_value = if !tokens.is_empty() {
-                // Collect all Word tokens and join them with spaces
-                let words: Vec<String> = tokens
-                    .iter()
-                    .filter_map(|token| {
-                        if let crate::lexer::Token::Word(word) = token {
-                            Some(word.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if !words.is_empty() {
-                    words.join(" ")
-                } else {
-                    value
-                }
-            } else {
-                value
-            };
+            // Expand variables and command substitutions in the value
+            let expanded_value = expand_variables_in_string(&value, shell_state);
             shell_state.set_var(&var, expanded_value);
             0
         }
         Ast::LocalAssignment { var, value } => {
-            // Expand substitutions in the value
-            let tokens = crate::lexer::lex(&value, shell_state).unwrap_or_else(|_| vec![]);
-            let expanded_value = if !tokens.is_empty() {
-                // Collect all Word tokens and join them with spaces
-                let words: Vec<String> = tokens
-                    .iter()
-                    .filter_map(|token| {
-                        if let crate::lexer::Token::Word(word) = token {
-                            Some(word.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-                if !words.is_empty() {
-                    words.join(" ")
-                } else {
-                    value
-                }
-            } else {
-                value
-            };
+            // Expand variables and command substitutions in the value
+            let expanded_value = expand_variables_in_string(&value, shell_state);
             shell_state.set_local_var(&var, expanded_value);
             0
         }
@@ -169,6 +458,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             let mut exit_code = 0;
             for ast in asts {
                 exit_code = execute(ast, shell_state);
+
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    return exit_code;
+                }
             }
             exit_code
         }
@@ -179,11 +473,25 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             for (condition, then_branch) in branches {
                 let cond_exit = execute(*condition, shell_state);
                 if cond_exit == 0 {
-                    return execute(*then_branch, shell_state);
+                    let exit_code = execute(*then_branch, shell_state);
+
+                    // Check if we got an early return from a function
+                    if shell_state.is_returning() {
+                        return exit_code;
+                    }
+
+                    return exit_code;
                 }
             }
             if let Some(else_b) = else_branch {
-                execute(*else_b, shell_state)
+                let exit_code = execute(*else_b, shell_state);
+
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    return exit_code;
+                }
+
+                exit_code
             } else {
                 0
             }
@@ -197,21 +505,90 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 for pattern in &patterns {
                     if let Ok(glob_pattern) = glob::Pattern::new(pattern) {
                         if glob_pattern.matches(&word) {
-                            return execute(branch, shell_state);
+                            let exit_code = execute(branch, shell_state);
+
+                            // Check if we got an early return from a function
+                            if shell_state.is_returning() {
+                                return exit_code;
+                            }
+
+                            return exit_code;
                         }
                     } else {
                         // If pattern is invalid, fall back to exact match
                         if &word == pattern {
-                            return execute(branch, shell_state);
+                            let exit_code = execute(branch, shell_state);
+
+                            // Check if we got an early return from a function
+                            if shell_state.is_returning() {
+                                return exit_code;
+                            }
+
+                            return exit_code;
                         }
                     }
                 }
             }
             if let Some(def) = default {
-                execute(*def, shell_state)
+                let exit_code = execute(*def, shell_state);
+
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    return exit_code;
+                }
+
+                exit_code
             } else {
                 0
             }
+        }
+        Ast::For { variable, items, body } => {
+            let mut exit_code = 0;
+            
+            // Execute the loop body for each item
+            for item in items {
+                // Set the loop variable
+                shell_state.set_var(&variable, item.clone());
+                
+                // Execute the body
+                exit_code = execute(*body.clone(), shell_state);
+                
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    return exit_code;
+                }
+            }
+            
+            exit_code
+        }
+        Ast::While { condition, body } => {
+            let mut exit_code = 0;
+            
+            // Execute the loop while condition is true (exit code 0)
+            loop {
+                // Evaluate the condition
+                let cond_exit = execute(*condition.clone(), shell_state);
+                
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    return cond_exit;
+                }
+                
+                // If condition is false (non-zero exit code), break
+                if cond_exit != 0 {
+                    break;
+                }
+                
+                // Execute the body
+                exit_code = execute(*body.clone(), shell_state);
+                
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    return exit_code;
+                }
+            }
+            
+            exit_code
         }
         Ast::FunctionDefinition { name, body } => {
             // Store function definition in shell state
@@ -220,6 +597,12 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         }
         Ast::FunctionCall { name, args } => {
             if let Some(function_body) = shell_state.get_function(&name).cloned() {
+                // Check recursion limit before entering function
+                if shell_state.function_depth >= shell_state.max_recursion_depth {
+                    eprintln!("Function recursion limit ({}) exceeded", shell_state.max_recursion_depth);
+                    return 1;
+                }
+
                 // Enter function context for local variable scoping
                 shell_state.enter_function();
 
@@ -232,6 +615,23 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Execute function body
                 let exit_code = execute(function_body, shell_state);
 
+                // Check if we got an early return from the function
+                if shell_state.is_returning() {
+                    let return_value = shell_state.get_return_value().unwrap_or(0);
+
+                    // Restore old positional parameters
+                    shell_state.set_positional_params(old_positional);
+
+                    // Exit function context
+                    shell_state.exit_function();
+
+                    // Clear return state
+                    shell_state.clear_return();
+
+                    // Return the early return value
+                    return return_value;
+                }
+
                 // Restore old positional parameters
                 shell_state.set_positional_params(old_positional);
 
@@ -242,6 +642,58 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             } else {
                 eprintln!("Function '{}' not found", name);
                 1
+            }
+        }
+        Ast::Return { value } => {
+            // Return statements can only be used inside functions
+            if shell_state.function_depth == 0 {
+                eprintln!("Return statement outside of function");
+                return 1;
+            }
+
+            // Parse return value if provided
+            let exit_code = if let Some(ref val) = value {
+                val.parse::<i32>().unwrap_or(0)
+            } else {
+                0
+            };
+
+            // Set return state to indicate early return from function
+            shell_state.set_return(exit_code);
+
+            // Return the exit code - the function call handler will check for this
+            exit_code
+        }
+        Ast::And { left, right } => {
+            // Execute left side first
+            let left_exit = execute(*left, shell_state);
+            
+            // Check if we got an early return from a function
+            if shell_state.is_returning() {
+                return left_exit;
+            }
+            
+            // Only execute right side if left succeeded (exit code 0)
+            if left_exit == 0 {
+                execute(*right, shell_state)
+            } else {
+                left_exit
+            }
+        }
+        Ast::Or { left, right } => {
+            // Execute left side first
+            let left_exit = execute(*left, shell_state);
+            
+            // Check if we got an early return from a function
+            if shell_state.is_returning() {
+                return left_exit;
+            }
+            
+            // Only execute right side if left failed (exit code != 0)
+            if left_exit != 0 {
+                execute(*right, shell_state)
+            } else {
+                left_exit
             }
         }
     }
@@ -281,7 +733,27 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             output: cmd.output.clone(),
             append: cmd.append.clone(),
         };
-        crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
+        
+        // If we're capturing output, create a writer for it
+        if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
+            // Create a writer that writes to our capture buffer
+            struct CaptureWriter {
+                buffer: Rc<RefCell<Vec<u8>>>,
+            }
+            impl std::io::Write for CaptureWriter {
+                fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                    self.buffer.borrow_mut().extend_from_slice(buf);
+                    Ok(buf.len())
+                }
+                fn flush(&mut self) -> std::io::Result<()> {
+                    Ok(())
+                }
+            }
+            let writer = CaptureWriter { buffer: capture_buffer.clone() };
+            crate::builtins::execute_builtin(&temp_cmd, shell_state, Some(Box::new(writer)))
+        } else {
+            crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
+        }
     } else {
         let mut command = Command::new(&expanded_args[0]);
         command.args(&expanded_args[1..]);
@@ -291,6 +763,12 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         command.env_clear();
         for (key, value) in child_env {
             command.env(key, value);
+        }
+        
+        // If we're capturing output, redirect stdout to capture buffer
+        let capturing = shell_state.capture_output.is_some();
+        if capturing {
+            command.stdout(Stdio::piped());
         }
 
         // Handle input redirection
@@ -360,9 +838,23 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         }
 
         match command.spawn() {
-            Ok(mut child) => match child.wait() {
-                Ok(status) => status.code().unwrap_or(0),
-                Err(e) => {
+            Ok(mut child) => {
+                // If capturing, read stdout
+                if capturing {
+                    if let Some(mut stdout) = child.stdout.take() {
+                        use std::io::Read;
+                        let mut output = Vec::new();
+                        if stdout.read_to_end(&mut output).is_ok() {
+                            if let Some(ref capture_buffer) = shell_state.capture_output {
+                                capture_buffer.borrow_mut().extend_from_slice(&output);
+                            }
+                        }
+                    }
+                }
+                
+                match child.wait() {
+                    Ok(status) => status.code().unwrap_or(0),
+                    Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
                             "{}{}{}{}",
@@ -374,9 +866,10 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     } else {
                         eprintln!("Error waiting for command: {}", e);
                     }
-                    1
+                        1
+                    }
                 }
-            },
+            }
             Err(e) => {
                 if shell_state.colors_enabled {
                     eprintln!(

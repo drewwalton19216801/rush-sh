@@ -27,6 +27,13 @@ pub enum Token {
     RightBrace,
     Newline,
     Local,
+    Return,
+    For,
+    Do,
+    Done,
+    While,    // while
+    And,      // &&
+    Or,       // ||
 }
 
 fn is_keyword(word: &str) -> Option<Token> {
@@ -40,6 +47,11 @@ fn is_keyword(word: &str) -> Option<Token> {
         "in" => Some(Token::In),
         "esac" => Some(Token::Esac),
         "local" => Some(Token::Local),
+        "return" => Some(Token::Return),
+        "for" => Some(Token::For),
+        "while" => Some(Token::While),
+        "do" => Some(Token::Do),
+        "done" => Some(Token::Done),
         _ => None,
     }
 }
@@ -295,8 +307,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -307,8 +319,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -316,26 +328,36 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 chars.next();
             }
             '"' if !in_single_quote => {
-                chars.next(); // consume the quote
-                if in_double_quote {
-                    // End of double quote - push the accumulated content as a word
-                    // Even if empty, we need to preserve it as an empty string token
-                    let word = expand_variables_in_command(&current, shell_state);
-                    tokens.push(Token::Word(word));
-                    current.clear();
-                    in_double_quote = false;
+                // Check if this quote is escaped (preceded by backslash in current)
+                let is_escaped = current.ends_with('\\');
+                
+                if is_escaped && in_double_quote {
+                    // This is an escaped quote inside double quotes - treat as literal
+                    current.pop(); // Remove the backslash
+                    current.push('"'); // Add the literal quote
+                    chars.next(); // consume the quote
                 } else {
-                    // Start of double quote - push any accumulated content first
-                    if !current.is_empty() {
-                        if let Some(keyword) = is_keyword(&current) {
-                            tokens.push(keyword);
-                        } else {
-                            let word = expand_variables_in_command(&current, shell_state);
-                            tokens.push(Token::Word(word));
-                        }
+                    chars.next(); // consume the quote
+                    if in_double_quote {
+                        // End of double quote - push the accumulated content as a word
+                        // Even if empty, we need to preserve it as an empty string token
+                        // Don't expand variables here - keep them as literals for execution-time expansion
+                        tokens.push(Token::Word(current.clone()));
                         current.clear();
+                        in_double_quote = false;
+                    } else {
+                        // Start of double quote - push any accumulated content first
+                        if !current.is_empty() {
+                            if let Some(keyword) = is_keyword(&current) {
+                                tokens.push(keyword);
+                            } else {
+                                // Don't expand variables here - keep them as literals
+                                tokens.push(Token::Word(current.clone()));
+                            }
+                            current.clear();
+                        }
+                        in_double_quote = true;
                     }
-                    in_double_quote = true;
                 }
             }
             '\'' => {
@@ -440,11 +462,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else if let Some(&'(') = chars.peek() {
                     chars.next(); // consume (
                     if let Some(&'(') = chars.peek() {
-                        // Arithmetic expansion $((...))
+                        // Arithmetic expansion $((...)) - keep as literal for execution-time expansion
                         chars.next(); // consume second (
                         let mut arithmetic_expr = String::new();
                         let mut paren_depth = 1;
-                        let mut found_closing = false;
                         while let Some(&ch) = chars.peek() {
                             if ch == '(' {
                                 paren_depth += 1;
@@ -455,22 +476,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 if paren_depth == 0 {
                                     // Found the matching closing ))
                                     chars.next(); // consume the first )
-                                    chars.next(); // consume the second )
-                                    found_closing = true;
-                                    // Evaluate the arithmetic expression
-                                    match crate::arithmetic::evaluate_arithmetic_expression(
-                                        &arithmetic_expr,
-                                        shell_state,
-                                    ) {
-                                        Ok(result) => {
-                                            current.push_str(&result.to_string());
-                                        }
-                                        Err(_e) => {
-                                            // On error, keep the literal
-                                            current.push_str("$(( ");
-                                            current.push_str(&arithmetic_expr);
-                                            current.push_str(" ))");
-                                        }
+                                    if let Some(&')') = chars.peek() {
+                                        chars.next(); // consume the second )
                                     }
                                     break;
                                 } else {
@@ -482,14 +489,13 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 chars.next();
                             }
                         }
-
-                        // If we didn't find the closing )), put back the consumed characters
-                        if !found_closing {
-                            current.push_str("$(( ");
-                            current.push_str(&arithmetic_expr);
-                        }
+                        // Keep as literal for execution-time expansion
+                        current.push_str("$((");
+                        current.push_str(&arithmetic_expr);
+                        current.push_str("))");
                     } else {
-                        // Command substitution $(...)
+                        // Command substitution $(...) - keep as literal for runtime expansion
+                        // This will be expanded by the executor using execute_and_capture_output()
                         let mut sub_command = String::new();
                         let mut paren_depth = 1;
                         while let Some(&ch) = chars.peek() {
@@ -511,36 +517,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 chars.next();
                             }
                         }
-                        // Expand variables in the command before executing
-                        let expanded_command =
-                            expand_variables_in_command(&sub_command, shell_state);
-                        // Execute the command and substitute the output
-                        let mut command = std::process::Command::new("sh");
-                        command.arg("-c").arg(&expanded_command);
-                        let child_env = shell_state.get_env_for_child();
-                        command.env_clear();
-                        for (key, value) in child_env {
-                            command.env(key, value);
-                        }
-                        if let Ok(output) = command.output() {
-                            if output.status.success() {
-                                let stdout =
-                                    String::from_utf8_lossy(&output.stdout).trim().to_string();
-                                if !stdout.is_empty() {
-                                    current.push_str(&stdout);
-                                }
-                            } else {
-                                // On failure, keep the literal
-                                current.push_str("$(");
-                                current.push_str(&sub_command);
-                                current.push(')');
-                            }
-                        } else {
-                            // On error, keep the literal
-                            current.push_str("$(");
-                            current.push_str(&sub_command);
-                            current.push(')');
-                        }
+                        // Keep the command substitution as literal - it will be expanded at execution time
+                        current.push_str("$(");
+                        current.push_str(&sub_command);
+                        current.push(')');
                     }
                 } else {
                     // Variable expansion - collect var name without consuming the terminating character
@@ -583,14 +563,20 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
-                tokens.push(Token::Pipe);
-                chars.next();
-                // Skip any whitespace after the pipe
+                chars.next(); // consume first |
+                // Check if this is || (OR operator)
+                if let Some(&'|') = chars.peek() {
+                    chars.next(); // consume second |
+                    tokens.push(Token::Or);
+                } else {
+                    tokens.push(Token::Pipe);
+                }
+                // Skip any whitespace after the pipe/or
                 while let Some(&ch) = chars.peek() {
                     if ch == ' ' || ch == '\t' {
                         chars.next();
@@ -599,26 +585,126 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                 }
             }
-            '>' => {
+            '&' if !in_double_quote && !in_single_quote => {
                 if !current.is_empty() {
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
-                chars.next();
-                if let Some(&next_ch) = chars.peek() {
-                    if next_ch == '>' {
-                        chars.next();
-                        tokens.push(Token::RedirAppend);
+                chars.next(); // consume first &
+                // Check if this is && (AND operator)
+                if let Some(&'&') = chars.peek() {
+                    chars.next(); // consume second &
+                    tokens.push(Token::And);
+                    // Skip any whitespace after &&
+                    while let Some(&ch) = chars.peek() {
+                        if ch == ' ' || ch == '\t' {
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+                } else {
+                    // Single & is not supported, treat as part of word
+                    current.push('&');
+                }
+            }
+            '>' => {
+                // Check if this is a file descriptor redirection like 2>&1
+                // Look back to see if current ends with a digit
+                let is_fd_redirect = if !current.is_empty() {
+                    current.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                } else {
+                    false
+                };
+                
+                if is_fd_redirect {
+                    // This might be a file descriptor redirection like 2>&1
+                    chars.next(); // consume >
+                    if let Some(&'&') = chars.peek() {
+                        chars.next(); // consume &
+                        // Now collect the target fd or '-'
+                        let mut target = String::new();
+                        while let Some(&ch) = chars.peek() {
+                            if ch.is_ascii_digit() || ch == '-' {
+                                target.push(ch);
+                                chars.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        
+                        if !target.is_empty() {
+                            // This is a valid fd redirection like 2>&1 or 2>&-
+                            // Remove the trailing digit from current (the fd number)
+                            current.pop();
+                            
+                            // Push any remaining content as a token
+                            if !current.is_empty() {
+                                if let Some(keyword) = is_keyword(&current) {
+                                    tokens.push(keyword);
+                                } else {
+                                    tokens.push(Token::Word(current.clone()));
+                                }
+                                current.clear();
+                            }
+                            
+                            // For now, we'll just skip the fd redirection (treat as no-op)
+                            // since we don't fully support it, but we won't treat it as an error
+                            continue;
+                        } else {
+                            // Invalid syntax, put back what we consumed
+                            current.push('>');
+                            current.push('&');
+                        }
+                    } else {
+                        // Not a fd redirection, handle as normal redirect
+                        // Put the > back into processing
+                        if !current.is_empty() {
+                            if let Some(keyword) = is_keyword(&current) {
+                                tokens.push(keyword);
+                            } else {
+                                tokens.push(Token::Word(current.clone()));
+                            }
+                            current.clear();
+                        }
+                        
+                        if let Some(&next_ch) = chars.peek() {
+                            if next_ch == '>' {
+                                chars.next();
+                                tokens.push(Token::RedirAppend);
+                            } else {
+                                tokens.push(Token::RedirOut);
+                            }
+                        } else {
+                            tokens.push(Token::RedirOut);
+                        }
+                    }
+                } else {
+                    // Normal redirection
+                    if !current.is_empty() {
+                        if let Some(keyword) = is_keyword(&current) {
+                            tokens.push(keyword);
+                        } else {
+                            // Don't expand variables here - keep them as literals
+                            tokens.push(Token::Word(current.clone()));
+                        }
+                        current.clear();
+                    }
+                    chars.next();
+                    if let Some(&next_ch) = chars.peek() {
+                        if next_ch == '>' {
+                            chars.next();
+                            tokens.push(Token::RedirAppend);
+                        } else {
+                            tokens.push(Token::RedirOut);
+                        }
                     } else {
                         tokens.push(Token::RedirOut);
                     }
-                } else {
-                    tokens.push(Token::RedirOut);
                 }
             }
             '<' => {
@@ -626,8 +712,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -639,8 +725,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -652,8 +738,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -665,8 +751,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -678,8 +764,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -691,8 +777,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -707,42 +793,18 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         chars.next();
                     }
                 }
-                // Expand variables in the command before executing
-                let expanded_command = expand_variables_in_command(&sub_command, shell_state);
-                // Execute the command and substitute the output
-                let mut command = std::process::Command::new("sh");
-                command.arg("-c").arg(&expanded_command);
-                let child_env = shell_state.get_env_for_child();
-                command.env_clear();
-                for (key, value) in child_env {
-                    command.env(key, value);
-                }
-                if let Ok(output) = command.output() {
-                    if output.status.success() {
-                        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                        if !stdout.is_empty() {
-                            current.push_str(&stdout);
-                        }
-                    } else {
-                        // On failure, keep the literal
-                        current.push('`');
-                        current.push_str(&sub_command);
-                        current.push('`');
-                    }
-                } else {
-                    // On error, keep the literal
-                    current.push('`');
-                    current.push_str(&sub_command);
-                    current.push('`');
-                }
+                // Keep backtick command substitution as literal for runtime expansion
+                current.push('`');
+                current.push_str(&sub_command);
+                current.push('`');
             }
             ';' => {
                 if !current.is_empty() {
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
                     } else {
-                        let word = expand_variables_in_command(&current, shell_state);
-                        tokens.push(Token::Word(word));
+                        // Don't expand variables here - keep them as literals
+                        tokens.push(Token::Word(current.clone()));
                     }
                     current.clear();
                 }
@@ -776,8 +838,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
         if let Some(keyword) = is_keyword(&current) {
             tokens.push(keyword);
         } else {
-            let word = expand_variables_in_command(&current, shell_state);
-            tokens.push(Token::Word(word));
+            // Don't expand variables here - keep them as literals
+            tokens.push(Token::Word(current.clone()));
         }
     }
 

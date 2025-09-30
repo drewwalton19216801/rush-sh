@@ -21,6 +21,15 @@ pub enum Ast {
         cases: Vec<(Vec<String>, Ast)>,
         default: Option<Box<Ast>>,
     },
+    For {
+        variable: String,
+        items: Vec<String>,
+        body: Box<Ast>,
+    },
+    While {
+        condition: Box<Ast>,
+        body: Box<Ast>,
+    },
     FunctionDefinition {
         name: String,
         body: Box<Ast>,
@@ -28,6 +37,17 @@ pub enum Ast {
     FunctionCall {
         name: String,
         args: Vec<String>,
+    },
+    Return {
+        value: Option<String>,
+    },
+    And {
+        left: Box<Ast>,
+        right: Box<Ast>,
+    },
+    Or {
+        left: Box<Ast>,
+        right: Box<Ast>,
     },
 }
 
@@ -46,13 +66,16 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
         {
             // Look for the matching RightBrace
-            let mut brace_depth = 0;
+            // Start from the opening brace (token 3) and find its match
+            let mut brace_depth = 1; // We've already seen the opening brace at position 3
             let mut function_end = tokens.len();
+            let mut j = 4; // Start after the opening brace
 
-            for j in 0..tokens.len() {
+            while j < tokens.len() {
                 match &tokens[j] {
                     Token::LeftBrace => {
                         brace_depth += 1;
+                        j += 1;
                     },
                     Token::RightBrace => {
                         brace_depth -= 1;
@@ -60,8 +83,48 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
                             function_end = j + 1; // Include the closing brace
                             break;
                         }
+                        j += 1;
                     }
-                    _ => {}
+                    Token::If => {
+                        // Skip to matching fi to avoid confusion
+                        let mut if_depth = 1;
+                        j += 1;
+                        while j < tokens.len() && if_depth > 0 {
+                            match tokens[j] {
+                                Token::If => if_depth += 1,
+                                Token::Fi => if_depth -= 1,
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                    }
+                    Token::For | Token::While => {
+                        // Skip to matching done
+                        let mut for_depth = 1;
+                        j += 1;
+                        while j < tokens.len() && for_depth > 0 {
+                            match tokens[j] {
+                                Token::For | Token::While => for_depth += 1,
+                                Token::Done => for_depth -= 1,
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                    }
+                    Token::Case => {
+                        // Skip to matching esac
+                        j += 1;
+                        while j < tokens.len() {
+                            if tokens[j] == Token::Esac {
+                                j += 1;
+                                break;
+                            }
+                            j += 1;
+                        }
+                    }
+                    _ => {
+                        j += 1;
+                    }
                 }
             }
 
@@ -143,14 +206,35 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         }
     }
 
-    // Check if it's a local assignment (local VAR VALUE)
+    // Check if it's a local assignment (local VAR VALUE or local VAR= VALUE)
     if tokens.len() == 3 {
         if let (Token::Local, Token::Word(var), Token::Word(value)) = (&tokens[0], &tokens[1], &tokens[2]) {
+            // Strip trailing = if present (handles "local var= value" format)
+            let clean_var = if var.ends_with('=') {
+                &var[..var.len() - 1]
+            } else {
+                var
+            };
             // Basic validation: variable name should start with letter or underscore
-            if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+            if clean_var.chars().next().unwrap().is_alphabetic() || clean_var.starts_with('_') {
                 return Ok(Ast::LocalAssignment {
-                    var: var.clone(),
+                    var: clean_var.to_string(),
                     value: value.clone(),
+                });
+            }
+        }
+    }
+
+    // Check if it's a return statement
+    if tokens.len() >= 1 && tokens.len() <= 2 {
+        if let Token::Return = &tokens[0] {
+            if tokens.len() == 1 {
+                // return (with no value, defaults to 0)
+                return Ok(Ast::Return { value: None });
+            } else if let Token::Word(word) = &tokens[1] {
+                // return value
+                return Ok(Ast::Return {
+                    value: Some(word.clone()),
                 });
             }
         }
@@ -196,6 +280,16 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     // Check if it's a case statement
     if let Token::Case = tokens[0] {
         return parse_case(tokens);
+    }
+
+    // Check if it's a for loop
+    if let Token::For = tokens[0] {
+        return parse_for(tokens);
+    }
+
+    // Check if it's a while loop
+    if let Token::While = tokens[0] {
+        return parse_while(tokens);
     }
 
     // Check if it's a function definition
@@ -285,6 +379,42 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
             // If we didn't find a matching fi, include all remaining tokens
             // This handles the case where the if statement is incomplete
+        } else if tokens[i] == Token::For {
+            // For for loops, find the matching done
+            let mut depth = 1; // Start at 1 because we're already inside the for
+            i += 1; // Move past the 'for' token
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::For | Token::While => depth += 1,
+                    Token::Done => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1; // Include the done
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+        } else if tokens[i] == Token::While {
+            // For while loops, find the matching done
+            let mut depth = 1; // Start at 1 because we're already inside the while
+            i += 1; // Move past the 'while' token
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::While | Token::For => depth += 1,
+                    Token::Done => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1; // Include the done
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
         } else if tokens[i] == Token::Case {
             // For case statements, find the matching esac
             while i < tokens.len() {
@@ -294,11 +424,29 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
                 i += 1;
             }
+        } else if i + 3 < tokens.len()
+            && matches!(tokens[i], Token::Word(_))
+            && tokens[i + 1] == Token::LeftParen
+            && tokens[i + 2] == Token::RightParen
+            && tokens[i + 3] == Token::LeftBrace
+        {
+            // This is a function definition - find the matching closing brace
+            let mut brace_depth = 1;
+            i += 4; // Skip to after opening brace
+            while i < tokens.len() && brace_depth > 0 {
+                match tokens[i] {
+                    Token::LeftBrace => brace_depth += 1,
+                    Token::RightBrace => brace_depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
         } else {
-            // For simple commands, stop at newline or semicolon
+            // For simple commands, stop at newline, semicolon, &&, or ||
             // But check if the next token after newline is a control flow keyword
             while i < tokens.len() {
-                if tokens[i] == Token::Newline || tokens[i] == Token::Semicolon {
+                if tokens[i] == Token::Newline || tokens[i] == Token::Semicolon
+                    || tokens[i] == Token::And || tokens[i] == Token::Or {
                     // Look ahead to see if the next non-newline token is else/elif/fi
                     let mut j = i + 1;
                     while j < tokens.len() && tokens[j] == Token::Newline {
@@ -339,7 +487,39 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             }
 
             let ast = parse_slice(command_tokens)?;
-            commands.push(ast);
+            
+            // Check if the next token is && or ||
+            if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
+                let operator = tokens[i].clone();
+                i += 1; // Skip the operator
+                
+                // Skip any newlines after the operator
+                while i < tokens.len() && tokens[i] == Token::Newline {
+                    i += 1;
+                }
+                
+                // Parse the right side recursively
+                let remaining_tokens = &tokens[i..];
+                let right_ast = parse_commands_sequentially(remaining_tokens)?;
+                
+                // Create And or Or node
+                let combined_ast = match operator {
+                    Token::And => Ast::And {
+                        left: Box::new(ast),
+                        right: Box::new(right_ast),
+                    },
+                    Token::Or => Ast::Or {
+                        left: Box::new(ast),
+                        right: Box::new(right_ast),
+                    },
+                    _ => unreachable!(),
+                };
+                
+                commands.push(combined_ast);
+                break; // We've consumed the rest of the tokens
+            } else {
+                commands.push(ast);
+            }
         }
 
         if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
@@ -410,12 +590,27 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 }
             }
             Token::RightParen => {
+                // Check if this looks like a function call pattern: Word LeftParen ... RightParen
+                // If so, treat it as a function call even if the function doesn't exist
+                if !current_cmd.args.is_empty() && i > 0 {
+                    if let Token::LeftParen = tokens[i-1] {
+                        // This looks like a function call pattern, treat as function call
+                        // For now, we'll handle this in the executor by checking if it's a function
+                        // If not a function, the executor will handle the error gracefully
+                        break;
+                    }
+                }
                 return Err("Unexpected ) in pipeline".to_string());
             }
             Token::Newline => {
                 // Newlines are handled at the sequence level, skip them in pipelines
                 i += 1;
                 continue;
+            }
+            Token::Do | Token::Done | Token::Then | Token::Else | Token::Elif | Token::Fi | Token::Esac => {
+                // These are control flow keywords that should be handled at a higher level
+                // If we encounter them here, it means we've reached the end of the current command
+                break;
             }
             _ => {
                 return Err(format!("Unexpected token in pipeline: {:?}", token));
@@ -716,6 +911,230 @@ fn parse_case(tokens: &[Token]) -> Result<Ast, String> {
     })
 }
 
+fn parse_for(tokens: &[Token]) -> Result<Ast, String> {
+    let mut i = 1; // Skip 'for'
+
+    // Parse variable name
+    if i >= tokens.len() || !matches!(tokens[i], Token::Word(_)) {
+        return Err("Expected variable name after for".to_string());
+    }
+    let variable = if let Token::Word(ref v) = tokens[i] {
+        v.clone()
+    } else {
+        unreachable!()
+    };
+    i += 1;
+
+    // Expect 'in'
+    if i >= tokens.len() || tokens[i] != Token::In {
+        return Err("Expected 'in' after for variable".to_string());
+    }
+    i += 1;
+
+    // Parse items until we hit 'do' or semicolon/newline
+    let mut items = Vec::new();
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::Do => break,
+            Token::Semicolon | Token::Newline => {
+                i += 1;
+                // Check if next token is 'do'
+                if i < tokens.len() && tokens[i] == Token::Do {
+                    break;
+                }
+            }
+            Token::Word(word) => {
+                items.push(word.clone());
+                i += 1;
+            }
+            _ => {
+                return Err(format!("Unexpected token in for items: {:?}", tokens[i]));
+            }
+        }
+    }
+
+    // Skip any newlines before 'do'
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+
+    // Expect 'do'
+    if i >= tokens.len() || tokens[i] != Token::Do {
+        return Err("Expected 'do' in for loop".to_string());
+    }
+    i += 1;
+
+    // Skip any newlines after 'do'
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+
+    // Parse body until 'done'
+    let mut body_tokens = Vec::new();
+    let mut depth = 0;
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::For => {
+                depth += 1;
+                body_tokens.push(tokens[i].clone());
+            }
+            Token::Done => {
+                if depth > 0 {
+                    depth -= 1;
+                    body_tokens.push(tokens[i].clone());
+                } else {
+                    break; // This done closes our for loop
+                }
+            }
+            Token::Newline => {
+                // Skip newlines but check what comes after
+                let mut j = i + 1;
+                while j < tokens.len() && tokens[j] == Token::Newline {
+                    j += 1;
+                }
+                if j < tokens.len() && depth == 0 && tokens[j] == Token::Done {
+                    i = j; // Skip to done
+                    break;
+                }
+                // Otherwise it's just a newline in the middle of commands
+                body_tokens.push(tokens[i].clone());
+            }
+            _ => {
+                body_tokens.push(tokens[i].clone());
+            }
+        }
+        i += 1;
+    }
+
+    if i >= tokens.len() || tokens[i] != Token::Done {
+        return Err("Expected 'done' to close for loop".to_string());
+    }
+
+    // Parse the body
+    let body_ast = if body_tokens.is_empty() {
+        // Empty body - create a no-op
+        Ast::Pipeline(vec![ShellCommand {
+            args: vec!["true".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        }])
+    } else {
+        parse_commands_sequentially(&body_tokens)?
+    };
+
+    Ok(Ast::For {
+        variable,
+        items,
+        body: Box::new(body_ast),
+    })
+}
+
+fn parse_while(tokens: &[Token]) -> Result<Ast, String> {
+    let mut i = 1; // Skip 'while'
+
+    // Parse condition until we hit 'do' or semicolon/newline
+    let mut cond_tokens = Vec::new();
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::Do => break,
+            Token::Semicolon | Token::Newline => {
+                i += 1;
+                // Check if next token is 'do'
+                if i < tokens.len() && tokens[i] == Token::Do {
+                    break;
+                }
+            }
+            _ => {
+                cond_tokens.push(tokens[i].clone());
+                i += 1;
+            }
+        }
+    }
+
+    if cond_tokens.is_empty() {
+        return Err("Expected condition after while".to_string());
+    }
+
+    // Skip any newlines before 'do'
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+
+    // Expect 'do'
+    if i >= tokens.len() || tokens[i] != Token::Do {
+        return Err("Expected 'do' in while loop".to_string());
+    }
+    i += 1;
+
+    // Skip any newlines after 'do'
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+
+    // Parse body until 'done'
+    let mut body_tokens = Vec::new();
+    let mut depth = 0;
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::While | Token::For => {
+                depth += 1;
+                body_tokens.push(tokens[i].clone());
+            }
+            Token::Done => {
+                if depth > 0 {
+                    depth -= 1;
+                    body_tokens.push(tokens[i].clone());
+                } else {
+                    break; // This done closes our while loop
+                }
+            }
+            Token::Newline => {
+                // Skip newlines but check what comes after
+                let mut j = i + 1;
+                while j < tokens.len() && tokens[j] == Token::Newline {
+                    j += 1;
+                }
+                if j < tokens.len() && depth == 0 && tokens[j] == Token::Done {
+                    i = j; // Skip to done
+                    break;
+                }
+                // Otherwise it's just a newline in the middle of commands
+                body_tokens.push(tokens[i].clone());
+            }
+            _ => {
+                body_tokens.push(tokens[i].clone());
+            }
+        }
+        i += 1;
+    }
+
+    if i >= tokens.len() || tokens[i] != Token::Done {
+        return Err("Expected 'done' to close while loop".to_string());
+    }
+
+    // Parse the condition
+    let condition_ast = parse_slice(&cond_tokens)?;
+
+    // Parse the body
+    let body_ast = if body_tokens.is_empty() {
+        // Empty body - create a no-op
+        Ast::Pipeline(vec![ShellCommand {
+            args: vec!["true".to_string()],
+            input: None,
+            output: None,
+            append: None,
+        }])
+    } else {
+        parse_commands_sequentially(&body_tokens)?
+    };
+
+    Ok(Ast::While {
+        condition: Box::new(condition_ast),
+        body: Box::new(body_ast),
+    })
+}
+
 fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
     if tokens.len() < 2 {
         return Err("Function definition too short".to_string());
@@ -751,27 +1170,93 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
         return Err("Expected ( after function name or { for legacy format".to_string());
     };
 
-    // Find the matching closing brace
+    // Find the matching closing brace, accounting for nested function definitions and control structures
     let mut brace_depth = 0;
     let mut body_end = 0;
     let mut found_closing = false;
+    let mut i = brace_pos + 1;
 
-    for (i, token) in tokens[brace_pos + 1..].iter().enumerate() {
-        match token {
+    while i < tokens.len() {
+        // Check if this is the start of a nested function definition
+        // Pattern: Word LeftParen RightParen LeftBrace
+        if i + 3 < tokens.len()
+            && matches!(&tokens[i], Token::Word(_))
+            && tokens[i + 1] == Token::LeftParen
+            && tokens[i + 2] == Token::RightParen
+            && tokens[i + 3] == Token::LeftBrace
+        {
+            // This is a nested function - skip over it entirely
+            // Skip to after the opening brace of nested function
+            i += 4;
+            let mut nested_depth = 1;
+            while i < tokens.len() && nested_depth > 0 {
+                match tokens[i] {
+                    Token::LeftBrace => nested_depth += 1,
+                    Token::RightBrace => nested_depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
+            // Don't increment i again - continue from current position
+            continue;
+        }
+        
+        match &tokens[i] {
             Token::LeftBrace => {
                 brace_depth += 1;
+                i += 1;
             }
             Token::RightBrace => {
                 if brace_depth == 0 {
                     // This is our matching closing brace
-                    body_end = brace_pos + 1 + i;
+                    body_end = i;
                     found_closing = true;
                     break;
                 } else {
                     brace_depth -= 1;
+                    i += 1;
                 }
             }
-            _ => {}
+            Token::If => {
+                // Skip to matching fi
+                let mut if_depth = 1;
+                i += 1;
+                while i < tokens.len() && if_depth > 0 {
+                    match tokens[i] {
+                        Token::If => if_depth += 1,
+                        Token::Fi => if_depth -= 1,
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            Token::For | Token::While => {
+                // Skip to matching done
+                let mut for_depth = 1;
+                i += 1;
+                while i < tokens.len() && for_depth > 0 {
+                    match tokens[i] {
+                        Token::For | Token::While => for_depth += 1,
+                        Token::Done => for_depth -= 1,
+                        _ => {}
+                    }
+                    i += 1;
+                }
+            }
+            Token::Case => {
+                // Skip to matching esac
+                i += 1;
+                while i < tokens.len() {
+                    if tokens[i] == Token::Esac {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
+            }
+            _ => {
+                i += 1;
+            }
         }
     }
 
