@@ -7,6 +7,7 @@ use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
+mod arithmetic;
 mod builtins;
 mod completion;
 mod executor;
