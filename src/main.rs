@@ -12,6 +12,7 @@ mod builtins;
 mod completion;
 mod executor;
 mod lexer;
+mod parameter_expansion;
 mod parser;
 mod state;
 
@@ -107,8 +108,7 @@ fn main() {
             if shell_state.colors_enabled {
                 eprintln!(
                     "{}Error: Could not read script file '{}'\x1b[0m",
-                    shell_state.color_scheme.error,
-                    script_path
+                    shell_state.color_scheme.error, script_path
                 );
             } else {
                 eprintln!("Error: Could not read script file '{}'", script_path);
@@ -173,8 +173,7 @@ fn main() {
                             if shell_state.colors_enabled {
                                 eprintln!(
                                     "{}Readline error: {}\x1b[0m",
-                                    shell_state.color_scheme.error,
-                                    err
+                                    shell_state.color_scheme.error, err
                                 );
                             } else {
                                 eprintln!("Readline error: {}", err);
@@ -236,10 +235,7 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
         }
         Err(e) => {
             if shell_state.colors_enabled {
-                eprintln!(
-                    "{}Lex error: {}\x1b[0m",
-                    shell_state.color_scheme.error, e
-                );
+                eprintln!("{}Lex error: {}\x1b[0m", shell_state.color_scheme.error, e);
             } else {
                 eprintln!("Lex error: {}", e);
             }
