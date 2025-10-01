@@ -1,0 +1,370 @@
+# Rush Shell - AI Agent Guide
+
+## Project Overview
+
+**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.4.3. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
+
+### Project Goals
+
+- **POSIX Compliance**: Achieve 100% compliance with IEEE Std 1003.1-2008 (POSIX sh)
+- **Performance**: Leverage Rust's zero-cost abstractions for optimal execution speed
+- **Reliability**: Extensive test coverage and robust error handling
+- **Maintainability**: Clean, modular architecture with comprehensive documentation
+- **Safety**: Memory safety and thread safety through Rust's ownership system
+
+### Current Status
+
+- **Compliance Level**: ~87% POSIX compliant
+- **Test Coverage**: 269+ individual test cases across all components
+- **Built-in Commands**: 18 implemented commands
+- **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions
+- **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
+
+## Architecture Overview
+
+### Core Components
+
+```text
+src/
+├── main.rs              # Entry point and REPL loop
+├── lexer.rs             # Tokenization and alias expansion
+├── parser.rs            # AST construction and parsing
+├── executor.rs          # Command execution and evaluation
+├── state.rs             # Shell state and variable management
+├── arithmetic.rs        # Arithmetic expression evaluation
+├── parameter_expansion.rs # Parameter expansion with modifiers
+├── brace_expansion.rs   # Brace expansion engine
+├── completion.rs        # Tab completion system
+├── builtins/            # Built-in command implementations
+│   ├── builtin_*.rs     # Individual builtin commands
+└── lib.rs               # Library exports (if exists)
+```
+
+### Module Responsibilities
+
+#### **Lexer** (`src/lexer.rs`)
+
+- **Token Recognition**: Identifies commands, operators, keywords, and special tokens
+- **Quote Handling**: Processes single/double quotes and escape sequences
+- **Variable Detection**: Identifies variable patterns for deferred expansion
+- **Alias Expansion**: Expands command aliases before parsing
+- **Command Substitution**: Preserves `$(...)` and `` `...` `` syntax for runtime expansion
+
+#### **Parser** (`src/parser.rs`)
+
+- **AST Construction**: Builds Abstract Syntax Tree from token stream
+- **Control Structures**: Handles if/elif/else, case, for, while, functions
+- **Pipeline Construction**: Creates pipeline structures for command chaining
+- **Redirection Parsing**: Processes I/O redirection operators
+
+#### **Executor** (`src/executor.rs`)
+
+- **Command Execution**: Runs external commands and built-in functions
+- **Variable Expansion**: Runtime expansion of variables and parameters
+- **Pipeline Management**: Coordinates data flow between pipeline stages
+- **Redirection Handling**: Manages file descriptors and I/O redirection
+- **Error Propagation**: Handles exit codes and error conditions
+
+#### **State Management** (`src/state.rs`)
+
+- **Variable Scoping**: Global and local variable management with proper scoping
+- **Environment Integration**: Coordination with system environment variables
+- **Function Context**: Function call stack and local variable scoping
+- **Directory Stack**: pushd/popd/dirs functionality
+- **Alias Management**: Command alias storage and expansion
+
+#### **Expansion Engines**
+
+- **Arithmetic** (`src/arithmetic.rs`): `$((...))` evaluation using Shunting-yard algorithm
+- **Parameter** (`src/parameter_expansion.rs`): `${VAR:-default}` and modifier processing
+- **Brace** (`src/brace_expansion.rs`): `{a,b,c}` and range expansion (`{1..5}`)
+
+## Code Quality Standards
+
+### Testing Philosophy
+
+The project maintains **comprehensive test coverage** with 269+ individual test cases:
+
+```rust
+// Example test structure
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_feature_comprehensive_coverage() {
+        // Arrange
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("TEST_VAR", "test_value".to_string());
+
+        // Act
+        let tokens = lex("echo $TEST_VAR", &shell_state).unwrap();
+        let result = expand_tokens(tokens, &mut shell_state);
+
+        // Assert
+        assert_eq!(result, vec![
+            Token::Word("echo".to_string()),
+            Token::Word("test_value".to_string())
+        ]);
+    }
+}
+```
+
+### Error Handling Patterns
+
+**Graceful Degradation**: The shell follows a "fail gracefully" philosophy:
+
+```rust
+// Example: Command substitution fallback
+match execute_and_capture_output(ast, shell_state) {
+    Ok(output) => output,
+    Err(_) => {
+        // Fall back to literal syntax preservation
+        original_command.to_string()
+    }
+}
+```
+
+**Comprehensive Error Context**:
+
+```rust
+// Detailed error reporting with context
+if shell_state.colors_enabled {
+    eprintln!("{}Parse error: {}\x1b[0m",
+              shell_state.color_scheme.error, error_msg);
+} else {
+    eprintln!("Parse error: {}", error_msg);
+}
+```
+
+### Code Organization Principles
+
+#### **Single Responsibility**
+
+Each module has a clearly defined purpose:
+
+- `lexer.rs`: Only handles tokenization and lexical analysis
+- `arithmetic.rs`: Only handles mathematical expression evaluation
+- `state.rs`: Only manages shell state and variables
+
+#### **Immutable by Default**
+
+```rust
+// Functions prefer immutable references
+pub fn get_var(&self, name: &str) -> Option<String> {
+    // Implementation avoids mutation
+}
+```
+
+#### **Explicit Error Propagation**
+
+```rust
+// Clear Result types for error handling
+pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String>
+```
+
+## Development Guidelines
+
+### Coding Standards
+
+#### **Rust Best Practices**
+
+- Use `clippy` linting with strict settings
+- Prefer `&str` over `String` where possible
+- Use `Cow<'_, str>` for efficient string handling
+- Leverage Rust's type system for safety
+
+#### **Documentation Requirements**
+
+```rust
+/// Comprehensive function documentation
+///
+/// # Examples
+///
+/// ```
+/// use rush_sh::lexer;
+/// let tokens = lexer::lex("echo hello", &shell_state).unwrap();
+/// ```
+///
+/// # Errors
+///
+/// Returns `Err` if input cannot be tokenized
+pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String>
+```
+
+### Contribution Workflow
+
+#### **Before Making Changes**
+
+1. **Understand the Architecture**: Review the module responsibilities above
+2. **Check Test Coverage**: Ensure existing tests pass
+3. **Identify Integration Points**: Understand how changes affect other modules
+4. **Consider Error Cases**: Plan for comprehensive error handling
+
+#### **Implementation Steps**
+
+1. **Add Tests First**: Write failing tests for new functionality
+2. **Implement Core Logic**: Follow existing patterns and error handling
+3. **Update Documentation**: Maintain comprehensive documentation
+4. **Run Full Test Suite**: Ensure no regressions
+
+#### **Code Review Checklist**
+
+- [ ] Comprehensive error handling implemented
+- [ ] Tests cover both success and failure cases
+- [ ] Documentation is complete and accurate
+- [ ] Follows existing code patterns and style
+- [ ] No performance regressions introduced
+- [ ] Integration with existing modules verified
+
+### Key Implementation Patterns
+
+#### **Token Processing Pipeline**
+
+```rust
+// Standard flow for command processing
+pub fn execute_line(line: &str, shell_state: &mut ShellState) {
+    match lexer::lex(line, shell_state) {
+        Ok(tokens) => {
+            match lexer::expand_aliases(tokens, shell_state, &mut HashSet::new()) {
+                Ok(expanded_tokens) => {
+                    match brace_expansion::expand_braces(expanded_tokens) {
+                        Ok(brace_expanded_tokens) => {
+                            match parser::parse(brace_expanded_tokens) {
+                                Ok(ast) => {
+                                    let exit_code = executor::execute(ast, shell_state);
+                                    // Handle execution results
+                                }
+                                Err(e) => { /* Handle parse errors */ }
+                            }
+                        }
+                        Err(e) => { /* Handle brace expansion errors */ }
+                    }
+                }
+                Err(e) => { /* Handle alias expansion errors */ }
+            }
+        }
+        Err(e) => { /* Handle lex errors */ }
+    }
+}
+```
+
+#### **State Management**
+
+```rust
+// Proper variable scoping implementation
+impl ShellState {
+    /// Get variable with proper scoping rules
+    pub fn get_var(&self, name: &str) -> Option<String> {
+        // Check local scopes first (innermost to outermost)
+        for scope in self.local_vars.iter().rev() {
+            if let Some(value) = scope.get(name) {
+                return Some(value.clone());
+            }
+        }
+
+        // Fall back to global variables
+        if let Some(value) = self.variables.get(name) {
+            Some(value.clone())
+        } else {
+            // Finally check environment
+            env::var(name).ok()
+        }
+    }
+}
+```
+
+## Current Development Priorities
+
+### High Priority (Core POSIX Features)
+
+1. **Redirections**: Here-documents (`<<`), file descriptor operations (`2>&1`)
+2. **Missing Built-ins**: `set`, `eval`, `exec`, `trap`, `readonly`, `return`
+3. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
+
+### Medium Priority
+
+1. **Advanced Expansions**: Extended globbing patterns
+2. **History Features**: History expansion (`!!`), improved line editing
+
+### Testing Priorities
+
+- **Edge Case Coverage**: Ensure all error conditions are tested
+- **Integration Testing**: End-to-end workflow validation
+- **Performance Testing**: Verify no regressions in execution speed
+
+## Performance Considerations
+
+### **Memory Management**
+
+- Reuse `String` instances where possible
+- Avoid unnecessary allocations in hot paths
+- Use `Rc<RefCell<_>>` for shared mutable state carefully
+
+### **Execution Optimization**
+
+- Built-in commands execute without process spawning
+- Command substitution uses in-process execution for built-ins
+- Efficient token processing with minimal copying
+
+### **Caching Strategy**
+
+- Alias expansion results are not cached (by design for freshness)
+- Variable lookups are O(1) with HashMap implementation
+- Function definitions stored efficiently in HashMap
+
+## Debugging and Development Tools
+
+### **Testing Commands**
+
+```bash
+# Run full test suite
+cargo test
+
+# Run specific test modules
+cargo test lexer
+cargo test parser
+cargo test executor
+cargo test builtins
+
+# Run with output capture
+cargo test -- --nocapture
+
+# Benchmark tests
+cargo test --release
+```
+
+### **Development Workflow**
+
+```bash
+# Build in debug mode
+cargo build
+
+# Build optimized version
+cargo build --release
+
+# Run interactive shell
+cargo run
+
+# Execute specific command
+cargo run -- -c "echo hello"
+
+# Run script
+cargo run -- script.sh arg1 arg2
+```
+
+## Integration Points
+
+### **Module Dependencies**
+
+- `lexer` → `parser` → `executor` (primary flow)
+- `state` ↔ All modules (shared state management)
+- `expansion engines` → `executor` (runtime expansion)
+- `builtins` → `executor` (command implementation)
+
+### **External Dependencies**
+
+- `rustyline`: Interactive line editing and history
+- `nix`: Unix system interactions
+- `glob`: Pattern matching for case statements
+- `clap`: Command-line argument parsing
+
+This guide serves as a comprehensive reference for AI agents working on the Rush shell project. The modular architecture and extensive test coverage make it an excellent platform for learning systems programming in Rust while contributing to a real-world POSIX shell implementation.
