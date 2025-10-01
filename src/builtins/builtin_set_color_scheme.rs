@@ -28,8 +28,8 @@ impl super::Builtin for SetColorSchemeBuiltin {
             if shell_state.colors_enabled {
                 writeln!(
                     output_writer,
-                    "{}{}{}",
-                    shell_state.color_scheme.success, "Current color scheme: default", "\x1b[0m"
+                    "{}Current color scheme: default\x1b[0m",
+                    shell_state.color_scheme.success
                 )
                 .unwrap_or(());
             } else {
@@ -44,8 +44,8 @@ impl super::Builtin for SetColorSchemeBuiltin {
                 if shell_state.colors_enabled {
                     writeln!(
                         output_writer,
-                        "{}{}{}",
-                        shell_state.color_scheme.success, "Color scheme set to default", "\x1b[0m"
+                        "{}Color scheme set to default\x1b[0m",
+                        shell_state.color_scheme.success
                     )
                     .unwrap_or(());
                 } else {
@@ -64,8 +64,8 @@ impl super::Builtin for SetColorSchemeBuiltin {
                 if shell_state.colors_enabled {
                     writeln!(
                         output_writer,
-                        "{}{}{}",
-                        shell_state.color_scheme.success, "Color scheme set to dark", "\x1b[0m"
+                        "{}Color scheme set to dark\x1b[0m",
+                        shell_state.color_scheme.success
                     )
                     .unwrap_or(());
                 } else {
@@ -84,8 +84,8 @@ impl super::Builtin for SetColorSchemeBuiltin {
                 if shell_state.colors_enabled {
                     writeln!(
                         output_writer,
-                        "{}{}{}",
-                        shell_state.color_scheme.success, "Color scheme set to light", "\x1b[0m"
+                        "{}Color scheme set to light\x1b[0m",
+                        shell_state.color_scheme.success
                     )
                     .unwrap_or(());
                 } else {
@@ -96,10 +96,8 @@ impl super::Builtin for SetColorSchemeBuiltin {
                 if shell_state.colors_enabled {
                     writeln!(
                         output_writer,
-                        "{}{}{}",
-                        shell_state.color_scheme.error,
-                        "Available schemes: default, dark, light",
-                        "\x1b[0m"
+                        "{}Available schemes: default, dark, light\x1b[0m",
+                        shell_state.color_scheme.error
                     )
                     .unwrap_or(());
                 } else {

@@ -51,14 +51,14 @@ impl super::Builtin for TestBuiltin {
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    return if args[1].is_empty() { 0 } else { 1 };
+                    if args[1].is_empty() { 0 } else { 1 }
                 }
                 "n" => {
                     // Test if string is not empty
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    return if !args[1].is_empty() { 0 } else { 1 };
+                    if !args[1].is_empty() { 0 } else { 1 }
                 }
                 "f" => {
                     // Test if file exists and is regular file
@@ -104,7 +104,7 @@ impl super::Builtin for TestBuiltin {
                 }
                 _ => {
                     // Invalid option
-                    return 2;
+                    2
                 }
             }
         } else {
@@ -176,7 +176,7 @@ impl super::Builtin for TestBuiltin {
                 }
             }
             // No valid option or numeric comparison found
-            return 2;
+            2
         }
     }
 }

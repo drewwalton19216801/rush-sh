@@ -31,8 +31,8 @@ impl super::Builtin for EnvBuiltin {
                 if shell_state.colors_enabled {
                     let _ = writeln!(
                         output_writer,
-                        "{}{}{}={}",
-                        shell_state.color_scheme.success, var_name, "\x1b[0m", value
+                        "{}{}\x1b[0m={}",
+                        shell_state.color_scheme.success, var_name, value
                     );
                 } else {
                     let _ = writeln!(output_writer, "{}={}", var_name, value);
@@ -45,8 +45,8 @@ impl super::Builtin for EnvBuiltin {
                 if shell_state.colors_enabled {
                     let _ = writeln!(
                         output_writer,
-                        "{}{}{}={}",
-                        shell_state.color_scheme.builtin, key, "\x1b[0m", value
+                        "{}{}\x1b[0m={}",
+                        shell_state.color_scheme.builtin, key, value
                     );
                 } else {
                     let _ = writeln!(output_writer, "{}={}", key, value);

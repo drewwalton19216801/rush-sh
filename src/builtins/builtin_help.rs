@@ -29,27 +29,25 @@ impl super::Builtin for HelpBuiltin {
         if shell_state.colors_enabled {
             if writeln!(
                 output_writer,
-                "{}{}{}",
-                shell_state.color_scheme.success, header, "\x1b[0m"
+                "{}{}\x1b[0m",
+                shell_state.color_scheme.success, header
             )
             .is_err()
                 || writeln!(output_writer).is_err()
                 || writeln!(
                     output_writer,
-                    "{}{}{}",
-                    shell_state.color_scheme.builtin, "Available built-in commands:", "\x1b[0m"
+                    "{}Available built-in commands:\x1b[0m",
+                    shell_state.color_scheme.builtin
                 )
                 .is_err()
             {
                 return 1;
             }
-        } else {
-            if writeln!(output_writer, "{}", header).is_err()
-                || writeln!(output_writer, "").is_err()
-                || writeln!(output_writer, "Available built-in commands:").is_err()
-            {
-                return 1;
-            }
+        } else if writeln!(output_writer, "{}", header).is_err()
+            || writeln!(output_writer).is_err()
+            || writeln!(output_writer, "Available built-in commands:").is_err()
+        {
+            return 1;
         }
 
         // Iterate over builtins with color if enabled
@@ -59,17 +57,15 @@ impl super::Builtin for HelpBuiltin {
             if shell_state.colors_enabled {
                 if writeln!(
                     output_writer,
-                    "{}{}{}",
-                    shell_state.color_scheme.builtin, formatted_line, "\x1b[0m"
+                    "{}{}\x1b[0m",
+                    shell_state.color_scheme.builtin, formatted_line
                 )
                 .is_err()
                 {
                     return 1;
                 }
-            } else {
-                if writeln!(output_writer, "{}", formatted_line).is_err() {
-                    return 1;
-                }
+            } else if writeln!(output_writer, "{}", formatted_line).is_err() {
+                return 1;
             }
         }
         0

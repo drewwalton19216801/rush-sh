@@ -1,6 +1,5 @@
-/// Brace expansion implementation for POSIX shell
-/// Supports patterns like {a,b,c}, {1..3}, file{a,b}.txt, and nested {{a,b},{c,d}}
-
+//! Brace expansion implementation for POSIX shell
+//! Supports patterns like {a,b,c}, {1..3}, file{a,b}.txt, and nested {{a,b},{c,d}}
 use super::lexer::Token;
 use regex::Regex;
 
@@ -72,10 +71,10 @@ fn find_brace_patterns(word: &str) -> Result<Vec<(String, Vec<String>, String)>,
             let mut depth = 0;
             let mut end = None;
             
-            for i in start..chars.len() {
-                if chars[i] == '{' {
+            for (i, &ch) in chars.iter().enumerate().skip(start) {
+                if ch == '{' {
                     depth += 1;
-                } else if chars[i] == '}' {
+                } else if ch == '}' {
                     depth -= 1;
                     if depth == 0 {
                         end = Some(i);
@@ -187,9 +186,9 @@ fn split_top_level(input: &str, _delimiter: char) -> Result<Vec<String>, String>
     let mut parts = Vec::new();
     let mut current = String::new();
     let mut brace_depth = 0;
-    let mut chars = input.chars().peekable();
+    let chars = input.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         match ch {
             '{' => {
                 brace_depth += 1;
@@ -232,13 +231,11 @@ fn expand_range(pattern: &str) -> Result<Vec<String>, String> {
     let end = parts[1].trim();
 
     // Check if both parts are single characters (for alphabetic ranges)
-    if start.len() == 1 && end.len() == 1 {
-        if let (Some(start_ch), Some(end_ch)) = (start.chars().next(), end.chars().next()) {
-            if start_ch.is_ascii_alphabetic() && end_ch.is_ascii_alphabetic() {
-                return expand_char_range(start_ch, end_ch);
-            }
+    if start.len() == 1 && end.len() == 1
+        && let (Some(start_ch), Some(end_ch)) = (start.chars().next(), end.chars().next())
+        && start_ch.is_ascii_alphabetic() && end_ch.is_ascii_alphabetic() {
+            return expand_char_range(start_ch, end_ch);
         }
-    }
 
     // Check if both parts are numeric (for numeric ranges)
     if let (Ok(start_num), Ok(end_num)) = (start.parse::<i64>(), end.parse::<i64>()) {
@@ -246,7 +243,7 @@ fn expand_range(pattern: &str) -> Result<Vec<String>, String> {
     }
 
     // If neither, treat as literal strings
-    return Ok(vec![start.to_string(), end.to_string()]);
+    Ok(vec![start.to_string(), end.to_string()])
 }
 
 /// Expand a character range like 'a'..'c'

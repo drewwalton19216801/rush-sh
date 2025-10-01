@@ -102,7 +102,7 @@ pub fn execute_builtin(
     // Helper function for colored error messages
     let print_error = |msg: &str| {
         if shell_state.colors_enabled {
-            eprintln!("{}{}{}", shell_state.color_scheme.error, msg, "\x1b[0m");
+            eprintln!("{}{}\x1b[0m", shell_state.color_scheme.error, msg);
         } else {
             eprintln!("{}", msg);
         }

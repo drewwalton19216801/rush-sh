@@ -30,10 +30,9 @@ impl super::Builtin for PwdBuiltin {
                 if shell_state.colors_enabled {
                     let _ = writeln!(
                         output_writer,
-                        "{}{}{}",
+                        "{}{}\x1b[0m",
                         shell_state.color_scheme.directory,
-                        path.display(),
-                        "\x1b[0m"
+                        path.display()
                     );
                 } else {
                     let _ = writeln!(output_writer, "{}", path.display());
@@ -44,10 +43,9 @@ impl super::Builtin for PwdBuiltin {
                 if shell_state.colors_enabled {
                     let _ = writeln!(
                         output_writer,
-                        "{}{}{}",
+                        "{}pwd: {}\x1b[0m",
                         shell_state.color_scheme.error,
-                        format!("pwd: {}", e),
-                        "\x1b[0m"
+                        e
                     );
                 } else {
                     let _ = writeln!(output_writer, "pwd: {}", e);

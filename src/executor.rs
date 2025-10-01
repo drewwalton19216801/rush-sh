@@ -197,10 +197,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                                 // Expand variable
                                 let mut var_name = String::new();
                                 if let Some(&c) = expr_chars.peek() {
-                                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' {
-                                        var_name.push(c);
-                                        expr_chars.next();
-                                    } else if c.is_ascii_digit() {
+                                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' || c.is_ascii_digit() {
                                         var_name.push(c);
                                         expr_chars.next();
                                     } else {
@@ -257,7 +254,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                 let mut sub_command = String::new();
                 let mut paren_depth = 1;
                 
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c == '(' {
                         paren_depth += 1;
                         sub_command.push(c);
@@ -310,8 +307,8 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                         if tokens_str.contains(' ') {
                             // Split by spaces and check if first token looks like a function call
                             let parts: Vec<&str> = tokens_str.split_whitespace().collect();
-                            if let Some(first_token) = parts.first() {
-                                if shell_state.get_function(first_token).is_some() {
+                            if let Some(first_token) = parts.first()
+                                && shell_state.get_function(first_token).is_some() {
                                     // This is a function call, create AST manually
                                     let function_call = Ast::FunctionCall {
                                         name: first_token.to_string(),
@@ -327,7 +324,6 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                                         }
                                     }
                                 }
-                            }
                         }
                         // Keep the literal
                         result.push_str("$(");
@@ -392,7 +388,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
             // Backtick command substitution
             let mut sub_command = String::new();
             
-            while let Some(c) = chars.next() {
+            for c in chars.by_ref() {
                 if c == '`' {
                     break;
                 }
@@ -837,9 +833,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
-                            "{}{}{}{}",
+                            "{}Error opening input file '{}{}",
                             shell_state.color_scheme.error,
-                            "Error opening input file '",
                             input_file,
                             &format!("': {}\x1b[0m", e)
                         );
@@ -861,9 +856,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
-                            "{}{}{}{}",
+                            "{}Error creating output file '{}{}",
                             shell_state.color_scheme.error,
-                            "Error creating output file '",
                             output_file,
                             &format!("': {}\x1b[0m", e)
                         );
@@ -882,9 +876,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
-                            "{}{}{}{}",
+                            "{}Error opening append file '{}{}",
                             shell_state.color_scheme.error,
-                            "Error opening append file '",
                             append_file,
                             &format!("': {}\x1b[0m", e)
                         );
@@ -899,28 +892,24 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         match command.spawn() {
             Ok(mut child) => {
                 // If capturing, read stdout
-                if capturing {
-                    if let Some(mut stdout) = child.stdout.take() {
+                if capturing
+                    && let Some(mut stdout) = child.stdout.take() {
                         use std::io::Read;
                         let mut output = Vec::new();
-                        if stdout.read_to_end(&mut output).is_ok() {
-                            if let Some(ref capture_buffer) = shell_state.capture_output {
+                        if stdout.read_to_end(&mut output).is_ok()
+                            && let Some(ref capture_buffer) = shell_state.capture_output {
                                 capture_buffer.borrow_mut().extend_from_slice(&output);
                             }
-                        }
                     }
-                }
                 
                 match child.wait() {
                     Ok(status) => status.code().unwrap_or(0),
                     Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
-                            "{}{}{}{}",
+                            "{}Error waiting for command: {}\x1b[0m",
                             shell_state.color_scheme.error,
-                            "Error waiting for command: ",
-                            e,
-                            "\x1b[0m"
+                            e
                         );
                     } else {
                         eprintln!("Error waiting for command: {}", e);
@@ -932,8 +921,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             Err(e) => {
                 if shell_state.colors_enabled {
                     eprintln!(
-                        "{}{}{}{}",
-                        shell_state.color_scheme.error, "Command spawn error: ", e, "\x1b[0m"
+                        "{}Command spawn error: {}\x1b[0m",
+                        shell_state.color_scheme.error, e
                     );
                 } else {
                     eprintln!("Command spawn error: {}", e);
@@ -982,11 +971,9 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                     Err(e) => {
                         if shell_state.colors_enabled {
                             eprintln!(
-                                "{}{}{}{}",
+                                "{}Error creating pipe for builtin: {}\x1b[0m",
                                 shell_state.color_scheme.error,
-                                "Error creating pipe for builtin: ",
-                                e,
-                                "\x1b[0m"
+                                e
                             );
                         } else {
                             eprintln!("Error creating pipe for builtin: {}", e);
@@ -1029,8 +1016,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             }
 
             // Handle input redirection (only for first command)
-            if i == 0 {
-                if let Some(ref input_file) = cmd.input {
+            if i == 0
+                && let Some(ref input_file) = cmd.input {
                     let expanded_input = expand_variables_in_string(input_file, shell_state);
                     match File::open(&expanded_input) {
                         Ok(file) => {
@@ -1039,9 +1026,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         Err(e) => {
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}{}{}{}",
+                                    "{}Error opening input file '{}{}",
                                     shell_state.color_scheme.error,
-                                    "Error opening input file '",
                                     input_file,
                                     &format!("': {}\x1b[0m", e)
                                 );
@@ -1052,7 +1038,6 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         }
                     }
                 }
-            }
 
             // Handle output redirection (only for last command)
             if is_last {
@@ -1065,9 +1050,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         Err(e) => {
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}{}{}{}",
+                                    "{}Error creating output file '{}{}",
                                     shell_state.color_scheme.error,
-                                    "Error creating output file '",
                                     output_file,
                                     &format!("': {}\x1b[0m", e)
                                 );
@@ -1086,9 +1070,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         Err(e) => {
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}{}{}{}",
+                                    "{}Error opening append file '{}{}",
                                     shell_state.color_scheme.error,
-                                    "Error opening append file '",
                                     append_file,
                                     &format!("': {}\x1b[0m", e)
                                 );
@@ -1113,11 +1096,9 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         Err(e) => {
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}{}{}{}",
+                                    "{}Error waiting for command: {}\x1b[0m",
                                     shell_state.color_scheme.error,
-                                    "Error waiting for command: ",
-                                    e,
-                                    "\x1b[0m"
+                                    e
                                 );
                             } else {
                                 eprintln!("Error waiting for command: {}", e);
@@ -1129,12 +1110,10 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 Err(e) => {
                     if shell_state.colors_enabled {
                         eprintln!(
-                            "{}{}{}{}{}",
+                            "{}Error spawning command '{}{}",
                             shell_state.color_scheme.error,
-                            "Error spawning command '",
                             expanded_args[0],
-                            &format!("': {}\x1b[0m", e),
-                            ""
+                            &format!("': {}\x1b[0m", e)
                         );
                     } else {
                         eprintln!("Error spawning command '{}': {}", expanded_args[0], e);

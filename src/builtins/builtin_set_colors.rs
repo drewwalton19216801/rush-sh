@@ -39,8 +39,8 @@ impl super::Builtin for SetColorsBuiltin {
                 if shell_state.colors_enabled {
                     writeln!(
                         output_writer,
-                        "{}{}{}",
-                        shell_state.color_scheme.success, "Colors enabled", "\x1b[0m"
+                        "{}Colors enabled\x1b[0m",
+                        shell_state.color_scheme.success
                     )
                     .unwrap_or(());
                 } else {
@@ -56,8 +56,8 @@ impl super::Builtin for SetColorsBuiltin {
                     if shell_state.colors_enabled {
                         writeln!(
                             output_writer,
-                            "{}{}{}",
-                            shell_state.color_scheme.success, "Colors are enabled", "\x1b[0m"
+                            "{}Colors are enabled\x1b[0m",
+                            shell_state.color_scheme.success
                         )
                         .unwrap_or(());
                     } else {
@@ -71,10 +71,8 @@ impl super::Builtin for SetColorsBuiltin {
                 if shell_state.colors_enabled {
                     writeln!(
                         output_writer,
-                        "{}{}{}",
-                        shell_state.color_scheme.error,
-                        "Usage: set_colors on|off|status",
-                        "\x1b[0m"
+                        "{}Usage: set_colors on|off|status\x1b[0m",
+                        shell_state.color_scheme.error
                     )
                     .unwrap_or(());
                 } else {

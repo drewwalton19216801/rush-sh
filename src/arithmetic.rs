@@ -102,20 +102,18 @@ pub fn tokenize_expression(expr: &str) -> Result<Vec<ArithmeticToken>, Arithmeti
             ')' => tokens.push(ArithmeticToken::RightParen),
 
             '+' => {
-                if let Some(next_ch) = chars.peek() {
-                    if *next_ch == '+' {
+                if let Some(next_ch) = chars.peek()
+                    && *next_ch == '+' {
                         return Err(ArithmeticError::SyntaxError("Unexpected ++".to_string()));
                     }
-                }
                 tokens.push(ArithmeticToken::Operator(ArithmeticOperator::Add));
             }
 
             '-' => {
-                if let Some(next_ch) = chars.peek() {
-                    if *next_ch == '-' {
+                if let Some(next_ch) = chars.peek()
+                    && *next_ch == '-' {
                         return Err(ArithmeticError::SyntaxError("Unexpected --".to_string()));
                     }
-                }
                 tokens.push(ArithmeticToken::Operator(ArithmeticOperator::Subtract));
             }
 

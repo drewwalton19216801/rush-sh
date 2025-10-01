@@ -61,8 +61,8 @@ pub struct ShellCommand {
 
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
     // First, try to detect and parse function definitions that span multiple lines
-    if tokens.len() >= 4 {
-        if let (Token::Word(_), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
+    if tokens.len() >= 4
+        && let (Token::Word(_), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
         {
             // Look for the matching RightBrace
@@ -144,20 +144,15 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
                 }
             }
         }
-    }
 
     // Also check for legacy function definition format (word with parentheses followed by brace)
-    if tokens.len() >= 2 {
-        if let Token::Word(ref word) = tokens[0] {
-            if let Some(paren_pos) = word.find('(') {
-                if word.ends_with(')') && paren_pos > 0 {
-                    if tokens[1] == Token::LeftBrace {
+    if tokens.len() >= 2
+        && let Token::Word(ref word) = tokens[0]
+            && let Some(paren_pos) = word.find('(')
+                && word.ends_with(')') && paren_pos > 0
+                    && tokens[1] == Token::LeftBrace {
                         return parse_function_definition(&tokens);
                     }
-                }
-            }
-        }
-    }
 
     // Fall back to normal parsing
     parse_commands_sequentially(&tokens)
@@ -171,9 +166,9 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     // Check if it's an assignment
     if tokens.len() == 2 {
         // Check for pattern: VAR= VALUE
-        if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1]) {
-            if let Some(eq_pos) = var_eq.find('=') {
-                if eq_pos > 0 && eq_pos < var_eq.len() - 1 {
+        if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1])
+            && let Some(eq_pos) = var_eq.find('=')
+                && eq_pos > 0 && eq_pos < var_eq.len() - 1 {
                     let var = var_eq[..eq_pos].to_string();
                     let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
                     // Basic validation: variable name should start with letter or underscore
@@ -184,15 +179,13 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                         });
                     }
                 }
-            }
-        }
     }
 
     // Check if it's an assignment (VAR= VALUE)
-    if tokens.len() == 2 {
-        if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1]) {
-            if let Some(eq_pos) = var_eq.find('=') {
-                if eq_pos > 0 && eq_pos == var_eq.len() - 1 {
+    if tokens.len() == 2
+        && let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1])
+            && let Some(eq_pos) = var_eq.find('=')
+                && eq_pos > 0 && eq_pos == var_eq.len() - 1 {
                     let var = var_eq[..eq_pos].to_string();
                     // Basic validation: variable name should start with letter or underscore
                     if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
@@ -202,13 +195,10 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                         });
                     }
                 }
-            }
-        }
-    }
 
     // Check if it's a local assignment (local VAR VALUE or local VAR= VALUE)
-    if tokens.len() == 3 {
-        if let (Token::Local, Token::Word(var), Token::Word(value)) = (&tokens[0], &tokens[1], &tokens[2]) {
+    if tokens.len() == 3
+        && let (Token::Local, Token::Word(var), Token::Word(value)) = (&tokens[0], &tokens[1], &tokens[2]) {
             // Strip trailing = if present (handles "local var= value" format)
             let clean_var = if var.ends_with('=') {
                 &var[..var.len() - 1]
@@ -223,11 +213,10 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                 });
             }
         }
-    }
 
     // Check if it's a return statement
-    if tokens.len() >= 1 && tokens.len() <= 2 {
-        if let Token::Return = &tokens[0] {
+    if !tokens.is_empty() && tokens.len() <= 2
+        && let Token::Return = &tokens[0] {
             if tokens.len() == 1 {
                 // return (with no value, defaults to 0)
                 return Ok(Ast::Return { value: None });
@@ -238,13 +227,12 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                 });
             }
         }
-    }
 
     // Check if it's a local assignment (local VAR=VALUE)
-    if tokens.len() == 2 {
-        if let (Token::Local, Token::Word(var_eq)) = (&tokens[0], &tokens[1]) {
-            if let Some(eq_pos) = var_eq.find('=') {
-                if eq_pos > 0 && eq_pos < var_eq.len() - 1 {
+    if tokens.len() == 2
+        && let (Token::Local, Token::Word(var_eq)) = (&tokens[0], &tokens[1])
+            && let Some(eq_pos) = var_eq.find('=')
+                && eq_pos > 0 && eq_pos < var_eq.len() - 1 {
                     let var = var_eq[..eq_pos].to_string();
                     let value = var_eq[eq_pos + 1..].to_string();
                     // Basic validation: variable name should start with letter or underscore
@@ -252,15 +240,12 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                         return Ok(Ast::LocalAssignment { var, value });
                     }
                 }
-            }
-        }
-    }
 
     // Check if it's an assignment (single token with =)
-    if tokens.len() == 1 {
-        if let Token::Word(ref word) = tokens[0] {
-            if let Some(eq_pos) = word.find('=') {
-                if eq_pos > 0 && eq_pos < word.len() - 1 {
+    if tokens.len() == 1
+        && let Token::Word(ref word) = tokens[0]
+            && let Some(eq_pos) = word.find('=')
+                && eq_pos > 0 && eq_pos < word.len() - 1 {
                     let var = word[..eq_pos].to_string();
                     let value = word[eq_pos + 1..].to_string();
                     // Basic validation: variable name should start with letter or underscore
@@ -268,9 +253,6 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                         return Ok(Ast::Assignment { var, value });
                     }
                 }
-            }
-        }
-    }
 
     // Check if it's an if statement
     if let Token::If = tokens[0] {
@@ -294,31 +276,24 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
 
     // Check if it's a function definition
     // Pattern: Word LeftParen RightParen LeftBrace
-    if tokens.len() >= 4 {
-        if let (Token::Word(word), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
+    if tokens.len() >= 4
+        && let (Token::Word(word), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
-        {
-            if word.chars().next().unwrap().is_alphabetic() || word.starts_with('_') {
+            && (word.chars().next().unwrap().is_alphabetic() || word.starts_with('_')) {
                 return parse_function_definition(tokens);
             }
-        }
-    }
 
     // Also check for function definition with parentheses in the word (legacy support)
-    if tokens.len() >= 2 {
-        if let Token::Word(ref word) = tokens[0] {
-            if let Some(paren_pos) = word.find('(') {
-                if word.ends_with(')') && paren_pos > 0 {
+    if tokens.len() >= 2
+        && let Token::Word(ref word) = tokens[0]
+            && let Some(paren_pos) = word.find('(')
+                && word.ends_with(')') && paren_pos > 0 {
                     let func_name = &word[..paren_pos];
-                    if func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_') {
-                        if tokens[1] == Token::LeftBrace {
+                    if (func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_'))
+                        && tokens[1] == Token::LeftBrace {
                             return parse_function_definition(tokens);
                         }
-                    }
                 }
-            }
-        }
-    }
 
     // Check if it's a function call (word followed by arguments)
     // For Phase 1, we'll parse as regular pipeline and handle function calls in executor
@@ -567,39 +542,35 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             }
             Token::RedirIn => {
                 i += 1;
-                if i < tokens.len() {
-                    if let Token::Word(ref file) = tokens[i] {
+                if i < tokens.len()
+                    && let Token::Word(ref file) = tokens[i] {
                         current_cmd.input = Some(file.clone());
                     }
-                }
             }
             Token::RedirOut => {
                 i += 1;
-                if i < tokens.len() {
-                    if let Token::Word(ref file) = tokens[i] {
+                if i < tokens.len()
+                    && let Token::Word(ref file) = tokens[i] {
                         current_cmd.output = Some(file.clone());
                     }
-                }
             }
             Token::RedirAppend => {
                 i += 1;
-                if i < tokens.len() {
-                    if let Token::Word(ref file) = tokens[i] {
+                if i < tokens.len()
+                    && let Token::Word(ref file) = tokens[i] {
                         current_cmd.append = Some(file.clone());
                     }
-                }
             }
             Token::RightParen => {
                 // Check if this looks like a function call pattern: Word LeftParen ... RightParen
                 // If so, treat it as a function call even if the function doesn't exist
-                if !current_cmd.args.is_empty() && i > 0 {
-                    if let Token::LeftParen = tokens[i-1] {
+                if !current_cmd.args.is_empty() && i > 0
+                    && let Token::LeftParen = tokens[i-1] {
                         // This looks like a function call pattern, treat as function call
                         // For now, we'll handle this in the executor by checking if it's a function
                         // If not a function, the executor will handle the error gracefully
                         break;
                     }
-                }
                 return Err("Unexpected ) in pipeline".to_string());
             }
             Token::Newline => {

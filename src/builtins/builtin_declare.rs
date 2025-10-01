@@ -33,16 +33,15 @@ impl super::Builtin for DeclareBuiltin {
                     if shell_state.colors_enabled {
                         let _ = writeln!(
                             output_writer,
-                            "{}{}{}",
+                            "{}{}\x1b[0m",
                             shell_state.color_scheme.builtin,
-                            name,
-                            "\x1b[0m"
+                            name
                         );
                     } else {
                         let _ = writeln!(output_writer, "{}", name);
                     }
                 }
-                return 0;
+                0
             } else {
                 // declare -f function_name: show specific function definition
                 let func_name = &cmd.args[2];
@@ -54,28 +53,26 @@ impl super::Builtin for DeclareBuiltin {
                     if shell_state.colors_enabled {
                         let _ = writeln!(
                             output_writer,
-                            "{}{}{}",
+                            "{}{}\x1b[0m",
                             shell_state.color_scheme.success,
-                            definition,
-                            "\x1b[0m"
+                            definition
                         );
                     } else {
                         let _ = writeln!(output_writer, "{}", definition);
                     }
-                    return 0;
+                    0
                 } else {
                     if shell_state.colors_enabled {
                         let _ = writeln!(
                             output_writer,
-                            "{}{}declare: function '{}' not found\x1b[0m",
+                            "{}declare: function 'declare: function '{}' not found\x1b[0m",
                             shell_state.color_scheme.error,
-                            "declare: function '",
                             func_name
                         );
                     } else {
                         let _ = writeln!(output_writer, "declare: function '{}' not found", func_name);
                     }
-                    return 1;
+                    1
                 }
             }
         } else if cmd.args.len() >= 2 && cmd.args[1] == "-F" {
@@ -85,16 +82,15 @@ impl super::Builtin for DeclareBuiltin {
                 if shell_state.colors_enabled {
                     let _ = writeln!(
                         output_writer,
-                        "{}{}{}",
+                        "{}{}\x1b[0m",
                         shell_state.color_scheme.builtin,
-                        name,
-                        "\x1b[0m"
+                        name
                     );
                 } else {
                     let _ = writeln!(output_writer, "{}", name);
                 }
             }
-            return 0;
+            0
         } else {
             // declare without -f flag or with other arguments
             if shell_state.colors_enabled {
@@ -109,7 +105,7 @@ impl super::Builtin for DeclareBuiltin {
                     "declare: use 'declare -f' to list functions or 'declare -f <name>' to show function definition"
                 );
             }
-            return 1;
+            1
         }
     }
 }
