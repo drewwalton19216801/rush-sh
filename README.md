@@ -1544,6 +1544,110 @@ cargo test state
 cargo test integration
 ```
 
+### Performance Benchmarking
+
+Rush includes a comprehensive performance benchmark suite for measuring and tracking shell performance across all major components:
+
+#### Running Benchmarks
+
+Run the complete benchmark suite from the repository root:
+
+```bash
+cargo run -p rush-benchmarks
+```
+
+This will execute 20+ benchmark scenarios covering:
+
+- **Lexer Performance**: Tokenization speed for basic and complex commands
+- **Parser Performance**: AST construction for various command structures
+- **Executor Performance**: Command execution speed for built-ins and external commands
+- **Expansion Performance**: Variable, arithmetic, and command substitution performance
+- **Control Structure Performance**: If statements, loops, and case statement execution
+- **Pipeline Performance**: Simple and complex pipeline execution
+- **Script Execution Performance**: Full script file execution and command-line mode
+
+#### Benchmark Output
+
+The benchmark suite generates:
+
+- **Interactive Progress**: Real-time progress display during execution
+- **Performance Metrics**: Detailed timing for each benchmark category
+- **HTML Report**: Visual report saved to `target/benchmark_report.html`
+- **JSON Results**: Machine-readable results in `target/benchmark_results.json`
+- **Regression Detection**: Basic performance regression analysis
+
+#### Example Output
+
+```
+🚀 Rush Shell Performance Benchmark Suite
+==========================================
+
+📝 Registering lexer benchmarks...
+🔍 Registering parser benchmarks...
+⚡ Registering executor benchmarks...
+🔄 Registering expansion benchmarks...
+🏗️  Registering control structure benchmarks...
+🔗 Registering pipeline benchmarks...
+📜 Registering script benchmarks...
+
+📊 Running benchmarks...
+  Running: lexer_basic_tokens (Basic tokenization (simple commands))
+  Running: lexer_complex_tokens (Complex tokenization (quotes, variables, expansions))
+  ...
+
+📈 Generating report...
+
+✅ Benchmark completed!
+📊 Results summary:
+   Total benchmarks: 21
+   Total time: 2.34s
+
+📋 Detailed report saved to: target/benchmark_report.html
+📋 JSON results saved to: target/benchmark_results.json
+```
+
+#### Advanced Usage
+
+Run benchmarks with custom iteration counts:
+
+```bash
+# Use the library API for custom configurations
+# See benchmarks/src/main.rs for implementation details
+```
+
+View the generated HTML report in a browser:
+
+```bash
+# Open target/benchmark_report.html in your browser
+# or serve it locally:
+python3 -m http.server 8000 -d target/
+# Then visit http://localhost:8000/benchmark_report.html
+```
+
+#### Benchmark Categories
+
+The benchmark suite covers all major shell components:
+
+1. **Lexer Benchmarks**: Tokenization performance for various command types
+2. **Parser Benchmarks**: AST construction speed for complex structures
+3. **Executor Benchmarks**: Command execution performance
+4. **Expansion Benchmarks**: Variable and arithmetic expansion speed
+5. **Control Structure Benchmarks**: If/for/while/case statement performance
+6. **Pipeline Benchmarks**: Pipe and redirection performance
+7. **Script Benchmarks**: Full script execution performance
+
+#### Performance Monitoring
+
+The benchmark suite is designed for:
+
+- **Regression Detection**: Track performance changes over time
+- **Optimization Validation**: Verify performance improvements
+- **CI/CD Integration**: Automated performance testing in build pipelines
+- **Historical Tracking**: JSON export enables trend analysis
+- **Component Analysis**: Detailed breakdown of performance by shell component
+
+This benchmark suite provides a foundation for maintaining optimal shell performance and identifying performance regressions during development.
+
 ### Test Coverage
 
 The test suite provides extensive coverage of:
