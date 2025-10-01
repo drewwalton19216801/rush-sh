@@ -74,7 +74,6 @@ impl ArithmeticOperator {
 pub enum ArithmeticError {
     SyntaxError(String),
     DivisionByZero,
-    UndefinedVariable(String),
     UnmatchedParentheses,
     EmptyExpression,
 }
@@ -84,7 +83,6 @@ impl std::fmt::Display for ArithmeticError {
         match self {
             ArithmeticError::SyntaxError(msg) => write!(f, "Syntax error: {}", msg),
             ArithmeticError::DivisionByZero => write!(f, "Division by zero"),
-            ArithmeticError::UndefinedVariable(var) => write!(f, "Undefined variable: {}", var),
             ArithmeticError::UnmatchedParentheses => write!(f, "Unmatched parentheses"),
             ArithmeticError::EmptyExpression => write!(f, "Empty expression"),
         }
