@@ -127,11 +127,13 @@ static ENV_LOCK: Mutex<()> = Mutex::new(());
 #### When to Use Test Mutexes
 
 **You MUST use `ENV_LOCK`** when your test:
+
 - Modifies environment variables using `std::env::set_var()` or `std::env::remove_var()`
 - Reads environment variables that other tests might modify (e.g., `HOME`, `RUSH_CONDENSED`, `RUSH_COLORS`)
 - Creates `ShellState` instances that depend on environment variables
 
 **You MUST use `DIR_CHANGE_LOCK`** when your test:
+
 - Changes the current working directory using `std::env::set_current_dir()`
 - Depends on the current working directory being in a specific location
 
@@ -239,6 +241,7 @@ fn test_source_rushrc_functionality() {
 If you need to add a new mutex for a different type of global state:
 
 1. Add it to the test module in `src/main.rs`:
+
 ```rust
 static NEW_RESOURCE_LOCK: Mutex<()> = Mutex::new(());
 ```
