@@ -83,7 +83,7 @@ src/
 
 ### Testing Philosophy
 
-The project maintains **comprehensive test coverage** with 269+ individual test cases:
+The project maintains **comprehensive test coverage** with 276+ individual test cases:
 
 ```rust
 // Example test structure
@@ -107,6 +107,144 @@ mod tests {
     }
 }
 ```
+
+### Test Synchronization Guidelines
+
+**CRITICAL**: Tests that modify global state (environment variables, current directory, etc.) **MUST** use synchronization mutexes to prevent race conditions when running in parallel.
+
+#### Available Test Mutexes
+
+The test suite provides the following mutexes in `src/main.rs`:
+
+```rust
+// Mutex to serialize tests that change the current directory
+static DIR_CHANGE_LOCK: Mutex<()> = Mutex::new(());
+
+// Mutex to serialize tests that modify environment variables
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+```
+
+#### When to Use Test Mutexes
+
+**You MUST use `ENV_LOCK`** when your test:
+- Modifies environment variables using `std::env::set_var()` or `std::env::remove_var()`
+- Reads environment variables that other tests might modify (e.g., `HOME`, `RUSH_CONDENSED`, `RUSH_COLORS`)
+- Creates `ShellState` instances that depend on environment variables
+
+**You MUST use `DIR_CHANGE_LOCK`** when your test:
+- Changes the current working directory using `std::env::set_current_dir()`
+- Depends on the current working directory being in a specific location
+
+#### Proper Test Structure with Mutexes
+
+```rust
+#[test]
+fn test_with_environment_modification() {
+    // ALWAYS acquire the lock at the start of the test
+    let _lock = ENV_LOCK.lock().unwrap();
+    
+    // Save original environment state
+    let original_home = std::env::var("HOME").ok();
+    let original_custom_var = std::env::var("CUSTOM_VAR").ok();
+    
+    // Perform test operations
+    unsafe {
+        std::env::set_var("HOME", "/tmp/test");
+        std::env::set_var("CUSTOM_VAR", "test_value");
+    }
+    
+    // ... test logic here ...
+    
+    // ALWAYS restore original environment state
+    unsafe {
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+        
+        if let Some(custom_var) = original_custom_var {
+            std::env::set_var("CUSTOM_VAR", custom_var);
+        } else {
+            std::env::remove_var("CUSTOM_VAR");
+        }
+    }
+    
+    // Lock is automatically released when _lock goes out of scope
+}
+```
+
+#### Common Pitfalls to Avoid
+
+1. **Forgetting to acquire the lock**: This causes flaky tests that fail intermittently
+2. **Not restoring environment state**: This can cause subsequent tests to fail
+3. **Acquiring the lock too late**: The lock must be acquired before any environment reads/writes
+4. **Not using unique temporary directories**: Always use timestamps or process IDs in temp paths
+
+#### Example: Complete Test with Proper Synchronization
+
+```rust
+#[test]
+fn test_source_rushrc_functionality() {
+    // Lock to prevent parallel tests from interfering
+    let _lock = ENV_LOCK.lock().unwrap();
+    
+    // Create unique temporary directory
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_dir = format!("/tmp/rush_test_{}", timestamp);
+    
+    // Save original state
+    let original_home = std::env::var("HOME").ok();
+    
+    // Create test files
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::write(
+        format!("{}/.rushrc", temp_dir),
+        "TEST_VAR=value\nexport TEST_VAR"
+    ).unwrap();
+    
+    // Small delay to ensure filesystem consistency
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    
+    // Modify environment
+    unsafe {
+        std::env::set_var("HOME", &temp_dir);
+    }
+    
+    // Run test
+    let mut shell_state = ShellState::new();
+    source_rushrc(&mut shell_state);
+    assert_eq!(shell_state.get_var("TEST_VAR"), Some("value".to_string()));
+    
+    // Cleanup
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    
+    // Restore environment
+    unsafe {
+        if let Some(home) = original_home {
+            std::env::set_var("HOME", home);
+        } else {
+            std::env::remove_var("HOME");
+        }
+    }
+}
+```
+
+#### Adding New Test Mutexes
+
+If you need to add a new mutex for a different type of global state:
+
+1. Add it to the test module in `src/main.rs`:
+```rust
+static NEW_RESOURCE_LOCK: Mutex<()> = Mutex::new(());
+```
+
+2. Document it in this guide
+3. Use it consistently in all tests that access that resource
 
 ### Error Handling Patterns
 
