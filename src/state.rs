@@ -67,6 +67,8 @@ pub struct ShellState {
     pub return_value: Option<i32>,
     /// Output capture buffer for command substitution
     pub capture_output: Option<Rc<RefCell<Vec<u8>>>>,
+    /// Whether to use condensed cwd display in prompt
+    pub condensed_cwd: bool,
 }
 
 impl ShellState {
@@ -88,6 +90,17 @@ impl ShellState {
             _ => !no_color && std::io::stdout().is_terminal(),
         };
 
+        // Check RUSH_CONDENSED environment variable for cwd display preference
+        let rush_condensed = std::env::var("RUSH_CONDENSED")
+            .map(|v| v.to_lowercase())
+            .unwrap_or_else(|_| "true".to_string());
+
+        let condensed_cwd = match rush_condensed.as_str() {
+            "1" | "true" | "on" | "enable" => true,
+            "0" | "false" | "off" | "disable" => false,
+            _ => true, // Default to condensed for backward compatibility
+        };
+
         Self {
             variables: HashMap::new(),
             exported: HashSet::new(),
@@ -106,6 +119,7 @@ impl ShellState {
             returning: false,
             return_value: None,
             capture_output: None,
+            condensed_cwd,
         }
     }
 
@@ -258,6 +272,14 @@ impl ShellState {
         }
     }
 
+    /// Get the full current working directory for the prompt
+    pub fn get_full_cwd(&self) -> String {
+        match std::env::current_dir() {
+            Ok(path) => path.to_string_lossy().to_string(),
+            Err(_) => "/?".to_string(), // fallback if can't get cwd
+        }
+    }
+
     /// Get the user@hostname string for the prompt
     pub fn get_user_hostname(&self) -> String {
         let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
@@ -269,10 +291,15 @@ impl ShellState {
     pub fn get_prompt(&self) -> String {
         let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
         let prompt_char = if user == "root" { "#" } else { "$" };
+        let cwd = if self.condensed_cwd {
+            self.get_condensed_cwd()
+        } else {
+            self.get_full_cwd()
+        };
         format!(
             "{}:{} {} ",
             self.get_user_hostname(),
-            self.get_condensed_cwd(),
+            cwd,
             prompt_char
         )
     }
@@ -626,5 +653,59 @@ mod tests {
         // Pop scope
         state.pop_local_scope();
         assert_eq!(state.get_var("test_var"), Some("global".to_string()));
+    }
+
+    #[test]
+    fn test_condensed_cwd_environment_variable() {
+        // Test default behavior (should be true for backward compatibility)
+        let state = ShellState::new();
+        assert!(state.condensed_cwd);
+
+        // Test explicit true
+        unsafe {
+            std::env::set_var("RUSH_CONDENSED", "true");
+        }
+        let state = ShellState::new();
+        assert!(state.condensed_cwd);
+
+        // Test explicit false
+        unsafe {
+            std::env::set_var("RUSH_CONDENSED", "false");
+        }
+        let state = ShellState::new();
+        assert!(!state.condensed_cwd);
+
+        // Clean up
+        unsafe {
+            std::env::remove_var("RUSH_CONDENSED");
+        }
+    }
+
+    #[test]
+    fn test_get_full_cwd() {
+        let state = ShellState::new();
+        let full_cwd = state.get_full_cwd();
+        assert!(!full_cwd.is_empty());
+        // Should contain path separators (either / or \ depending on platform)
+        assert!(full_cwd.contains('/') || full_cwd.contains('\\'));
+    }
+
+    #[test]
+    fn test_prompt_with_condensed_setting() {
+        let mut state = ShellState::new();
+
+        // Test with condensed enabled (default)
+        assert!(state.condensed_cwd);
+        let prompt_condensed = state.get_prompt();
+        assert!(prompt_condensed.contains('@'));
+
+        // Test with condensed disabled
+        state.condensed_cwd = false;
+        let prompt_full = state.get_prompt();
+        assert!(prompt_full.contains('@'));
+
+        // Both should end with "$ " (or "# " for root)
+        assert!(prompt_condensed.ends_with("$ ") || prompt_condensed.ends_with("# "));
+        assert!(prompt_full.ends_with("$ ") || prompt_full.ends_with("# "));
     }
 }

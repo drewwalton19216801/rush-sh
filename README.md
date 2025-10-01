@@ -76,7 +76,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
     - Local variables: `local var=value`
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
-- **Built-in Commands** (18 total):
+- **Built-in Commands** (19 total):
   - `cd`: Change directory
   - `exit`: Exit the shell
   - `pwd`: Print working directory
@@ -93,6 +93,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `test` / `[`: POSIX-compatible test builtin with string and file tests
   - `set_colors`: Enable/disable color output dynamically
   - `set_color_scheme`: Switch between color themes (default/dark/light)
+  - `set_condensed`: Enable/disable condensed cwd display in prompt
   - `declare`: Display function definitions and list function names
   - `help`: Show available commands
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
@@ -458,21 +459,61 @@ This architecture enables command substitutions to behave identically to bash wh
 
 ### Condensed Current Working Directory in Prompt
 
-Rush now displays a condensed version of the current working directory in the interactive prompt:
+Rush displays a condensed version of the current working directory in the interactive prompt by default, but this behavior is now fully configurable:
 
 - **Condensed Path**: Each directory except the last is abbreviated to its first letter (preserving case)
 - **Full Last Directory**: The final directory in the path is shown in full
 - **Dynamic Updates**: The prompt updates automatically when changing directories
+- **Configurable Display**: Choose between condensed or full path display
 
-Example prompt displays:
+**Configuration Options:**
 
+```bash
+# Environment variable (set before starting shell)
+export RUSH_CONDENSED=true    # Enable condensed display (default)
+export RUSH_CONDENSED=false   # Enable full path display
+
+# Runtime control (in already running shell)
+set_condensed on              # Enable condensed display
+set_condensed off             # Enable full path display
+set_condensed status          # Show current setting
+```
+
+**Example Prompt Displays:**
+
+Condensed mode (default):
 ```bash
 /h/d/p/r/rush $
 /u/b/s/project $
 /h/u/Documents $
 ```
 
-This feature provides context about your current location while keeping the prompt concise.
+Full path mode:
+```bash
+/home/drew/projects/rush-sh $
+/usr/bin/src/project $
+/home/user/Documents $
+```
+
+**Usage Examples:**
+
+```bash
+# Start with condensed display (default behavior)
+rush-sh
+
+# Start with full path display
+RUSH_CONDENSED=false rush-sh
+
+# Toggle in running shell
+set_condensed off    # Switch to full paths
+set_condensed on     # Switch back to condensed
+set_condensed status # Check current setting
+
+# In ~/.rushrc for permanent preference
+echo 'export RUSH_CONDENSED=false' >> ~/.rushrc
+```
+
+This feature provides flexible control over prompt display while maintaining backward compatibility with the existing condensed format as the default.
 
 ### Arithmetic Expansion
 
@@ -1450,7 +1491,7 @@ Rush consists of the following components:
 
 ### Comprehensive Test Suite
 
-Rush includes an extensive test suite with **100+ test cases** ensuring reliability and correctness:
+Rush includes an extensive test suite with **275+ test cases** ensuring reliability and correctness:
 
 - **Unit Tests**: Individual component testing for lexer, parser, arithmetic engine, and parameter expansion
 - **Integration Tests**: End-to-end command execution, pipelines, redirections, and control structures
