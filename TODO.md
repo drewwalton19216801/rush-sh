@@ -39,8 +39,8 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Special parameters: `$?`, `$$`, `$0`
 - ✅ Positional parameters (`$1`, `$2`, ...)
 - ✅ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
-- ✅ Parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, etc.) - **FULLY IMPLEMENTED**
-- ✅ Arithmetic expansion (`$((...))`) - **COMPREHENSIVE IMPLEMENTATION** with full operator precedence, variables, bitwise/logical operations
+- ✅ Parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, etc.)
+- ✅ Arithmetic expansion (`$((...))`)
 
 ### 1.6 Word Expansions
 
@@ -48,7 +48,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Parameter expansion ($VAR)
 - ✅ Command substitution ($(...) and `...`)
 - ✅ Pathname expansion (globbing with *, ?, [...])
-- ✅ Brace expansion ({a,b,c}, {1..5}, {a..z}) - **FULLY IMPLEMENTED** with nested braces and cartesian products
+- ✅ Brace expansion ({a,b,c}, {1..5}, {a..z})
 - ✅ Arithmetic expansion
 
 ### 1.7 Redirection
