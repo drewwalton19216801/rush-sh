@@ -874,8 +874,27 @@ pub fn expand_aliases(
             // Lex the alias value
             let alias_tokens = lex(alias_value, shell_state)?;
 
-            // Expand aliases in the alias tokens recursively
-            let expanded_alias_tokens = expand_aliases(alias_tokens, shell_state, expanded)?;
+            // DO NOT recursively expand aliases in the alias tokens.
+            // In bash, once an alias is expanded, the resulting command name is not
+            // checked for aliases again. This prevents false recursion detection for
+            // cases like: alias ls='ls --color'
+            //
+            // Only check if the FIRST token of the alias expansion is itself an alias
+            // that we haven't expanded yet (for chained aliases like: alias ll='ls -l', alias ls='ls --color')
+            let expanded_alias_tokens = if !alias_tokens.is_empty() {
+                if let Token::Word(ref first_word) = alias_tokens[0] {
+                    // Only expand if it's a different alias that we haven't seen yet
+                    if first_word != word && shell_state.get_alias(first_word).is_some() && !expanded.contains(first_word) {
+                        expand_aliases(alias_tokens, shell_state, expanded)?
+                    } else {
+                        alias_tokens
+                    }
+                } else {
+                    alias_tokens
+                }
+            } else {
+                alias_tokens
+            };
 
             // Remove from expanded set after processing
             expanded.remove(word);
@@ -1438,14 +1457,18 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_aliases_recursion() {
+    fn test_expand_aliases_chained() {
+        // Test that chained aliases work correctly: a -> b -> a (command)
+        // This is NOT recursion in bash - it expands a to b, then b to a (the command),
+        // and then tries to execute command 'a' which doesn't exist.
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("a", "b".to_string());
         shell_state.set_alias("b", "a".to_string());
         let tokens = vec![Token::Word("a".to_string())];
         let result = expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new());
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("recursion"));
+        // Should succeed and expand to just "a" (the command, not the alias)
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec![Token::Word("a".to_string())]);
     }
 
     #[test]
