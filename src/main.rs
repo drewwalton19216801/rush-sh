@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
 mod arithmetic;
+mod brace_expansion;
 mod builtins;
 mod completion;
 mod executor;
@@ -201,20 +202,35 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
             match lexer::expand_aliases(tokens, shell_state, &mut std::collections::HashSet::new())
             {
                 Ok(expanded_tokens) => {
-                    match parser::parse(expanded_tokens) {
-                        Ok(ast) => {
-                            let exit_code = executor::execute(ast, shell_state);
-                            shell_state.set_last_exit_code(exit_code);
-                            // TODO: For now, no printing of AST
+                    match brace_expansion::expand_braces(expanded_tokens) {
+                        Ok(brace_expanded_tokens) => {
+                            match parser::parse(brace_expanded_tokens) {
+                                Ok(ast) => {
+                                    let exit_code = executor::execute(ast, shell_state);
+                                    shell_state.set_last_exit_code(exit_code);
+                                    // TODO: For now, no printing of AST
+                                }
+                                Err(e) => {
+                                    if shell_state.colors_enabled {
+                                        eprintln!(
+                                            "{}Parse error: {}\x1b[0m",
+                                            shell_state.color_scheme.error, e
+                                        );
+                                    } else {
+                                        eprintln!("Parse error: {}", e);
+                                    }
+                                    shell_state.set_last_exit_code(1);
+                                }
+                            }
                         }
                         Err(e) => {
                             if shell_state.colors_enabled {
                                 eprintln!(
-                                    "{}Parse error: {}\x1b[0m",
+                                    "{}Brace expansion error: {}\x1b[0m",
                                     shell_state.color_scheme.error, e
                                 );
                             } else {
-                                eprintln!("Parse error: {}", e);
+                                eprintln!("Brace expansion error: {}", e);
                             }
                             shell_state.set_last_exit_code(1);
                         }
@@ -582,5 +598,65 @@ mod tests {
                 std::env::remove_var("HOME");
             }
         }
+    }
+
+    #[test]
+    fn test_integration_brace_expansion_simple() {
+        let line = "echo {a,b,c}";
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
+        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
+        let ast = parser::parse(brace_expanded_tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_brace_expansion_with_ranges() {
+        let line = "echo {1..3}";
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
+        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
+        let ast = parser::parse(brace_expanded_tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_brace_expansion_mixed() {
+        let line = "echo file{a,b}.txt";
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
+        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
+        let ast = parser::parse(brace_expanded_tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_brace_expansion_nested() {
+        let line = "echo {{a,b},{c,d}}";
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
+        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
+        let ast = parser::parse(brace_expanded_tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_integration_brace_expansion_with_pipes() {
+        let line = "echo {a,b} | cat";
+        let mut shell_state = state::ShellState::new();
+        let tokens = lexer::lex(line, &shell_state).unwrap();
+        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
+        let ast = parser::parse(brace_expanded_tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
     }
 }

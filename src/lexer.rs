@@ -764,17 +764,74 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 chars.next();
             }
             '{' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
+                // Check if this looks like a brace expansion pattern
+                let mut temp_chars = chars.clone();
+                let mut brace_content = String::new();
+                let mut depth = 1;
+
+                // Collect the content inside braces
+                temp_chars.next(); // consume the {
+                while let Some(&ch) = temp_chars.peek() {
+                    if ch == '{' {
+                        depth += 1;
+                    } else if ch == '}' {
+                        depth -= 1;
+                        if depth == 0 {
+                            break;
+                        }
                     }
-                    current.clear();
+                    brace_content.push(ch);
+                    temp_chars.next();
                 }
-                tokens.push(Token::LeftBrace);
-                chars.next();
+
+                if depth == 0 && !brace_content.trim().is_empty() {
+                    // This looks like a brace expansion pattern
+                    // Check if it contains commas or ranges (basic indicators of brace expansion)
+                    if brace_content.contains(',') || brace_content.contains("..") {
+                        // Treat as brace expansion - include braces in the word
+                        current.push('{');
+                        current.push_str(&brace_content);
+                        current.push('}');
+                        chars.next(); // consume the {
+                        // Consume the content and closing brace from the actual iterator
+                        let mut content_depth = 1;
+                        while let Some(&ch) = chars.peek() {
+                            chars.next();
+                            if ch == '{' {
+                                content_depth += 1;
+                            } else if ch == '}' {
+                                content_depth -= 1;
+                                if content_depth == 0 {
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // Not a brace expansion pattern, treat as separate tokens
+                        if !current.is_empty() {
+                            if let Some(keyword) = is_keyword(&current) {
+                                tokens.push(keyword);
+                            } else {
+                                tokens.push(Token::Word(current.clone()));
+                            }
+                            current.clear();
+                        }
+                        tokens.push(Token::LeftBrace);
+                        chars.next();
+                    }
+                } else {
+                    // Not a valid brace pattern, treat as separate tokens
+                    if !current.is_empty() {
+                        if let Some(keyword) = is_keyword(&current) {
+                            tokens.push(keyword);
+                        } else {
+                            tokens.push(Token::Word(current.clone()));
+                        }
+                        current.clear();
+                    }
+                    tokens.push(Token::LeftBrace);
+                    chars.next();
+                }
             }
             '`' => {
                 if !current.is_empty() {
