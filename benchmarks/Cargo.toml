@@ -1,0 +1,17 @@
+[package]
+name = "rush-benchmarks"
+version = "0.1.0"
+edition = "2024"
+description = "Performance benchmarking suite for Rush shell"
+publish = false
+
+[dependencies]
+rush-sh = { path = "../" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+
+[[bin]]
+name = "rush-benchmark"
+path = "src/main.rs"
