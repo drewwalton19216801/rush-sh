@@ -1305,6 +1305,7 @@ Rush consists of the following components:
 - `libc`: For low-level C library bindings.
 - `glob`: For pattern matching in case statements.
 - `regex`: For advanced pattern matching in parameter expansion.
+- `lazy_static`: For global state management in completion system.
 
 ## Quality Assurance
 
