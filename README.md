@@ -21,6 +21,12 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Command Execution**: Execute external commands and built-in commands.
 - **Pipes**: Chain commands using the `|` operator.
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
+- **Brace Expansion**: Generate multiple strings from patterns with braces.
+  - Comma-separated lists: `{a,b,c}` expands to `a b c`
+  - Numeric ranges: `{1..5}` expands to `1 2 3 4 5`
+  - Alphabetic ranges: `{a..e}` expands to `a b c d e`
+  - Prefix/suffix combinations: `file{1,2,3}.txt` expands to `file1.txt file2.txt file3.txt`
+  - Nested patterns: `{{a,b},{c,d}}` expands to `a b c d`
 - **Command Substitution**: Execute commands and substitute their output inline **within the current shell context**.
   - `$(command)` syntax: `echo "Current dir: $(pwd)"`
   - `` `command` `` syntax: `echo "Files:`ls | wc -l`"`
@@ -179,6 +185,123 @@ echo "$MY_VAR" | grep "Rush"
 # Special variables
 if true; then echo "Success ($?)"; fi
 ```
+
+### Brace Expansion
+
+Rush now supports comprehensive brace expansion, a powerful feature for generating multiple strings from patterns:
+
+- **Comma-Separated Lists**: `{a,b,c}` generates multiple alternatives
+- **Numeric Ranges**: `{1..10}` generates sequences of numbers
+- **Alphabetic Ranges**: `{a..z}` generates sequences of letters
+- **Prefix/Suffix Combinations**: Combine braces with text for complex patterns
+- **Nested Patterns**: Support for nested brace expressions
+- **Integration**: Works seamlessly with all shell features (pipes, redirections, variables)
+
+**Basic Syntax:**
+
+```bash
+# Comma-separated alternatives
+echo {a,b,c}
+# Output: a b c
+
+echo file{1,2,3}.txt
+# Output: file1.txt file2.txt file3.txt
+
+# Numeric ranges
+echo {1..5}
+# Output: 1 2 3 4 5
+
+echo test{1..3}.log
+# Output: test1.log test2.log test3.log
+
+# Alphabetic ranges
+echo {a..e}
+# Output: a b c d e
+
+echo file{a..c}.txt
+# Output: filea.txt fileb.txt filec.txt
+```
+
+**Advanced Usage:**
+
+```bash
+# Nested brace expansion
+echo {{a,b},{c,d}}
+# Output: a b c d
+
+echo file{{1,2},{a,b}}.txt
+# Output: file1.txt file2.txt filea.txt fileb.txt
+
+# Multiple brace patterns in one command
+echo {a,b}{1,2}
+# Output: a1 a2 b1 b2
+
+# With prefixes and suffixes
+echo prefix_{a,b,c}_suffix
+# Output: prefix_a_suffix prefix_b_suffix prefix_c_suffix
+```
+
+**Real-World Examples:**
+
+```bash
+# Create multiple directories
+mkdir -p project/{src,test,docs}
+
+# Create numbered backup files
+cp important.txt important.txt.{1..5}
+
+# Process multiple file types
+cat file.{txt,md,log}
+
+# Generate test data
+echo user{1..100}@example.com
+
+# Create directory structure
+mkdir -p app/{controllers,models,views}/{admin,public}
+
+# Batch file operations
+mv photo{1..10}.jpg backup/
+
+# Generate configuration files
+touch config.{dev,staging,prod}.yml
+```
+
+**Integration with Other Features:**
+
+```bash
+# With pipes
+echo {a,b,c} | tr ' ' '\n'
+
+# With redirections
+echo {1..5} > numbers.txt
+
+# With variables
+PREFIX="test"
+echo ${PREFIX}{1..3}
+
+# With command substitution
+echo file{$(seq 1 5)}.txt
+
+# In for loops
+for file in document{1..5}.txt; do
+    touch "$file"
+done
+```
+
+**Key Features:**
+
+- **POSIX-Compatible**: Follows standard brace expansion behavior
+- **Performance**: Efficient expansion with minimal memory overhead
+- **Error Handling**: Graceful handling of malformed patterns
+- **Nested Support**: Full support for complex nested patterns
+- **Integration**: Works with all shell features (variables, pipes, redirections)
+
+**Implementation Details:**
+
+- Brace expansion occurs after alias expansion but before parsing
+- Patterns are detected and expanded by the lexer
+- Supports both simple and complex nested patterns
+- Maintains proper order of expansion for predictable results
 
 ### Case Statements with Glob Pattern Matching
 
@@ -1268,6 +1391,15 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Pattern removal: `echo "Basename: ${FULL_PATH##*/}"`
   - Pattern substitution: `echo "Replaced: ${TEXT/old/new}"`
   - Length operations: `echo "Length: ${#VARIABLE}"`
+- Brace expansion:
+  - Simple lists: `echo {a,b,c}` → `a b c`
+  - Numeric ranges: `echo {1..5}` → `1 2 3 4 5`
+  - Alphabetic ranges: `echo {a..c}` → `a b c`
+  - With prefix/suffix: `echo file{1,2,3}.txt` → `file1.txt file2.txt file3.txt`
+  - Nested patterns: `echo {{a,b},{c,d}}` → `a b c d`
+  - Multiple patterns: `echo {a,b}{1,2}` → `a1 a2 b1 b2`
+  - Create directories: `mkdir -p project/{src,test,docs}`
+  - Batch operations: `touch file{1..10}.txt`
 - Tab completion:
   - Complete commands: `cd` → `cd`, `env`, `exit`
   - Complete files: `cat f` → `cat file.txt`
@@ -1279,9 +1411,16 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
 
 Rush consists of the following components:
 
-- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion, parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, etc.), command substitution (`$(...)` and `` `...` `` syntax), arithmetic expansion (`$((...))`), and alias expansion.
+- **Lexer**: Tokenizes input into commands, operators, and variables with support for variable expansion, parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, etc.), command substitution (`$(...)` and `` `...` `` syntax), arithmetic expansion (`$((...))`), brace expansion (`{a,b,c}`, `{1..5}`), and alias expansion.
 - **Parser**: Builds an Abstract Syntax Tree (AST) from tokens, including support for complex control structures, case statements with glob patterns, and variable assignments.
-- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, command substitution execution, and arithmetic expression evaluation.
+- **Brace Expansion Engine**: A comprehensive brace expansion system implemented in [`src/brace_expansion.rs`](src/brace_expansion.rs) that supports:
+  - **Pattern Detection**: Identifies brace patterns during lexing with support for nested braces
+  - **Comma-Separated Lists**: Expands `{a,b,c}` into multiple alternatives
+  - **Range Expansion**: Numeric (`{1..10}`) and alphabetic (`{a..z}`) range generation
+  - **Prefix/Suffix Handling**: Combines braces with surrounding text for complex patterns
+  - **Nested Patterns**: Recursive expansion of nested brace expressions
+  - **Error Handling**: Graceful handling of malformed patterns with clear error messages
+- **Executor**: Executes the AST, handling pipes, redirections, built-ins, glob pattern matching, environment variable inheritance, command substitution execution, arithmetic expression evaluation, and brace expansion.
 - **Arithmetic Engine**: A comprehensive arithmetic expression evaluator implemented in [`src/arithmetic.rs`](src/arithmetic.rs) that supports:
   - **Token-based parsing**: Converts expressions to tokens and uses the Shunting-yard algorithm for proper operator precedence
   - **Variable integration**: Seamlessly accesses shell variables during evaluation
