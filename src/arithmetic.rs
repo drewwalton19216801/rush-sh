@@ -360,10 +360,14 @@ pub fn evaluate_rpn(
                 if let Some(value) = shell_state.get_var(&var_name) {
                     match value.parse::<i64>() {
                         Ok(num) => stack.push(num),
-                        Err(_) => return Err(ArithmeticError::UndefinedVariable(var_name)),
+                        Err(_) => {
+                            // Variable exists but is not a valid number, treat as 0 (bash behavior)
+                            stack.push(0)
+                        }
                     }
                 } else {
-                    return Err(ArithmeticError::UndefinedVariable(var_name));
+                    // Variable is undefined, treat as 0 (bash behavior)
+                    stack.push(0)
                 }
             }
 
@@ -613,6 +617,7 @@ mod tests {
     fn test_evaluate_undefined_variable() {
         let shell_state = ShellState::new();
         let result = evaluate_arithmetic_expression("undefined + 5", &shell_state);
-        assert!(matches!(result, Err(ArithmeticError::UndefinedVariable(_))));
+        // Undefined variables are treated as 0 (bash behavior)
+        assert_eq!(result.unwrap(), 5);
     }
 }
