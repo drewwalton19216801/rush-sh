@@ -95,6 +95,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - **File/Directory Completion**: Files and directories with relative paths
   - **Directory Traversal**: Support for nested paths (`src/`, `../`, `/usr/bin/`)
   - **Home Directory Expansion**: Completion for `~/` and `~/Documents/` paths
+  - **Multi-Match Cycling**: Subsequent tab presses cycle through available completions when multiple matches exist
 - **Signal Handling**: Graceful handling of SIGINT (Ctrl+C) and SIGTERM.
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 

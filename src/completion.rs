@@ -6,6 +6,21 @@ use rustyline::{Context, Helper};
 use std::env;
 use std::fs;
 use std::path::Path;
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[derive(Debug, Clone)]
+struct CompletionContext {
+    word: String,
+    pos: usize,
+    timestamp: u64,
+    attempt_count: u32,
+}
+
+// Global state for tracking completion context
+lazy_static::lazy_static! {
+    static ref COMPLETION_STATE: Mutex<Option<CompletionContext>> = Mutex::new(None);
+}
 
 pub struct RushCompleter {}
 
@@ -82,6 +97,73 @@ impl RushCompleter {
         candidates.sort_by(|a, b| a.display.cmp(&b.display));
         candidates.dedup_by(|a, b| a.display == b.display);
         candidates
+    }
+
+    fn is_repeated_completion(word: &str, pos: usize) -> bool {
+        if let Ok(context) = COMPLETION_STATE.lock() {
+            if let Some(ref ctx) = *context {
+                // Check if this is the same word and position (within a reasonable time window)
+                if ctx.word == word && ctx.pos == pos {
+                    let current_time = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    // Consider it a repeated attempt if within 2 seconds
+                    if current_time - ctx.timestamp <= 2 {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn update_completion_context(word: String, pos: usize, is_repeated: bool) {
+        let current_time = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+
+        if let Ok(mut context) = COMPLETION_STATE.lock() {
+            if is_repeated {
+                if let Some(ref mut ctx) = *context {
+                    ctx.attempt_count += 1;
+                    ctx.timestamp = current_time;
+                }
+            } else {
+                *context = Some(CompletionContext {
+                    word,
+                    pos,
+                    timestamp: current_time,
+                    attempt_count: 1,
+                });
+            }
+        }
+    }
+
+    fn get_current_attempt_count(&self) -> u32 {
+        if let Ok(context) = COMPLETION_STATE.lock() {
+            if let Some(ref ctx) = *context {
+                return ctx.attempt_count;
+            }
+        }
+        1
+    }
+
+    fn get_next_completion_candidate(candidates: &[RushCandidate], attempt_count: u32) -> Option<(usize, Vec<RushCandidate>)> {
+        if candidates.len() <= 1 {
+            return None;
+        }
+
+        // Cycle through candidates based on attempt count
+        let index = ((attempt_count - 1) % candidates.len() as u32) as usize;
+        let candidate = &candidates[index];
+
+        // Return single candidate for cycling behavior
+        Some((0, vec![RushCandidate::new(
+            candidate.display.clone(),
+            candidate.replacement.clone(),
+        )]))
     }
 
     fn get_file_candidates(line: &str, pos: usize) -> Vec<RushCandidate> {
@@ -272,6 +354,20 @@ impl Completer for RushCompleter {
             Self::get_file_candidates(line, pos)
         };
 
+        // Check if this is a repeated completion attempt
+        let is_repeated = Self::is_repeated_completion(current_word, pos);
+
+        // If this is a repeated attempt with multiple matches, cycle through candidates
+        if is_repeated && candidates.len() > 1 {
+            if let Some(completion_result) = Self::get_next_completion_candidate(&candidates, self.get_current_attempt_count()) {
+                Self::update_completion_context(current_word.to_string(), pos, true);
+                return Ok(completion_result);
+            }
+        }
+
+        // Update completion context for next attempt
+        Self::update_completion_context(current_word.to_string(), pos, is_repeated);
+
         Ok((start, candidates))
     }
 }
@@ -432,7 +528,7 @@ mod tests {
     fn test_first_word_file_completion_precedence() {
         // Lock to prevent parallel tests from interfering with directory changes
         let _lock = COMPLETION_DIR_LOCK.lock().unwrap();
-        
+
         // Create a temporary directory for testing
         let temp_dir = env::temp_dir().join("rush_completion_test_first_word");
         let _ = fs::create_dir_all(&temp_dir);
@@ -455,6 +551,122 @@ mod tests {
         let _ = fs::remove_dir_all(&temp_dir);
 
         assert!(has_examples, "First word 'ex' should complete to 'examples/' when examples directory exists");
+    }
+
+    #[test]
+    fn test_multi_match_completion_cycling() {
+        // Test that multiple matches cycle correctly
+        let candidates = vec![
+            RushCandidate::new("file1".to_string(), "file1".to_string()),
+            RushCandidate::new("file2".to_string(), "file2".to_string()),
+            RushCandidate::new("file3".to_string(), "file3".to_string()),
+        ];
+
+        // First attempt should return first candidate
+        let result1 = RushCompleter::get_next_completion_candidate(&candidates, 1);
+        assert!(result1.is_some());
+        let (_, first_candidates) = result1.unwrap();
+        assert_eq!(first_candidates.len(), 1);
+        assert_eq!(first_candidates[0].display, "file1");
+
+        // Second attempt should return second candidate
+        let result2 = RushCompleter::get_next_completion_candidate(&candidates, 2);
+        assert!(result2.is_some());
+        let (_, second_candidates) = result2.unwrap();
+        assert_eq!(second_candidates.len(), 1);
+        assert_eq!(second_candidates[0].display, "file2");
+
+        // Third attempt should return third candidate
+        let result3 = RushCompleter::get_next_completion_candidate(&candidates, 3);
+        assert!(result3.is_some());
+        let (_, third_candidates) = result3.unwrap();
+        assert_eq!(third_candidates.len(), 1);
+        assert_eq!(third_candidates[0].display, "file3");
+
+        // Fourth attempt should cycle back to first candidate
+        let result4 = RushCompleter::get_next_completion_candidate(&candidates, 4);
+        assert!(result4.is_some());
+        let (_, fourth_candidates) = result4.unwrap();
+        assert_eq!(fourth_candidates.len(), 1);
+        assert_eq!(fourth_candidates[0].display, "file1");
+    }
+
+    #[test]
+    fn test_multi_match_completion_single_candidate() {
+        // Test that single candidate doesn't trigger cycling behavior
+        let candidates = vec![
+            RushCandidate::new("single_file".to_string(), "single_file".to_string()),
+        ];
+
+        let result = RushCompleter::get_next_completion_candidate(&candidates, 1);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_multi_match_completion_empty_candidates() {
+        // Test that empty candidates doesn't trigger cycling behavior
+        let candidates: Vec<RushCandidate> = vec![];
+
+        let result = RushCompleter::get_next_completion_candidate(&candidates, 1);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_repeated_completion_detection() {
+        // Clear any existing state first
+        if let Ok(mut context) = COMPLETION_STATE.lock() {
+            *context = None;
+        }
+
+        // Test that repeated completion attempts are detected correctly
+        let word = "test";
+        let pos = 4;
+
+        // First attempt should not be detected as repeated
+        assert!(!RushCompleter::is_repeated_completion(word, pos));
+
+        // Update context to simulate a completion attempt
+        RushCompleter::update_completion_context(word.to_string(), pos, false);
+
+        // Second attempt should be detected as repeated
+        assert!(RushCompleter::is_repeated_completion(word, pos));
+
+        // Different word should not be detected as repeated
+        assert!(!RushCompleter::is_repeated_completion("different", pos));
+
+        // Different position should not be detected as repeated
+        assert!(!RushCompleter::is_repeated_completion(word, pos + 1));
+    }
+
+    #[test]
+    fn test_completion_context_update() {
+        // Clear any existing state first
+        if let Ok(mut context) = COMPLETION_STATE.lock() {
+            *context = None;
+        }
+
+        let word = "test";
+        let pos = 4;
+
+        // Test initial context creation
+        RushCompleter::update_completion_context(word.to_string(), pos, false);
+
+        if let Ok(context) = COMPLETION_STATE.lock() {
+            assert!(context.is_some());
+            let ctx = context.as_ref().unwrap();
+            assert_eq!(ctx.word, word);
+            assert_eq!(ctx.pos, pos);
+            assert_eq!(ctx.attempt_count, 1);
+        }
+
+        // Test repeated attempt updates attempt count
+        RushCompleter::update_completion_context(word.to_string(), pos, true);
+
+        if let Ok(context) = COMPLETION_STATE.lock() {
+            assert!(context.is_some());
+            let ctx = context.as_ref().unwrap();
+            assert_eq!(ctx.attempt_count, 2);
+        }
     }
 }
 
