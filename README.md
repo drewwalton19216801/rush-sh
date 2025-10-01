@@ -332,8 +332,6 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
 
 This architecture enables command substitutions to behave identically to bash while leveraging Rust's type safety and performance characteristics, providing a seamless experience for shell scripting and interactive use.
 
-Example usage:
-
 ### Condensed Current Working Directory in Prompt
 
 Rush now displays a condensed version of the current working directory in the interactive prompt:
