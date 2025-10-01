@@ -260,7 +260,14 @@ impl Completer for RushCompleter {
         let is_file_path = Self::looks_like_file_path(current_word);
 
         let candidates = if is_first && !is_file_path {
-            Self::get_command_candidates(current_word)
+            // For first word that doesn't look like a file path, check if there are file matches
+            // If there are, prefer file completion over command completion
+            let file_candidates = Self::get_file_candidates(line, pos);
+            if file_candidates.is_empty() {
+                Self::get_command_candidates(current_word)
+            } else {
+                file_candidates
+            }
         } else {
             Self::get_file_candidates(line, pos)
         };
@@ -282,6 +289,11 @@ impl Helper for RushCompleter {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Import the mutex from main.rs tests module
+    // We need to use a separate mutex for completion tests to avoid cross-module issues
+    static COMPLETION_DIR_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_builtin_commands() {
@@ -389,14 +401,17 @@ mod tests {
 
     #[test]
     fn test_directory_completion_formatting() {
+        // Lock to prevent parallel tests from interfering with directory changes
+        let _lock = COMPLETION_DIR_LOCK.lock().unwrap();
+        
         // Create a temporary directory for testing
         let temp_dir = env::temp_dir().join("rush_completion_test");
         let _ = fs::create_dir_all(&temp_dir);
         let _ = fs::create_dir_all(temp_dir.join("testdir"));
         let _ = fs::write(temp_dir.join("testfile"), "content");
 
-        // Change to temp directory for this test
-        let original_dir = env::current_dir().unwrap();
+        // Ensure we're in a safe directory first, then change to temp directory
+        let _ = env::set_current_dir(env::temp_dir());
         let _ = env::set_current_dir(&temp_dir);
 
         // Test directory completion
@@ -404,13 +419,42 @@ mod tests {
         let has_testdir = candidates.iter().any(|c| c.display() == "testdir/");
         let has_testfile = candidates.iter().any(|c| c.display() == "testfile");
 
-        // Restore original directory
-        let _ = env::set_current_dir(&original_dir);
+        // Change back to a safe directory before cleanup
+        let _ = env::set_current_dir(env::temp_dir());
 
         // Clean up
         let _ = fs::remove_dir_all(&temp_dir);
 
         assert!(has_testdir || has_testfile); // At least one should be found
+    }
+
+    #[test]
+    fn test_first_word_file_completion_precedence() {
+        // Lock to prevent parallel tests from interfering with directory changes
+        let _lock = COMPLETION_DIR_LOCK.lock().unwrap();
+        
+        // Create a temporary directory for testing
+        let temp_dir = env::temp_dir().join("rush_completion_test_first_word");
+        let _ = fs::create_dir_all(&temp_dir);
+        let _ = fs::create_dir_all(temp_dir.join("examples"));
+
+        // Ensure we're in a safe directory first, then change to temp directory
+        let _ = env::set_current_dir(env::temp_dir());
+        let _ = env::set_current_dir(&temp_dir);
+
+        // Test that "ex" completes to "examples/" when it's the first word
+        // This tests the fix for the issue where "ex" + Tab didn't complete
+        // but "./ex" + Tab did complete to "./examples"
+        let candidates = RushCompleter::get_file_candidates("ex", 2);
+        let has_examples = candidates.iter().any(|c| c.display() == "examples/");
+
+        // Change back to a safe directory before cleanup
+        let _ = env::set_current_dir(env::temp_dir());
+
+        // Clean up
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        assert!(has_examples, "First word 'ex' should complete to 'examples/' when examples directory exists");
     }
 }
 

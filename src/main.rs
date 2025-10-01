@@ -429,6 +429,10 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::Path;
+    use std::sync::Mutex;
+
+    // Mutex to serialize tests that change the current directory
+    static DIR_CHANGE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_integration_true() {
@@ -506,7 +510,13 @@ mod tests {
 
     #[test]
     fn test_integration_builtin_cd() {
-        let original_dir = std::env::current_dir().unwrap();
+        // Lock to prevent parallel tests from interfering with directory changes
+        let _lock = DIR_CHANGE_LOCK.lock().unwrap();
+        
+        // First, ensure we're in a safe directory that definitely exists
+        // This prevents failures if the current directory was deleted by another test
+        std::env::set_current_dir("/tmp").unwrap();
+        
         let line = "cd /tmp";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
@@ -514,23 +524,33 @@ mod tests {
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         assert_eq!(std::env::current_dir().unwrap(), Path::new("/tmp"));
-        std::env::set_current_dir(original_dir).unwrap();
+        
+        // No need to restore since we're already in /tmp and the lock ensures
+        // other directory-changing tests won't run concurrently
     }
 
     #[test]
     fn test_source_rushrc_functionality() {
-        // Create a temporary .rushrc file
-        let temp_dir = "/tmp/rush_test_home";
+        // Use a unique temporary directory to avoid conflicts with parallel tests
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = format!("/tmp/rush_test_home_{}", timestamp);
         let rushrc_path = format!("{}/.rushrc", temp_dir);
         let rushrc_content = "TEST_RUSHRC_VAR=test_value\nexport TEST_RUSHRC_VAR";
 
         // Create temp directory and file
-        std::fs::create_dir_all(temp_dir).unwrap();
+        std::fs::create_dir_all(&temp_dir).unwrap();
         std::fs::write(&rushrc_path, rushrc_content).unwrap();
+
+        // Save original HOME value
+        let original_home = std::env::var("HOME").ok();
 
         // Set HOME to temp directory
         unsafe {
-            std::env::set_var("HOME", temp_dir);
+            std::env::set_var("HOME", &temp_dir);
         }
 
         // Test source_rushrc function
@@ -552,9 +572,15 @@ mod tests {
 
         // Clean up
         std::fs::remove_file(&rushrc_path).unwrap();
-        std::fs::remove_dir(temp_dir).unwrap();
+        std::fs::remove_dir(&temp_dir).unwrap();
+        
+        // Restore original HOME value
         unsafe {
-            std::env::remove_var("HOME");
+            if let Some(home) = original_home {
+                std::env::set_var("HOME", home);
+            } else {
+                std::env::remove_var("HOME");
+            }
         }
     }
 }
