@@ -1299,13 +1299,12 @@ Rush consists of the following components:
 
 ## Dependencies
 
-- `rustyline`: For interactive line editing and history.
-- `signal-hook`: For robust signal handling.
-- `nix`: For Unix system interactions.
-- `libc`: For low-level C library bindings.
-- `glob`: For pattern matching in case statements.
-- `regex`: For advanced pattern matching in parameter expansion.
-- `lazy_static`: For global state management in completion system.
+- `clap`: For command-line argument parsing with derive macros.
+- `rustyline`: For interactive line editing and history with signal handling support.
+- `signal-hook`: For robust signal handling (SIGINT, SIGTERM).
+- `nix`: For Unix system interactions and terminal detection.
+- `libc`: For low-level C library bindings and process management.
+- `glob`: For pattern matching in case statements and wildcard expansion.
 
 ## Quality Assurance
 
