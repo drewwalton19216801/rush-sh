@@ -1,3 +1,15 @@
+[workspace]
+members = [
+   ".",
+   "benchmarks"
+]
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+
 [package]
 name = "rush-sh"
 version = "0.4.3"
@@ -6,6 +18,10 @@ description = "A POSIX sh-compatible shell written in Rust"
 license = "MIT"
 documentation = "https://github.com/drewwalton19216801/rush-sh"
 repository = "https://github.com/drewwalton19216801/rush-sh"
+
+[lib]
+name = "rush_sh"
+path = "src/lib.rs"
 
 [dependencies]
 rustyline = { version = "17.0.1", features = ["signal-hook"] }
