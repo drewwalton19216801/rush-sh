@@ -616,7 +616,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     current.push('&');
                 }
             }
-            '>' => {
+            '>' if !in_double_quote && !in_single_quote => {
                 // Check if this is a file descriptor redirection like 2>&1
                 // Look back to see if current ends with a digit
                 let is_fd_redirect = if !current.is_empty() {
@@ -711,7 +711,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                 }
             }
-            '<' => {
+            '<' if !in_double_quote && !in_single_quote => {
                 if !current.is_empty() {
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
@@ -1530,13 +1530,15 @@ mod tests {
         let mut shell_state = crate::state::ShellState::new();
         let tokens = lex("echo $((5 / 0))", &shell_state).unwrap();
         let result = expand_tokens(tokens, &mut shell_state);
-        assert_eq!(
-            result,
-            vec![
-                Token::Word("echo".to_string()),
-                Token::Word("$((5 / 0))".to_string())
-            ]
-        );
+        // Division by zero produces an error message
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], Token::Word("echo".to_string()));
+        // The second token should contain an error message about division by zero
+        if let Token::Word(s) = &result[1] {
+            assert!(s.contains("Division by zero"), "Expected division by zero error, got: {}", s);
+        } else {
+            panic!("Expected Word token");
+        }
     }
 
     #[test]

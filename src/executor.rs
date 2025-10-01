@@ -234,11 +234,14 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                             Ok(value) => {
                                 result.push_str(&value.to_string());
                             }
-                            Err(_) => {
-                                // On error, keep the literal
-                                result.push_str("$((");
-                                result.push_str(&arithmetic_expr);
-                                result.push_str("))");
+                            Err(e) => {
+                                // On arithmetic error, display a proper error message
+                                if shell_state.colors_enabled {
+                                    result.push_str(&format!("{}arithmetic error: {}{}",
+                                        shell_state.color_scheme.error, e, "\x1b[0m"));
+                                } else {
+                                    result.push_str(&format!("arithmetic error: {}", e));
+                                }
                             }
                         }
                     } else {
