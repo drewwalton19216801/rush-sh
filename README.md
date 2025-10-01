@@ -1305,6 +1305,7 @@ Rush consists of the following components:
 - `nix`: For Unix system interactions and terminal detection.
 - `libc`: For low-level C library bindings and process management.
 - `glob`: For pattern matching in case statements and wildcard expansion.
+- `lazy_static`: For global state management in tab completion.
 
 ## Quality Assurance
 
