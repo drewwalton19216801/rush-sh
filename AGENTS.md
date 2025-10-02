@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.4.3. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
+**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.4.4. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
 
 ### Project Goals
 
