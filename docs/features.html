@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Features - Rush Shell Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <div class="logo">🚀</div>
+                    <h2>Rush Shell</h2>
+                </div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="index.html" class="nav-link">
+                    <span class="nav-icon">🏠</span>
+                    <span>Overview</span>
+                </a>
+                <a href="features.html" class="nav-link active">
+                    <span class="nav-icon">⚡</span>
+                    <span>Features</span>
+                </a>
+                <a href="installation.html" class="nav-link">
+                    <span class="nav-icon">📦</span>
+                    <span>Installation</span>
+                </a>
+                <a href="usage.html" class="nav-link">
+                    <span class="nav-icon">🎯</span>
+                    <span>Usage</span>
+                </a>
+                <a href="architecture.html" class="nav-link">
+                    <span class="nav-icon">🏗️</span>
+                    <span>Architecture</span>
+                </a>
+                <a href="compliance.html" class="nav-link">
+                    <span class="nav-icon">✅</span>
+                    <span>POSIX Compliance</span>
+                </a>
+                <a href="benchmarks.html" class="nav-link">
+                    <span class="nav-icon">📊</span>
+                    <span>Benchmarks</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="version-info">
+                    <span class="version">v0.4.3</span>
+                    <span class="status">~87% POSIX Compliant</span>
+                </div>
+                <div class="external-links">
+                    <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
+                        <span class="nav-icon">🔗</span>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile menu button -->
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-content">
+                    <div class="breadcrumb">
+                        <a href="index.html">Rush Shell Documentation</a> → <span>Features</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="theme-toggle" id="themeToggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <span class="search-icon">🔍</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="feature-hero">
+                    <h1>✨ Rush Shell Features</h1>
+                    <p>Comprehensive POSIX sh-compatible shell with advanced expansions, powerful built-ins, and modern interface</p>
+                </div>
+
+                <!-- Core Features -->
+                <section id="core-features">
+                    <h2>🔧 Core Features</h2>
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">⚡</div>
+                            <h3>Command Execution</h3>
+                            <p>Execute external commands and built-in commands with full PATH resolution and error handling</p>
+                            <div class="code-block">
+                                <pre><code># External commands
+ls -la /tmp
+curl https://api.example.com
+
+# Built-in commands
+cd /home/user
+pwd
+env</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">🔗</div>
+                            <h3>Pipelines</h3>
+                            <p>Chain commands using the pipe operator for powerful data processing workflows</p>
+                            <div class="code-block">
+                                <pre><code># Basic pipelines
+ls | grep ".txt" | wc -l
+cat file.txt | sort | uniq
+
+# Complex pipelines
+find . -name "*.rs" | xargs grep -l "fn main" | head -5</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">📝</div>
+                            <h3>Redirections</h3>
+                            <p>Input and output redirections for flexible I/O handling in commands and scripts</p>
+                            <div class="code-block">
+                                <pre><code># Output redirection
+echo "Hello World" > hello.txt
+ls -la >> log.txt
+
+# Input redirection
+sort < unsorted.txt > sorted.txt
+grep "pattern" < file.txt</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Expansions -->
+                <section id="expansions">
+                    <h2>🔄 Expansions</h2>
+
+                    <div class="expansion-section">
+                        <h3>Brace Expansion</h3>
+                        <p>Generate multiple strings from patterns with braces - perfect for batch operations and file generation</p>
+
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>Basic Lists</h4>
+                                <div class="code-block">
+                                    <pre><code>echo {a,b,c}
+# Output: a b c
+
+echo file{1,2,3}.txt
+# Output: file1.txt file2.txt file3.txt</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Numeric Ranges</h4>
+                                <div class="code-block">
+                                    <pre><code>echo {1..5}
+# Output: 1 2 3 4 5
+
+echo test{1..3}.log
+# Output: test1.log test2.log test3.log</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Alphabetic Ranges</h4>
+                                <div class="code-block">
+                                    <pre><code>echo {a..e}
+# Output: a b c d e
+
+echo file{a..c}.txt
+# Output: filea.txt fileb.txt filec.txt</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Real-World Usage</h4>
+                                <div class="code-block">
+                                    <pre><code># Create multiple directories
+mkdir -p project/{src,test,docs}
+
+# Create numbered backup files
+cp important.txt important.txt.{1..5}
+
+# Generate test data
+echo user{1..100}@example.com</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="expansion-section">
+                        <h3>Command Substitution</h3>
+                        <p>Execute commands and substitute their output inline within the current shell context for optimal performance</p>
+
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>Basic Substitution</h4>
+                                <div class="code-block">
+                                    <pre><code>echo "Current dir: $(pwd)"
+echo "Files: `ls | wc -l`"
+
+# Variable assignments
+PROJECT_DIR="$(pwd)/src"
+FILE_COUNT="$(ls *.rs 2>/dev/null | wc -l)"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Advanced Usage</h4>
+                                <div class="code-block">
+                                    <pre><code># Complex commands
+echo "Rust version: $(rustc --version | cut -d' ' -f2)"
+
+# Error handling
+RESULT="$(nonexistent_command 2>/dev/null || echo 'failed')"
+
+# Multiple commands
+echo "Output: $(echo 'First'; echo 'Second')"</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="expansion-section">
+                        <h3>Arithmetic Expansion</h3>
+                        <p>Evaluate mathematical expressions using POSIX-standard $((...)) syntax with full operator precedence</p>
+
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>Basic Arithmetic</h4>
+                                <div class="code-block">
+                                    <pre><code>echo "Result: $((2 + 3 * 4))"
+echo "Division: $((20 / 4))"
+echo "Modulo: $((17 % 3))"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Variable Integration</h4>
+                                <div class="code-block">
+                                    <pre><code>x=10
+y=3
+echo "x + y = $((x + y))"
+echo "x squared = $((x * x))"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Complex Expressions</h4>
+                                <div class="code-block">
+                                    <pre><code># With precedence
+echo "2 + 3 * 4 = $((2 + 3 * 4))"        # 14
+echo "(2 + 3) * 4 = $(((2 + 3) * 4))"    # 20
+
+# Temperature conversion
+celsius=25
+fahrenheit=$((celsius * 9 / 5 + 32))</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="expansion-section">
+                        <h3>Parameter Expansion with Modifiers</h3>
+                        <p>Advanced variable expansion with POSIX sh modifiers for powerful string manipulation</p>
+
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>Default Values</h4>
+                                <div class="code-block">
+                                    <pre><code># Use default if unset or null
+echo "Home: ${HOME:-/home/user}"
+echo "Editor: ${EDITOR:-vim}"
+
+# Assign default if unset
+echo "Editor: ${EDITOR:=nano}"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Substring Operations</h4>
+                                <div class="code-block">
+                                    <pre><code>FILENAME="document.txt"
+echo "Extension: ${FILENAME:9}"           # "txt"
+echo "Name only: ${FILENAME:0:8}"         # "document"
+echo "Length: ${#FILENAME}"               # "13"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Pattern Operations</h4>
+                                <div class="code-block">
+                                    <pre><code># Remove file extensions
+echo "No extension: ${FILENAME%.txt}"
+
+# Remove directory paths
+FULL_PATH="/usr/bin/ls"
+echo "Basename: ${FULL_PATH##*/}"         # "ls"
+
+# Pattern substitution
+echo "Replaced: ${TEXT/old/new}"</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Control Structures -->
+                <section id="control-structures">
+                    <h2>🎮 Control Structures</h2>
+
+                    <div class="control-section">
+                        <h3>Conditional Statements</h3>
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>If Statements</h4>
+                                <div class="code-block">
+                                    <pre><code>if [ -f "/etc/passwd" ]; then
+    echo "File exists"
+elif [ -d "/etc" ]; then
+    echo "Directory exists"
+else
+    echo "Neither exists"
+fi</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Case Statements</h4>
+                                <div class="code-block">
+                                    <pre><code>case $filename in
+    *.txt|*.md) echo "Text file" ;;
+    *.jpg|*.png) echo "Image file" ;;
+    file?) echo "Single character file" ;;
+    [abc]*) echo "Starts with a, b, or c" ;;
+    *) echo "Other file type" ;;
+esac</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Loops</h3>
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>For Loops</h4>
+                                <div class="code-block">
+                                    <pre><code>for i in 1 2 3 4 5; do
+    echo "Number: $i"
+done
+
+for file in *.txt; do
+    echo "Processing: $file"
+    wc -l "$file"
+done</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>While Loops</h4>
+                                <div class="code-block">
+                                    <pre><code>count=1
+while [ $count -le 5 ]; do
+    echo "Count: $count"
+    count=$((count + 1))
+done</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Functions</h3>
+                        <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>Function Definition</h4>
+                                <div class="code-block">
+                                    <pre><code>myfunc() {
+    echo "Hello $1!"
+    local result=$(( $2 + $3 ))
+    return $result
+}
+
+# Call function
+myfunc "World" 2 3
+echo "Exit code: $?"</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
+                                <h4>Function Introspection</h4>
+                                <div class="code-block">
+                                    <pre><code># List all functions
+declare -f
+
+# Show specific function
+declare -f myfunc
+
+# Local variables
+local var="value"</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Built-in Commands -->
+                <section id="builtins">
+                    <h2>🛠️ Built-in Commands</h2>
+
+                    <div class="builtins-overview">
+                        <p>Rush includes <strong>18 comprehensive built-in commands</strong> for enhanced functionality and performance:</p>
+
+                        <div class="builtins-grid">
+                            <div class="builtin-category">
+                                <h4>Process Management</h4>
+                                <ul>
+                                    <li><code>cd</code> - Change directory</li>
+                                    <li><code>exit</code> - Exit the shell</li>
+                                    <li><code>pwd</code> - Print working directory</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Variable Management</h4>
+                                <ul>
+                                    <li><code>env</code> - List environment variables</li>
+                                    <li><code>export</code> - Export variables to child processes</li>
+                                    <li><code>unset</code> - Remove variables</li>
+                                    <li><code>shift</code> - Shift positional parameters</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Directory Stack</h4>
+                                <ul>
+                                    <li><code>pushd</code> - Push directory and change</li>
+                                    <li><code>popd</code> - Pop directory and change</li>
+                                    <li><code>dirs</code> - Display directory stack</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Alias Management</h4>
+                                <ul>
+                                    <li><code>alias</code> - Define or display aliases</li>
+                                    <li><code>unalias</code> - Remove alias definitions</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Script Execution</h4>
+                                <ul>
+                                    <li><code>source</code> / <code>.</code> - Execute script files</li>
+                                    <li><code>test</code> / <code>[</code> - Conditional logic tests</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Interface</h4>
+                                <ul>
+                                    <li><code>help</code> - Show available commands</li>
+                                    <li><code>set_colors</code> - Control color output</li>
+                                    <li><code>set_color_scheme</code> - Switch themes</li>
+                                    <li><code>declare</code> - Function introspection</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Advanced Features -->
+                <section id="advanced-features">
+                    <h2>🚀 Advanced Features</h2>
+
+                    <div class="advanced-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">🎨</div>
+                            <h3>Color Support</h3>
+                            <p>Modern terminal interface with customizable color schemes and accessibility support</p>
+                            <div class="code-block">
+                                <pre><code># Runtime color control
+set_colors on
+set_color_scheme dark
+
+# Accessibility support
+export NO_COLOR=1</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">📁</div>
+                            <h3>Tab Completion</h3>
+                            <p>Intelligent completion for commands, files, directories, and nested paths</p>
+                            <div class="code-block">
+                                <pre><code># Command completion
+cd<TAB> → cd, env, exit
+
+# File completion
+cat f<TAB> → cat file.txt
+
+# Path completion
+ls src/m<TAB> → ls src/main/</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">⚙️</div>
+                            <h3>Configuration</h3>
+                            <p>Automatic sourcing of ~/.rushrc for personalized shell environment</p>
+                            <div class="code-block">
+                                <pre><code># ~/.rushrc
+export EDITOR=vim
+alias ll='ls -la'
+echo "Welcome to Rush!"</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">📊</div>
+                            <h3>Performance</h3>
+                            <p>Optimized execution with in-context command substitution and efficient expansions</p>
+                            <div class="code-block">
+                                <pre><code># 10-50x faster for builtins
+echo "Fast: $(echo 'hello')"
+
+# Efficient brace expansion
+echo {1..1000} | wc -w</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Navigation Footer -->
+                <div class="section-nav">
+                    <div class="nav-links">
+                        <a href="index.html" class="nav-button secondary">
+                            <span>← Back to Overview</span>
+                        </a>
+                        <a href="installation.html" class="nav-button primary">
+                            <span>Installation Guide</span>
+                            <span class="nav-arrow">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

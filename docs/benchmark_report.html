@@ -5,25 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rush Shell Benchmark Report</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1 { color: #2c3e50; text-align: center; margin-bottom: 30px; }
-        h2 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
-        .summary { background: #ecf0f1; padding: 20px; border-radius: 5px; margin-bottom: 30px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #0f172a; }
+        .container { max-width: 1200px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        h1 { color: #f8fafc; text-align: center; margin-bottom: 30px; }
+        h2 { color: #cbd5e1; border-bottom: 2px solid #334155; padding-bottom: 10px; }
+        .summary { background: #334155; padding: 20px; border-radius: 5px; margin-bottom: 30px; }
         .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
         .summary-item { text-align: center; }
-        .summary-value { font-size: 2em; font-weight: bold; color: #27ae60; }
-        .summary-label { color: #7f8c8d; font-size: 0.9em; }
+        .summary-value { font-size: 2em; font-weight: bold; color: #34d399; }
+        .summary-label { color: #94a3b8; font-size: 0.9em; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f8f9fa; font-weight: 600; color: #2c3e50; }
-        tr:hover { background-color: #f8f9fa; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #475569; color: #f8fafc; }
+        th { background-color: #334155; font-weight: 600; color: #f8fafc; }
+        tr:hover { background-color: #475569; }
         .duration { font-family: 'Courier New', monospace; }
         .performance-indicator { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
-        .fast { background-color: #d4edda; color: #155724; }
-        .medium { background-color: #fff3cd; color: #856404; }
-        .slow { background-color: #f8d7da; color: #721c24; }
-        .timestamp { color: #6c757d; font-size: 0.9em; margin-bottom: 20px; }
+        .fast { background-color: #064e3b; color: #34d399; }
+        .medium { background-color: #451a03; color: #fbbf24; }
+        .slow { background-color: #7f1d1d; color: #f87171; }
+        .timestamp { color: #94a3b8; font-size: 0.9em; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -245,14 +245,14 @@
         </table>
         <h2>Performance Analysis</h2>
         <div class="summary">
-            <p><strong>Performance Distribution:</strong></p>
-            <ul>
+            <p style="color: #f8fafc;"><strong>Performance Distribution:</strong></p>
+            <ul style="color: #f8fafc;">
                 <li>Fast (<10ms): 5 benchmarks</li>
                 <li>Medium (10-100ms): 2 benchmarks</li>
                 <li>Slow (≥100ms): 13 benchmarks</li>
             </ul>
-            <h3>Recommendations</h3>
-            <ul>
+            <h3 style="color: #f8fafc;">Recommendations</h3>
+            <ul style="color: #f8fafc;">
                 <li>⚠️ Some benchmarks are running slowly. Consider optimizing the slowest components.</li>
                 <li>💡 Run benchmarks regularly to track performance trends over time.</li>
                 <li>🔍 Focus optimization efforts on the slowest benchmarks identified above.</li>

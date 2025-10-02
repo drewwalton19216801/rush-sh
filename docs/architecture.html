@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture - Rush Shell Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <div class="logo">🚀</div>
+                    <h2>Rush Shell</h2>
+                </div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="index.html" class="nav-link">
+                    <span class="nav-icon">🏠</span>
+                    <span>Overview</span>
+                </a>
+                <a href="features.html" class="nav-link">
+                    <span class="nav-icon">⚡</span>
+                    <span>Features</span>
+                </a>
+                <a href="installation.html" class="nav-link">
+                    <span class="nav-icon">📦</span>
+                    <span>Installation</span>
+                </a>
+                <a href="usage.html" class="nav-link">
+                    <span class="nav-icon">🎯</span>
+                    <span>Usage</span>
+                </a>
+                <a href="architecture.html" class="nav-link active">
+                    <span class="nav-icon">🏗️</span>
+                    <span>Architecture</span>
+                </a>
+                <a href="compliance.html" class="nav-link">
+                    <span class="nav-icon">✅</span>
+                    <span>POSIX Compliance</span>
+                </a>
+                <a href="benchmarks.html" class="nav-link">
+                    <span class="nav-icon">📊</span>
+                    <span>Benchmarks</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="version-info">
+                    <span class="version">v0.4.3</span>
+                    <span class="status">~87% POSIX Compliant</span>
+                </div>
+                <div class="external-links">
+                    <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
+                        <span class="nav-icon">🔗</span>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile menu button -->
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-content">
+                    <div class="breadcrumb">
+                        <a href="index.html">Rush Shell Documentation</a> → <span>Architecture</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="theme-toggle" id="themeToggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <span class="search-icon">🔍</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="architecture-hero">
+                    <h1>🏗️ Architecture Overview</h1>
+                    <p>Modular design with separate lexer, parser, executor, and expansion engines</p>
+                </div>
+
+                <!-- Architecture Diagram -->
+                <section id="architecture-diagram">
+                    <h2>📐 System Architecture</h2>
+
+                    <div class="architecture-diagram">
+                        <div class="diagram-container">
+                            <!-- Input/Output -->
+                            <div class="component user-input">
+                                <div class="component-header">
+                                    <div class="component-icon">👤</div>
+                                    <h3>User Input</h3>
+                                </div>
+                                <div class="component-content">
+                                    <p>Interactive commands, scripts, or command strings</p>
+                                </div>
+                            </div>
+
+                            <!-- Main Pipeline -->
+                            <div class="pipeline">
+                                <div class="pipeline-arrow">↓</div>
+
+                                <div class="component lexer">
+                                    <div class="component-header">
+                                        <div class="component-icon">📝</div>
+                                        <h3>Lexer</h3>
+                                    </div>
+                                    <div class="component-content">
+                                        <ul>
+                                            <li>Token recognition</li>
+                                            <li>Quote handling</li>
+                                            <li>Alias expansion</li>
+                                            <li>Pattern detection</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="pipeline-arrow">↓</div>
+
+                                <div class="component expansions">
+                                    <div class="component-header">
+                                        <div class="component-icon">🔄</div>
+                                        <h3>Expansions</h3>
+                                    </div>
+                                    <div class="component-content">
+                                        <ul>
+                                            <li>Brace expansion</li>
+                                            <li>Variable expansion</li>
+                                            <li>Command substitution</li>
+                                            <li>Arithmetic expansion</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="pipeline-arrow">↓</div>
+
+                                <div class="component parser">
+                                    <div class="component-header">
+                                        <div class="component-icon">🔍</div>
+                                        <h3>Parser</h3>
+                                    </div>
+                                    <div class="component-content">
+                                        <ul>
+                                            <li>AST construction</li>
+                                            <li>Control structures</li>
+                                            <li>Pipeline construction</li>
+                                            <li>Redirection parsing</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="pipeline-arrow">↓</div>
+
+                                <div class="component executor">
+                                    <div class="component-header">
+                                        <div class="component-icon">⚡</div>
+                                        <h3>Executor</h3>
+                                    </div>
+                                    <div class="component-content">
+                                        <ul>
+                                            <li>Command execution</li>
+                                            <li>Pipeline management</li>
+                                            <li>Redirection handling</li>
+                                            <li>Error propagation</li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="pipeline-arrow">↓</div>
+
+                                <div class="component output">
+                                    <div class="component-header">
+                                        <div class="component-icon">📤</div>
+                                        <h3>Output</h3>
+                                    </div>
+                                    <div class="component-content">
+                                        <p>Command results, exit codes, and shell state</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Supporting Components -->
+                            <div class="supporting-components">
+                                <div class="support-left">
+                                    <div class="component state">
+                                        <div class="component-header">
+                                            <div class="component-icon">🗂️</div>
+                                            <h3>Shell State</h3>
+                                        </div>
+                                        <div class="component-content">
+                                            <ul>
+                                                <li>Variable management</li>
+                                                <li>Environment integration</li>
+                                                <li>Directory stack</li>
+                                                <li>Alias management</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="support-right">
+                                    <div class="component builtins">
+                                        <div class="component-header">
+                                            <div class="component-icon">🛠️</div>
+                                            <h3>Built-ins</h3>
+                                        </div>
+                                        <div class="component-content">
+                                            <ul>
+                                                <li>18 built-in commands</li>
+                                                <li>Optimized execution</li>
+                                                <li>No process spawning</li>
+                                                <li>Direct state access</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Core Components -->
+                <section id="core-components">
+                    <h2>🔧 Core Components</h2>
+
+                    <div class="components-grid">
+                        <div class="component-card">
+                            <div class="component-header">
+                                <div class="component-icon">📝</div>
+                                <h3>Lexer (<code>src/lexer.rs</code>)</h3>
+                            </div>
+                            <div class="component-details">
+                                <h4>Responsibilities</h4>
+                                <ul>
+                                    <li><strong>Token Recognition:</strong> Identifies commands, operators, keywords, and special tokens</li>
+                                    <li><strong>Quote Handling:</strong> Processes single/double quotes and escape sequences</li>
+                                    <li><strong>Variable Detection:</strong> Identifies variable patterns for deferred expansion</li>
+                                    <li><strong>Alias Expansion:</strong> Expands command aliases before parsing</li>
+                                    <li><strong>Command Substitution:</strong> Preserves $(...) and `...` syntax for runtime expansion</li>
+                                </ul>
+
+                                <h4>Key Features</h4>
+                                <ul>
+                                    <li>Context-aware tokenization</li>
+                                    <li>Efficient pattern matching</li>
+                                    <li>Comprehensive error reporting</li>
+                                    <li>Performance-optimized parsing</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="component-card">
+                            <div class="component-header">
+                                <div class="component-icon">🔍</div>
+                                <h3>Parser (<code>src/parser.rs</code>)</h3>
+                            </div>
+                            <div class="component-details">
+                                <h4>Responsibilities</h4>
+                                <ul>
+                                    <li><strong>AST Construction:</strong> Builds Abstract Syntax Tree from token stream</li>
+                                    <li><strong>Control Structures:</strong> Handles if/elif/else, case, for, while, functions</li>
+                                    <li><strong>Pipeline Construction:</strong> Creates pipeline structures for command chaining</li>
+                                    <li><strong>Redirection Parsing:</strong> Processes I/O redirection operators</li>
+                                </ul>
+
+                                <h4>Key Features</h4>
+                                <ul>
+                                    <li>Recursive descent parsing</li>
+                                    <li>Comprehensive error recovery</li>
+                                    <li>Context-aware structure building</li>
+                                    <li>Memory-efficient AST representation</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="component-card">
+                            <div class="component-header">
+                                <div class="component-icon">⚡</div>
+                                <h3>Executor (<code>src/executor.rs</code>)</h3>
+                            </div>
+                            <div class="component-details">
+                                <h4>Responsibilities</h4>
+                                <ul>
+                                    <li><strong>Command Execution:</strong> Runs external commands and built-in functions</li>
+                                    <li><strong>Variable Expansion:</strong> Runtime expansion of variables and parameters</li>
+                                    <li><strong>Pipeline Management:</strong> Coordinates data flow between pipeline stages</li>
+                                    <li><strong>Redirection Handling:</strong> Manages file descriptors and I/O redirection</li>
+                                    <li><strong>Error Propagation:</strong> Handles exit codes and error conditions</li>
+                                </ul>
+
+                                <h4>Key Features</h4>
+                                <ul>
+                                    <li>Efficient process management</li>
+                                    <li>Robust error handling</li>
+                                    <li>Streaming I/O operations</li>
+                                    <li>Cross-platform compatibility</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="component-card">
+                            <div class="component-header">
+                                <div class="component-icon">🗂️</div>
+                                <h3>Shell State (<code>src/state.rs</code>)</h3>
+                            </div>
+                            <div class="component-details">
+                                <h4>Responsibilities</h4>
+                                <ul>
+                                    <li><strong>Variable Scoping:</strong> Global and local variable management with proper scoping</li>
+                                    <li><strong>Environment Integration:</strong> Coordination with system environment variables</li>
+                                    <li><strong>Function Context:</strong> Function call stack and local variable scoping</li>
+                                    <li><strong>Directory Stack:</strong> pushd/popd/dirs functionality</li>
+                                    <li><strong>Alias Management:</strong> Command alias storage and expansion</li>
+                                </ul>
+
+                                <h4>Key Features</h4>
+                                <ul>
+                                    <li>Thread-safe state management</li>
+                                    <li>Efficient variable lookups</li>
+                                    <li>Proper scoping rules</li>
+                                    <li>Environment synchronization</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Expansion Engines -->
+                <section id="expansion-engines">
+                    <h2>🔄 Expansion Engines</h2>
+
+                    <div class="engines-grid">
+                        <div class="engine-card">
+                            <div class="engine-header">
+                                <div class="engine-icon">🧮</div>
+                                <h3>Arithmetic Engine</h3>
+                                <p><code>src/arithmetic.rs</code></p>
+                            </div>
+                            <div class="engine-details">
+                                <h4>Features</h4>
+                                <ul>
+                                    <li><strong>Shunting-yard Algorithm:</strong> Proper operator precedence and associativity</li>
+                                    <li><strong>Token-based Parsing:</strong> Converts infix expressions to Reverse Polish Notation</li>
+                                    <li><strong>Variable Integration:</strong> Seamlessly accesses shell variables during evaluation</li>
+                                    <li><strong>Comprehensive Operators:</strong> Arithmetic, comparison, bitwise, and logical operations</li>
+                                    <li><strong>Error Handling:</strong> Robust error reporting for syntax errors and division by zero</li>
+                                </ul>
+
+                                <h4>Supported Operations</h4>
+                                <div class="operations">
+                                    <div class="operation-group">
+                                        <h5>Arithmetic</h5>
+                                        <code>+ - * / % **</code>
+                                    </div>
+                                    <div class="operation-group">
+                                        <h5>Comparison</h5>
+                                        <code>== != < <= > >=</code>
+                                    </div>
+                                    <div class="operation-group">
+                                        <h5>Bitwise</h5>
+                                        <code>& | ^ << >> ~</code>
+                                    </div>
+                                    <div class="operation-group">
+                                        <h5>Logical</h5>
+                                        <code>&& || !</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="engine-card">
+                            <div class="engine-header">
+                                <div class="engine-icon">📊</div>
+                                <h3>Parameter Expansion Engine</h3>
+                                <p><code>src/parameter_expansion.rs</code></p>
+                            </div>
+                            <div class="engine-details">
+                                <h4>Features</h4>
+                                <ul>
+                                    <li><strong>Modifier Parsing:</strong> Sophisticated parsing of POSIX sh parameter expansion modifiers</li>
+                                    <li><strong>String Operations:</strong> Default values, substring extraction, pattern removal, and substitution</li>
+                                    <li><strong>Error Handling:</strong> Robust error reporting for malformed expressions and edge cases</li>
+                                    <li><strong>Performance:</strong> Efficient string manipulation with minimal memory allocation</li>
+                                </ul>
+
+                                <h4>Supported Modifiers</h4>
+                                <div class="modifiers">
+                                    <div class="modifier-group">
+                                        <h5>Defaults</h5>
+                                        <code>${VAR:-default} ${VAR:=default} ${VAR:+replacement} ${VAR:?error}</code>
+                                    </div>
+                                    <div class="modifier-group">
+                                        <h5>Substrings</h5>
+                                        <code>${VAR:offset} ${VAR:offset:length}</code>
+                                    </div>
+                                    <div class="modifier-group">
+                                        <h5>Patterns</h5>
+                                        <code>${VAR#pattern} ${VAR##pattern} ${VAR%pattern} ${VAR%%pattern}</code>
+                                    </div>
+                                    <div class="modifier-group">
+                                        <h5>Substitution</h5>
+                                        <code>${VAR/pattern/replacement} ${VAR//pattern/replacement}</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="engine-card">
+                            <div class="engine-header">
+                                <div class="engine-icon">🔗</div>
+                                <h3>Brace Expansion Engine</h3>
+                                <p><code>src/brace_expansion.rs</code></p>
+                            </div>
+                            <div class="engine-details">
+                                <h4>Features</h4>
+                                <ul>
+                                    <li><strong>Pattern Detection:</strong> Identifies brace patterns during lexing with nested brace support</li>
+                                    <li><strong>Comma-Separated Lists:</strong> Expands {a,b,c} into multiple alternatives</li>
+                                    <li><strong>Range Expansion:</strong> Numeric ({1..10}) and alphabetic ({a..z}) range generation</li>
+                                    <li><strong>Prefix/Suffix Handling:</strong> Combines braces with surrounding text for complex patterns</li>
+                                    <li><strong>Error Handling:</strong> Graceful handling of malformed patterns with clear error messages</li>
+                                </ul>
+
+                                <h4>Expansion Types</h4>
+                                <div class="expansion-types">
+                                    <div class="expansion-example">
+                                        <h5>Lists</h5>
+                                        <code>{a,b,c} → a b c</code>
+                                    </div>
+                                    <div class="expansion-example">
+                                        <h5>Ranges</h5>
+                                        <code>{1..5} → 1 2 3 4 5</code>
+                                    </div>
+                                    <div class="expansion-example">
+                                        <h5>Nested</h5>
+                                        <code>{{a,b},{c,d}} → a b c d</code>
+                                    </div>
+                                    <div class="expansion-example">
+                                        <h5>Complex</h5>
+                                        <code>file{1,2}.txt → file1.txt file2.txt</code>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Module Dependencies -->
+                <section id="module-dependencies">
+                    <h2>🔗 Module Dependencies</h2>
+
+                    <div class="dependencies-container">
+                        <div class="dependency-flow">
+                            <h3>Primary Flow</h3>
+                            <div class="flow-diagram">
+                                <div class="flow-item">
+                                    <span class="flow-component">lexer</span>
+                                    <span class="flow-arrow">→</span>
+                                    <span class="flow-component">parser</span>
+                                    <span class="flow-arrow">→</span>
+                                    <span class="flow-component">executor</span>
+                                </div>
+                                <p class="flow-description">Main command processing pipeline</p>
+                            </div>
+                        </div>
+
+                        <div class="dependency-flow">
+                            <h3>State Management</h3>
+                            <div class="flow-diagram">
+                                <div class="flow-item">
+                                    <span class="flow-component">state</span>
+                                    <span class="flow-arrow">↔</span>
+                                    <span class="flow-component">All modules</span>
+                                </div>
+                                <p class="flow-description">Shared state management across all components</p>
+                            </div>
+                        </div>
+
+                        <div class="dependency-flow">
+                            <h3>Expansion Integration</h3>
+                            <div class="flow-diagram">
+                                <div class="flow-item">
+                                    <span class="flow-component">expansion engines</span>
+                                    <span class="flow-arrow">→</span>
+                                    <span class="flow-component">executor</span>
+                                </div>
+                                <p class="flow-description">Runtime expansion during command execution</p>
+                            </div>
+                        </div>
+
+                        <div class="dependency-flow">
+                            <h3>Built-in Commands</h3>
+                            <div class="flow-diagram">
+                                <div class="flow-item">
+                                    <span class="flow-component">builtins</span>
+                                    <span class="flow-arrow">→</span>
+                                    <span class="flow-component">executor</span>
+                                </div>
+                                <p class="flow-description">Optimized command implementation</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Design Principles -->
+                <section id="design-principles">
+                    <h2>🎯 Design Principles</h2>
+
+                    <div class="principles-grid">
+                        <div class="principle-card">
+                            <div class="principle-icon">🔒</div>
+                            <h3>Single Responsibility</h3>
+                            <p>Each module has a clearly defined purpose with minimal cross-cutting concerns</p>
+                            <ul>
+                                <li>Lexer: Only handles tokenization and lexical analysis</li>
+                                <li>Parser: Only handles AST construction and parsing</li>
+                                <li>Executor: Only handles command execution and evaluation</li>
+                                <li>State: Only manages shell state and variables</li>
+                            </ul>
+                        </div>
+
+                        <div class="principle-card">
+                            <div class="principle-icon">📝</div>
+                            <h3>Immutable by Default</h3>
+                            <p>Functions prefer immutable references to prevent accidental state mutation</p>
+                            <div class="code-block">
+                                <pre><code>// Functions prefer immutable references
+pub fn get_var(&self, name: &str) -> Option<String> {
+    // Implementation avoids mutation
+}</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="principle-card">
+                            <div class="principle-icon">⚠️</div>
+                            <h3>Explicit Error Propagation</h3>
+                            <p>Clear Result types for error handling throughout the codebase</p>
+                            <div class="code-block">
+                                <pre><code>// Clear Result types for error handling
+pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String></code></pre>
+                            </div>
+                        </div>
+
+                        <div class="principle-card">
+                            <div class="principle-icon">🧪</div>
+                            <h3>Comprehensive Testing</h3>
+                            <p>269+ test cases ensuring reliability and correctness across all components</p>
+                            <ul>
+                                <li>Unit tests for individual components</li>
+                                <li>Integration tests for end-to-end workflows</li>
+                                <li>Error handling and edge case coverage</li>
+                                <li>Performance regression testing</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Performance Considerations -->
+                <section id="performance">
+                    <h2>⚡ Performance Considerations</h2>
+
+                    <div class="performance-sections">
+                        <div class="performance-section">
+                            <h3>Memory Management</h3>
+                            <ul>
+                                <li><strong>String Reuse:</strong> Reuse String instances where possible to reduce allocations</li>
+                                <li><strong>Minimal Copying:</strong> Avoid unnecessary allocations in hot paths</li>
+                                <li><strong>Efficient Data Structures:</strong> Use appropriate data structures for each use case</li>
+                                <li><strong>Streaming Operations:</strong> Process large inputs in chunks when possible</li>
+                            </ul>
+                        </div>
+
+                        <div class="performance-section">
+                            <h3>Execution Optimization</h3>
+                            <ul>
+                                <li><strong>Built-in Optimization:</strong> Built-in commands execute without process spawning</li>
+                                <li><strong>In-Context Execution:</strong> Command substitution uses in-process execution for built-ins</li>
+                                <li><strong>Efficient Token Processing:</strong> Minimal copying during token processing pipeline</li>
+                                <li><strong>Lazy Evaluation:</strong> Expansions are only executed when actually encountered</li>
+                            </ul>
+                        </div>
+
+                        <div class="performance-section">
+                            <h3>Caching Strategy</h3>
+                            <ul>
+                                <li><strong>Alias Expansion:</strong> Results are not cached (by design for freshness)</li>
+                                <li><strong>Variable Lookups:</strong> O(1) access with HashMap implementation</li>
+                                <li><strong>Function Definitions:</strong> Stored efficiently in HashMap for fast lookup</li>
+                                <li><strong>Path Resolution:</strong> PATH searching optimized for external commands</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- External Dependencies -->
+                <section id="dependencies">
+                    <h2>📚 External Dependencies</h2>
+
+                    <div class="dependencies-list">
+                        <div class="dependency-item">
+                            <div class="dep-name">rustyline</div>
+                            <div class="dep-description">Interactive line editing and history with signal handling support</div>
+                        </div>
+
+                        <div class="dependency-item">
+                            <div class="dep-name">nix</div>
+                            <div class="dep-description">Unix system interactions and terminal detection</div>
+                        </div>
+
+                        <div class="dependency-item">
+                            <div class="dep-name">glob</div>
+                            <div class="dep-description">Pattern matching for case statements and wildcard expansion</div>
+                        </div>
+
+                        <div class="dependency-item">
+                            <div class="dep-name">clap</div>
+                            <div class="dep-description">Command-line argument parsing with derive macros</div>
+                        </div>
+
+                        <div class="dependency-item">
+                            <div class="dep-name">signal-hook</div>
+                            <div class="dep-description">Robust signal handling (SIGINT, SIGTERM)</div>
+                        </div>
+
+                        <div class="dependency-item">
+                            <div class="dep-name">libc</div>
+                            <div class="dep-description">Low-level C library bindings and process management</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Navigation Footer -->
+                <div class="section-nav">
+                    <div class="nav-links">
+                        <a href="usage.html" class="nav-button secondary">
+                            <span>← Usage Guide</span>
+                        </a>
+                        <a href="compliance.html" class="nav-button primary">
+                            <span>POSIX Compliance</span>
+                            <span class="nav-arrow">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

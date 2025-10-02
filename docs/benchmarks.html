@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Benchmarks - Rush Shell Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <div class="logo">🚀</div>
+                    <h2>Rush Shell</h2>
+                </div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="index.html" class="nav-link">
+                    <span class="nav-icon">🏠</span>
+                    <span>Overview</span>
+                </a>
+                <a href="features.html" class="nav-link">
+                    <span class="nav-icon">⚡</span>
+                    <span>Features</span>
+                </a>
+                <a href="installation.html" class="nav-link">
+                    <span class="nav-icon">📦</span>
+                    <span>Installation</span>
+                </a>
+                <a href="usage.html" class="nav-link">
+                    <span class="nav-icon">🎯</span>
+                    <span>Usage</span>
+                </a>
+                <a href="architecture.html" class="nav-link">
+                    <span class="nav-icon">🏗️</span>
+                    <span>Architecture</span>
+                </a>
+                <a href="compliance.html" class="nav-link">
+                    <span class="nav-icon">✅</span>
+                    <span>POSIX Compliance</span>
+                </a>
+                <a href="benchmarks.html" class="nav-link active">
+                    <span class="nav-icon">📊</span>
+                    <span>Benchmarks</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="version-info">
+                    <span class="version">v0.4.3</span>
+                    <span class="status">~87% POSIX Compliant</span>
+                </div>
+                <div class="external-links">
+                    <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
+                        <span class="nav-icon">🔗</span>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile menu button -->
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-content">
+                    <div class="breadcrumb">
+                        <a href="index.html">Rush Shell Documentation</a> → <span>Benchmarks</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="theme-toggle" id="themeToggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <span class="search-icon">🔍</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="benchmarks-hero">
+                    <h1>📊 Performance Benchmarks</h1>
+                    <p>Comprehensive performance analysis of Rush Shell components and operations</p>
+
+                    <!-- Quick Stats -->
+                    <div class="benchmark-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">⚡</div>
+                            <div class="stat-content">
+                                <div class="stat-value">20</div>
+                                <div class="stat-label">Benchmark Categories</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">⏱️</div>
+                            <div class="stat-content">
+                                <div class="stat-value">29.59s</div>
+                                <div class="stat-label">Total Execution Time</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📈</div>
+                            <div class="stat-content">
+                                <div class="stat-value">1479ms</div>
+                                <div class="stat-label">Average per Benchmark</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Benchmark Report -->
+                <section id="benchmark-report">
+                    <h2>📋 Latest Benchmark Report</h2>
+
+                    <div class="report-container">
+                        <div class="report-header">
+                            <div class="report-info">
+                                <h3>🚀 Rush Shell Performance Benchmark Report</h3>
+                                <p class="report-timestamp">Generated on: 2025-10-01 18:49:24 UTC</p>
+                            </div>
+                            <div class="report-actions">
+                                <a href="benchmark_report.html" target="_blank" class="report-button primary">
+                                    <span>🔗</span>
+                                    <span>View Full Report</span>
+                                </a>
+                                <button class="report-button secondary" onclick="window.location.reload()">
+                                    <span>🔄</span>
+                                    <span>Refresh Data</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Embedded Report Content -->
+                        <div class="report-embed">
+                            <iframe
+                                src="benchmark_report.html"
+                                class="benchmark-iframe"
+                                title="Rush Shell Benchmark Report"
+                                onload="this.style.height = (this.contentWindow.document.body.scrollHeight + 50) + 'px';">
+                            </iframe>
+                        </div>
+
+                        <!-- Fallback for iframe issues -->
+                        <div class="report-fallback" style="display: none;">
+                            <p>Unable to load the benchmark report. Please use the link above to view it directly.</p>
+                            <a href="benchmark_report.html" class="fallback-link">
+                                Open Benchmark Report →
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Performance Analysis -->
+                <section id="performance-analysis">
+                    <h2>📈 Performance Analysis</h2>
+
+                    <div class="analysis-grid">
+                        <div class="analysis-card">
+                            <h3>Performance Distribution</h3>
+                            <div class="performance-breakdown">
+                                <div class="perf-item fast">
+                                    <span class="perf-label">Fast (<10ms)</span>
+                                    <span class="perf-count">5 benchmarks</span>
+                                </div>
+                                <div class="perf-item medium">
+                                    <span class="perf-label">Medium (10-100ms)</span>
+                                    <span class="perf-count">2 benchmarks</span>
+                                </div>
+                                <div class="perf-item slow">
+                                    <span class="perf-label">Slow (≥100ms)</span>
+                                    <span class="perf-count">13 benchmarks</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="analysis-card">
+                            <h3>Fastest Components</h3>
+                            <div class="fastest-list">
+                                <div class="component-item">
+                                    <span class="component-name">Lexer (Basic Tokens)</span>
+                                    <span class="component-time">371,430 ops/sec</span>
+                                </div>
+                                <div class="component-item">
+                                    <span class="component-name">Parser (Basic Commands)</span>
+                                    <span class="component-time">93,604 ops/sec</span>
+                                </div>
+                                <div class="component-item">
+                                    <span class="component-name">Case Statements</span>
+                                    <span class="component-time">1,983 ops/sec</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="analysis-card">
+                            <h3>Optimization Opportunities</h3>
+                            <div class="slowest-list">
+                                <div class="component-item slow">
+                                    <span class="component-name">Command-line Execution</span>
+                                    <span class="component-time">5 ops/sec</span>
+                                </div>
+                                <div class="component-item slow">
+                                    <span class="component-name">Script Execution</span>
+                                    <span class="component-time">19 ops/sec</span>
+                                </div>
+                                <div class="component-item slow">
+                                    <span class="component-name">Complex Pipelines</span>
+                                    <span class="component-time">34 ops/sec</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Benchmark Categories -->
+                <section id="benchmark-categories">
+                    <h2>🧪 Benchmark Categories</h2>
+
+                    <div class="categories-grid">
+                        <div class="category-card">
+                            <div class="category-icon">📝</div>
+                            <h3>Lexer Benchmarks</h3>
+                            <p>Tokenization performance for various command types</p>
+                            <ul>
+                                <li>Basic tokenization (simple commands)</li>
+                                <li>Complex tokenization (quotes, variables, expansions)</li>
+                                <li>Large input tokenization</li>
+                            </ul>
+                        </div>
+
+                        <div class="category-card">
+                            <div class="category-icon">🔍</div>
+                            <h3>Parser Benchmarks</h3>
+                            <p>AST construction speed for complex structures</p>
+                            <ul>
+                                <li>Basic command parsing</li>
+                                <li>Complex structure parsing (if/for/while/case)</li>
+                                <li>Function definition parsing</li>
+                            </ul>
+                        </div>
+
+                        <div class="category-card">
+                            <div class="category-icon">⚡</div>
+                            <h3>Executor Benchmarks</h3>
+                            <p>Command execution performance</p>
+                            <ul>
+                                <li>Built-in command execution</li>
+                                <li>External command execution</li>
+                                <li>Variable operations</li>
+                            </ul>
+                        </div>
+
+                        <div class="category-card">
+                            <div class="category-icon">🔄</div>
+                            <h3>Expansion Benchmarks</h3>
+                            <p>Variable and arithmetic expansion speed</p>
+                            <ul>
+                                <li>Variable expansion performance</li>
+                                <li>Arithmetic expansion performance</li>
+                                <li>Command substitution performance</li>
+                            </ul>
+                        </div>
+
+                        <div class="category-card">
+                            <div class="category-icon">🏗️</div>
+                            <h3>Control Structure Benchmarks</h3>
+                            <p>If/for/while/case statement performance</p>
+                            <ul>
+                                <li>If statement execution</li>
+                                <li>Loop execution (for/while)</li>
+                                <li>Case statement execution</li>
+                            </ul>
+                        </div>
+
+                        <div class="category-card">
+                            <div class="category-icon">🔗</div>
+                            <h3>Pipeline Benchmarks</h3>
+                            <p>Pipe and redirection performance</p>
+                            <ul>
+                                <li>Simple pipeline execution</li>
+                                <li>Complex pipeline execution</li>
+                                <li>Pipeline with redirections</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Running Benchmarks -->
+                <section id="running-benchmarks">
+                    <h2>🎯 Running Benchmarks</h2>
+
+                    <div class="benchmark-instructions">
+                        <div class="instruction-card">
+                            <h3>Complete Benchmark Suite</h3>
+                            <div class="code-block">
+                                <pre><code># Run from repository root
+cargo run -p rush-benchmarks</code></pre>
+                            </div>
+                            <p>Executes 20+ benchmark scenarios covering all major components</p>
+                        </div>
+
+                        <div class="instruction-card">
+                            <h3>View HTML Report</h3>
+                            <div class="code-block">
+                                <pre><code># Serve locally
+python3 -m http.server 8000 -d target/
+
+# Visit http://localhost:8000/benchmark_report.html</code></pre>
+                            </div>
+                            <p>Visual report with detailed metrics and performance analysis</p>
+                        </div>
+
+                        <div class="instruction-card">
+                            <h3>JSON Results</h3>
+                            <div class="code-block">
+                                <pre><code># Machine-readable results
+cat target/benchmark_results.json</code></pre>
+                            </div>
+                            <p>Structured data for CI/CD integration and trend analysis</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Performance Monitoring -->
+                <section id="monitoring">
+                    <h2>📊 Performance Monitoring</h2>
+
+                    <div class="monitoring-features">
+                        <div class="monitor-card">
+                            <div class="monitor-icon">🔍</div>
+                            <h3>Regression Detection</h3>
+                            <p>Track performance changes over time and identify regressions during development</p>
+                        </div>
+
+                        <div class="monitor-card">
+                            <div class="monitor-icon">⚡</div>
+                            <h3>Optimization Validation</h3>
+                            <p>Verify performance improvements and ensure no regressions in execution speed</p>
+                        </div>
+
+                        <div class="monitor-card">
+                            <div class="monitor-icon">🔄</div>
+                            <h3>CI/CD Integration</h3>
+                            <p>Automated performance testing in build pipelines for continuous monitoring</p>
+                        </div>
+
+                        <div class="monitor-card">
+                            <div class="monitor-icon">📈</div>
+                            <h3>Historical Tracking</h3>
+                            <p>JSON export enables trend analysis and long-term performance monitoring</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Recommendations -->
+                <section id="recommendations">
+                    <h2>💡 Recommendations</h2>
+
+                    <div class="recommendations">
+                        <div class="recommendation-card warning">
+                            <div class="rec-icon">⚠️</div>
+                            <div class="rec-content">
+                                <h3>Performance Optimization</h3>
+                                <p>Some benchmarks are running slowly. Consider optimizing the slowest components identified in the benchmark report.</p>
+                            </div>
+                        </div>
+
+                        <div class="recommendation-card info">
+                            <div class="rec-icon">💡</div>
+                            <div class="rec-content">
+                                <h3>Regular Monitoring</h3>
+                                <p>Run benchmarks regularly to track performance trends over time and catch regressions early.</p>
+                            </div>
+                        </div>
+
+                        <div class="recommendation-card info">
+                            <div class="rec-icon">🔍</div>
+                            <div class="rec-content">
+                                <h3>Focus Areas</h3>
+                                <p>Focus optimization efforts on the slowest benchmarks identified in the detailed results above.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Navigation Footer -->
+                <div class="section-nav">
+                    <div class="nav-links">
+                        <a href="compliance.html" class="nav-button secondary">
+                            <span>← POSIX Compliance</span>
+                        </a>
+                        <a href="index.html" class="nav-button primary">
+                            <span>Back to Overview</span>
+                            <span class="nav-arrow">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

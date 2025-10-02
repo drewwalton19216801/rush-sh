@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usage Guide - Rush Shell Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <div class="logo">🚀</div>
+                    <h2>Rush Shell</h2>
+                </div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="index.html" class="nav-link">
+                    <span class="nav-icon">🏠</span>
+                    <span>Overview</span>
+                </a>
+                <a href="features.html" class="nav-link">
+                    <span class="nav-icon">⚡</span>
+                    <span>Features</span>
+                </a>
+                <a href="installation.html" class="nav-link">
+                    <span class="nav-icon">📦</span>
+                    <span>Installation</span>
+                </a>
+                <a href="usage.html" class="nav-link active">
+                    <span class="nav-icon">🎯</span>
+                    <span>Usage</span>
+                </a>
+                <a href="architecture.html" class="nav-link">
+                    <span class="nav-icon">🏗️</span>
+                    <span>Architecture</span>
+                </a>
+                <a href="compliance.html" class="nav-link">
+                    <span class="nav-icon">✅</span>
+                    <span>POSIX Compliance</span>
+                </a>
+                <a href="benchmarks.html" class="nav-link">
+                    <span class="nav-icon">📊</span>
+                    <span>Benchmarks</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="version-info">
+                    <span class="version">v0.4.3</span>
+                    <span class="status">~87% POSIX Compliant</span>
+                </div>
+                <div class="external-links">
+                    <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
+                        <span class="nav-icon">🔗</span>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile menu button -->
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-content">
+                    <div class="breadcrumb">
+                        <a href="index.html">Rush Shell Documentation</a> → <span>Usage</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="theme-toggle" id="themeToggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <span class="search-icon">🔍</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="usage-hero">
+                    <h1>🎯 Usage Guide</h1>
+                    <p>Complete guide to using Rush Shell in interactive mode, scripts, and command execution</p>
+                </div>
+
+                <!-- Execution Modes -->
+                <section id="execution-modes">
+                    <h2>🚀 Execution Modes</h2>
+
+                    <div class="modes-grid">
+                        <div class="mode-card">
+                            <div class="mode-header">
+                                <div class="mode-icon">💻</div>
+                                <h3>Interactive Mode</h3>
+                                <span class="mode-badge">Default</span>
+                            </div>
+                            <p>Start Rush in interactive mode for command-line usage with modern prompt</p>
+                            <div class="code-block">
+                                <pre><code>./target/release/rush-sh</code></pre>
+                            </div>
+                            <div class="mode-features">
+                                <ul>
+                                    <li>Modern condensed prompt display</li>
+                                    <li>Tab completion for commands and files</li>
+                                    <li>Command history and line editing</li>
+                                    <li>Automatic ~/.rushrc sourcing</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mode-card">
+                            <div class="mode-header">
+                                <div class="mode-icon">📜</div>
+                                <h3>Script Mode</h3>
+                                <span class="mode-badge">File Execution</span>
+                            </div>
+                            <p>Execute commands from a script file</p>
+                            <div class="code-block">
+                                <pre><code>./target/release/rush-sh script.sh</code></pre>
+                            </div>
+                            <div class="mode-features">
+                                <ul>
+                                    <li>Execute multiple commands from file</li>
+                                    <li>Full variable and function support</li>
+                                    <li>Access to all Rush features</li>
+                                    <li>Proper exit code handling</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="mode-card">
+                            <div class="mode-header">
+                                <div class="mode-icon">⚡</div>
+                                <h3>Command Mode</h3>
+                                <span class="mode-badge">Single Command</span>
+                            </div>
+                            <p>Execute a single command string and exit</p>
+                            <div class="code-block">
+                                <pre><code>./target/release/rush-sh -c "echo Hello World"</code></pre>
+                            </div>
+                            <div class="mode-features">
+                                <ul>
+                                    <li>Quick command execution</li>
+                                    <li>Access to all shell features</li>
+                                    <li>Immediate exit after completion</li>
+                                    <li>Perfect for scripting and automation</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Interactive Usage -->
+                <section id="interactive-usage">
+                    <h2>💻 Interactive Usage</h2>
+
+                    <div class="interactive-sections">
+                        <div class="interactive-section">
+                            <h3>Basic Commands</h3>
+                            <div class="command-examples">
+                                <div class="example-item">
+                                    <div class="command">
+                                        <span class="prompt">/h/d/p/r/rush-sh $</span>
+                                        <span class="cmd">echo "Hello, Rush!"</span>
+                                    </div>
+                                    <div class="output">Hello, Rush!</div>
+                                </div>
+
+                                <div class="example-item">
+                                    <div class="command">
+                                        <span class="prompt">/h/d/p/r/rush-sh $</span>
+                                        <span class="cmd">pwd</span>
+                                    </div>
+                                    <div class="output">/home/drew/projects/rush-sh</div>
+                                </div>
+
+                                <div class="example-item">
+                                    <div class="command">
+                                        <span class="prompt">/h/d/p/r/rush-sh $</span>
+                                        <span class="cmd">ls -la</span>
+                                    </div>
+                                    <div class="output">drwxr-xr-x 12 drew drew 4096 Oct  2 01:00 .</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="interactive-section">
+                            <h3>Directory Navigation</h3>
+                            <div class="code-block">
+                                <pre><code># Change directory
+cd /tmp
+
+# Print working directory
+pwd
+
+# Directory stack management
+pushd /var
+pushd /usr
+dirs
+popd</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="interactive-section">
+                            <h3>Tab Completion</h3>
+                            <p>Use Tab for intelligent completion:</p>
+                            <div class="completion-examples">
+                                <div class="completion-item">
+                                    <span class="completion-input">cd<TAB></span>
+                                    <span class="completion-output">cd (shows: cd, env, exit, ...)</span>
+                                </div>
+                                <div class="completion-item">
+                                    <span class="completion-input">cat f<TAB></span>
+                                    <span class="completion-output">cat file.txt</span>
+                                </div>
+                                <div class="completion-item">
+                                    <span class="completion-input">ls src/m<TAB></span>
+                                    <span class="completion-output">ls src/main/</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Script Usage -->
+                <section id="script-usage">
+                    <h2>📜 Script Usage</h2>
+
+                    <div class="script-sections">
+                        <div class="script-section">
+                            <h3>Basic Script</h3>
+                            <div class="script-example">
+                                <div class="script-header">hello.sh</div>
+                                <div class="code-block">
+                                    <pre><code>#!/usr/bin/env rush-sh
+echo "Hello, World!"
+echo "Current directory: $(pwd)"
+echo "User: $USER"</code></pre>
+                                </div>
+                            </div>
+                            <div class="script-execution">
+                                <div class="code-block">
+                                    <pre><code>chmod +x hello.sh
+./target/release/rush-sh hello.sh</code></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="script-section">
+                            <h3>Script with Source Command</h3>
+                            <p>Use <code>source</code> or <code>.</code> to bypass shebang and execute with Rush:</p>
+                            <div class="code-block">
+                                <pre><code># For scripts with #!/usr/bin/env bash
+source script.sh
+. script.sh</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="script-section">
+                            <h3>Complex Script Example</h3>
+                            <div class="script-example">
+                                <div class="script-header">backup.sh</div>
+                                <div class="code-block">
+                                    <pre><code>#!/usr/bin/env rush-sh
+
+# Configuration
+BACKUP_DIR="/tmp/backup"
+SOURCE_DIR="$HOME/Documents"
+
+# Create backup directory
+mkdir -p "$BACKUP_DIR"
+
+# Generate timestamp
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Create backup with timestamp
+BACKUP_NAME="backup_$TIMESTAMP.tar.gz"
+
+# Create compressed backup
+tar -czf "$BACKUP_DIR/$BACKUP_NAME" "$SOURCE_DIR"
+
+# Report success
+echo "Backup created: $BACKUP_NAME"
+echo "Location: $BACKUP_DIR"
+echo "Size: $(du -h "$BACKUP_DIR/$BACKUP_NAME" | cut -f1)"</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Command Examples -->
+                <section id="command-examples">
+                    <h2>💡 Command Examples</h2>
+
+                    <div class="examples-grid">
+                        <div class="example-category">
+                            <h3>File Operations</h3>
+                            <div class="code-block">
+                                <pre><code># List files with details
+ls -la
+
+# Find files by pattern
+find . -name "*.rs" -type f
+
+# Count lines in files
+wc -l src/*.rs
+
+# Search in files
+grep -r "fn main" src/</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="example-category">
+                            <h3>Text Processing</h3>
+                            <div class="code-block">
+                                <pre><code># Sort and unique
+cat file.txt | sort | uniq
+
+# Count words
+wc -w document.txt
+
+# Extract columns
+cut -d',' -f1 data.csv
+
+# Replace text
+sed 's/old/new/g' file.txt</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="example-category">
+                            <h3>Process Management</h3>
+                            <div class="code-block">
+                                <pre><code># List processes
+ps aux
+
+# Monitor resource usage
+top
+
+# Kill process
+kill -TERM 1234
+
+# Background process
+long_command &</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="example-category">
+                            <h3>Network Operations</h3>
+                            <div class="code-block">
+                                <pre><code># Download file
+curl -O https://example.com/file.zip
+
+# Check connectivity
+ping -c 3 google.com
+
+# DNS lookup
+nslookup github.com
+
+# HTTP headers
+curl -I https://api.github.com</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="example-category">
+                            <h3>Archive Management</h3>
+                            <div class="code-block">
+                                <pre><code># Create tar archive
+tar -czf archive.tar.gz directory/
+
+# Extract tar archive
+tar -xzf archive.tar.gz
+
+# Create zip archive
+zip -r archive.zip directory/
+
+# List archive contents
+tar -tzf archive.tar.gz</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="example-category">
+                            <h3>System Information</h3>
+                            <div class="code-block">
+                                <pre><code># System information
+uname -a
+
+# Memory usage
+free -h
+
+# Disk usage
+df -h
+
+# CPU information
+lscpu</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Advanced Usage -->
+                <section id="advanced-usage">
+                    <h2>🔥 Advanced Usage</h2>
+
+                    <div class="advanced-sections">
+                        <div class="advanced-section">
+                            <h3>Complex Pipelines</h3>
+                            <div class="code-block">
+                                <pre><code># Multi-stage processing
+find . -name "*.log" -exec wc -l {} \; | \
+    awk '{sum += $1} END {print "Total lines:", sum}'
+
+# Process substitution
+diff <(ls dir1) <(ls dir2)
+
+# Named pipes
+mkfifo mypipe
+producer > mypipe &
+consumer < mypipe</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <h3>Job Control</h3>
+                            <div class="code-block">
+                                <pre><code># Run in background
+long_command &
+
+# List jobs
+jobs
+
+# Bring to foreground
+fg %1
+
+# Send to background
+bg %1
+
+# Kill job
+kill %1</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <h3>Signal Handling</h3>
+                            <div class="code-block">
+                                <pre><code># Trap signals
+trap 'echo "Interrupted!"; exit' INT
+
+# Custom signal handling
+cleanup() {
+    echo "Cleaning up..."
+    rm -f temp_*
+}
+trap cleanup EXIT</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tips and Tricks -->
+                <section id="tips-tricks">
+                    <h2>🎯 Tips and Tricks</h2>
+
+                    <div class="tips-grid">
+                        <div class="tip-card">
+                            <div class="tip-icon">⚡</div>
+                            <h3>Keyboard Shortcuts</h3>
+                            <ul>
+                                <li><kbd>Ctrl+C</kbd> - Interrupt current command</li>
+                                <li><kbd>Ctrl+D</kbd> - Exit shell (EOF)</li>
+                                <li><kbd>Tab</kbd> - Command/file completion</li>
+                                <li><kbd>↑/↓</kbd> - Navigate command history</li>
+                            </ul>
+                        </div>
+
+                        <div class="tip-card">
+                            <div class="tip-icon">🔍</div>
+                            <h3>History Search</h3>
+                            <ul>
+                                <li><kbd>Ctrl+R</kbd> - Reverse search history</li>
+                                <li><code>history</code> - Show command history</li>
+                                <li><code>!n</code> - Execute command by number</li>
+                                <li><code>!!</code> - Execute last command</li>
+                            </ul>
+                        </div>
+
+                        <div class="tip-card">
+                            <div class="tip-icon">⚙️</div>
+                            <h3>Shell Options</h3>
+                            <ul>
+                                <li><code>set -e</code> - Exit on error</li>
+                                <li><code>set -u</code> - Error on undefined variables</li>
+                                <li><code>set -x</code> - Debug mode (trace commands)</li>
+                                <li><code>set +x</code> - Disable debug mode</li>
+                            </ul>
+                        </div>
+
+                        <div class="tip-card">
+                            <div class="tip-icon">🛡️</div>
+                            <h3>Best Practices</h3>
+                            <ul>
+                                <li>Always quote variables: <code>"$variable"</code></li>
+                                <li>Use <code>set -euo pipefail</code> for strict error handling</li>
+                                <li>Prefer <code>$(command)</code> over backticks</li>
+                                <li>Use descriptive variable names</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Navigation Footer -->
+                <div class="section-nav">
+                    <div class="nav-links">
+                        <a href="installation.html" class="nav-button secondary">
+                            <span>← Installation</span>
+                        </a>
+                        <a href="architecture.html" class="nav-button primary">
+                            <span>Architecture Guide</span>
+                            <span class="nav-arrow">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

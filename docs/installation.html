@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installation - Rush Shell Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-container">
+                    <div class="logo">🚀</div>
+                    <h2>Rush Shell</h2>
+                </div>
+            </div>
+
+            <div class="sidebar-nav">
+                <a href="index.html" class="nav-link">
+                    <span class="nav-icon">🏠</span>
+                    <span>Overview</span>
+                </a>
+                <a href="features.html" class="nav-link">
+                    <span class="nav-icon">⚡</span>
+                    <span>Features</span>
+                </a>
+                <a href="installation.html" class="nav-link active">
+                    <span class="nav-icon">📦</span>
+                    <span>Installation</span>
+                </a>
+                <a href="usage.html" class="nav-link">
+                    <span class="nav-icon">🎯</span>
+                    <span>Usage</span>
+                </a>
+                <a href="architecture.html" class="nav-link">
+                    <span class="nav-icon">🏗️</span>
+                    <span>Architecture</span>
+                </a>
+                <a href="compliance.html" class="nav-link">
+                    <span class="nav-icon">✅</span>
+                    <span>POSIX Compliance</span>
+                </a>
+                <a href="benchmarks.html" class="nav-link">
+                    <span class="nav-icon">📊</span>
+                    <span>Benchmarks</span>
+                </a>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="version-info">
+                    <span class="version">v0.4.3</span>
+                    <span class="status">~87% POSIX Compliant</span>
+                </div>
+                <div class="external-links">
+                    <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
+                        <span class="nav-icon">🔗</span>
+                        <span>GitHub</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Mobile menu button -->
+            <button class="mobile-menu-btn" id="mobileMenuBtn">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <!-- Header -->
+            <header class="page-header">
+                <div class="header-content">
+                    <div class="breadcrumb">
+                        <a href="index.html">Rush Shell Documentation</a> → <span>Installation</span>
+                    </div>
+                    <div class="header-actions">
+                        <button class="theme-toggle" id="themeToggle">
+                            <span class="theme-icon">🌙</span>
+                        </button>
+                        <div class="search-container">
+                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <span class="search-icon">🔍</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="install-hero">
+                    <h1>📦 Installation Guide</h1>
+                    <p>Get Rush Shell up and running on your system in minutes</p>
+                </div>
+
+                <!-- Prerequisites -->
+                <section id="prerequisites">
+                    <h2>🛠️ Prerequisites</h2>
+                    <div class="prerequisites">
+                        <div class="prereq-card">
+                            <div class="prereq-icon">🦀</div>
+                            <h3>Rust</h3>
+                            <p>Rush requires Rust edition 2024 or later. Install Rust using <a href="https://rustup.rs/" target="_blank">rustup</a>.</p>
+                            <div class="code-block">
+                                <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="prereq-card">
+                            <div class="prereq-icon">📦</div>
+                            <h3>Cargo</h3>
+                            <p>Cargo is included with Rust and is used to build Rush Shell.</p>
+                            <div class="code-block">
+                                <pre><code>cargo --version</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="prereq-card">
+                            <div class="prereq-icon">🔒</div>
+                            <h3>System Dependencies</h3>
+                            <p>Rush requires standard C library and system headers for Unix interactions.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Installation Methods -->
+                <section id="installation-methods">
+                    <h2>📥 Installation Methods</h2>
+
+                    <div class="install-methods">
+                        <div class="method-card recommended">
+                            <div class="method-header">
+                                <div class="method-icon">🏗️</div>
+                                <h3>Build from Source (Recommended)</h3>
+                                <span class="method-badge">Latest Features</span>
+                            </div>
+
+                            <div class="method-steps">
+                                <div class="step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-content">
+                                        <h4>Clone the Repository</h4>
+                                        <div class="code-block">
+                                            <pre><code>git clone https://github.com/drewwalton19216801/rush-sh.git
+cd rush-sh</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="step">
+                                    <div class="step-number">2</div>
+                                    <div class="step-content">
+                                        <h4>Build in Release Mode</h4>
+                                        <div class="code-block">
+                                            <pre><code>cargo build --release</code></pre>
+                                        </div>
+                                        <p>The binary will be available at <code>target/release/rush-sh</code></p>
+                                    </div>
+                                </div>
+
+                                <div class="step">
+                                    <div class="step-number">3</div>
+                                    <div class="step-content">
+                                        <h4>Optional: Install Globally</h4>
+                                        <div class="code-block">
+                                            <pre><code>cargo install --path .</code></pre>
+                                        </div>
+                                        <p>This installs Rush to <code>~/.cargo/bin/rush-sh</code></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="method-card">
+                            <div class="method-header">
+                                <div class="method-icon">📦</div>
+                                <h3>Cargo Install</h3>
+                                <span class="method-badge">Easy Install</span>
+                            </div>
+
+                            <div class="method-steps">
+                                <div class="step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-content">
+                                        <h4>Install from Crates.io</h4>
+                                        <div class="code-block">
+                                            <pre><code>cargo install rush-sh</code></pre>
+                                        </div>
+                                        <p>Installs the latest published version from <a href="https://crates.io/crates/rush-sh" target="_blank">crates.io</a></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="method-card">
+                            <div class="method-header">
+                                <div class="method-icon">🐳</div>
+                                <h3>Docker</h3>
+                                <span class="method-badge">Containerized</span>
+                            </div>
+
+                            <div class="method-steps">
+                                <div class="step">
+                                    <div class="step-number">1</div>
+                                    <div class="step-content">
+                                        <h4>Clone and Build in Docker</h4>
+                                        <div class="code-block">
+                                            <pre><code>git clone https://github.com/drewwalton19216801/rush-sh.git
+cd rush-sh
+docker run -it -v $(pwd):/app -w /app rust:latest cargo build --release</code></pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Verification -->
+                <section id="verification">
+                    <h2>✅ Verification</h2>
+
+                    <div class="verification-steps">
+                        <div class="step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h4>Check Installation</h4>
+                                <div class="code-block">
+                                    <pre><code>./target/release/rush-sh --version</code></pre>
+                                </div>
+                                <p>You should see version information displayed.</p>
+                            </div>
+                        </div>
+
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h4>Test Interactive Mode</h4>
+                                <div class="code-block">
+                                    <pre><code>./target/release/rush-sh</code></pre>
+                                </div>
+                                <p>You should see a prompt like: <code>/h/d/p/r/rush-sh $</code></p>
+                            </div>
+                        </div>
+
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h4>Run Basic Commands</h4>
+                                <div class="code-block">
+                                    <pre><code>echo "Hello, Rush!"
+pwd
+ls -la</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Configuration -->
+                <section id="configuration">
+                    <h2>⚙️ Configuration</h2>
+
+                    <div class="config-section">
+                        <h3>~/.rushrc Configuration File</h3>
+                        <p>Rush automatically sources <code>~/.rushrc</code> on startup for customization.</p>
+
+                        <div class="config-example">
+                            <h4>Example ~/.rushrc</h4>
+                            <div class="code-block">
+                                <pre><code># Set environment variables
+export EDITOR=vim
+export PATH="$HOME/bin:$PATH"
+
+# Create useful aliases
+alias ll='ls -la'
+alias ..='cd ..'
+alias grep='grep --color=auto'
+
+# Set custom variables
+MY_PROJECTS="$HOME/projects"
+WORKSPACE="$HOME/workspace"
+
+# Display welcome message
+echo "Welcome to Rush shell!"
+echo "Type 'help' for available commands."</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="config-features">
+                            <h4>Configuration Features</h4>
+                            <div class="features-grid">
+                                <div class="feature-card">
+                                    <div class="feature-icon">🌍</div>
+                                    <h4>Environment Variables</h4>
+                                    <p>Set default variables and export them to child processes</p>
+                                </div>
+
+                                <div class="feature-card">
+                                    <div class="feature-icon">🏷️</div>
+                                    <h4>Aliases</h4>
+                                    <p>Define command shortcuts that persist across sessions</p>
+                                </div>
+
+                                <div class="feature-card">
+                                    <div class="feature-icon">🛣️</div>
+                                    <h4>PATH Configuration</h4>
+                                    <p>Customize PATH and other shell environment settings</p>
+                                </div>
+
+                                <div class="feature-card">
+                                    <div class="feature-icon">🚀</div>
+                                    <h4>Initialization</h4>
+                                    <p>Run setup commands and display custom welcome messages</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Development Setup -->
+                <section id="development">
+                    <h2>🔧 Development Setup</h2>
+
+                    <div class="dev-setup">
+                        <div class="dev-card">
+                            <h3>Development Build</h3>
+                            <div class="code-block">
+                                <pre><code># Debug build (faster compilation)
+cargo build
+
+# Development run
+cargo run
+
+# Run with custom command
+cargo run -- -c "echo hello"</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="dev-card">
+                            <h3>Testing</h3>
+                            <div class="code-block">
+                                <pre><code># Run all tests
+cargo test
+
+# Run specific test modules
+cargo test lexer
+cargo test parser
+cargo test executor
+
+# Run with output capture
+cargo test -- --nocapture</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="dev-card">
+                            <h3>Benchmarking</h3>
+                            <div class="code-block">
+                                <pre><code># Run benchmarks
+cargo run -p rush-benchmarks
+
+# View HTML report
+python3 -m http.server 8000 -d target/
+# Visit http://localhost:8000/benchmark_report.html</code></pre>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Troubleshooting -->
+                <section id="troubleshooting">
+                    <h2>🔍 Troubleshooting</h2>
+
+                    <div class="troubleshooting">
+                        <div class="trouble-item">
+                            <h4>Build Errors</h4>
+                            <div class="trouble-solution">
+                                <p><strong>Problem:</strong> Compilation fails with missing dependencies</p>
+                                <p><strong>Solution:</strong> Update Rust and ensure all system dependencies are installed</p>
+                                <div class="code-block">
+                                    <pre><code>rustup update stable
+sudo apt-get install build-essential  # Ubuntu/Debian
+sudo yum groupinstall "Development Tools"  # RHEL/CentOS</code></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="trouble-item">
+                            <h4>Permission Denied</h4>
+                            <div class="trouble-solution">
+                                <p><strong>Problem:</strong> Cannot execute the binary</p>
+                                <p><strong>Solution:</strong> Make sure the binary has execute permissions</p>
+                                <div class="code-block">
+                                    <pre><code>chmod +x target/release/rush-sh</code></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="trouble-item">
+                            <h4>Colors Not Working</h4>
+                            <div class="trouble-solution">
+                                <p><strong>Problem:</strong> Colors don't display in terminal</p>
+                                <p><strong>Solution:</strong> Check terminal capabilities and Rush color settings</p>
+                                <div class="code-block">
+                                    <pre><code># Force enable colors
+export RUSH_COLORS=on
+
+# Disable colors for accessibility
+export NO_COLOR=1</code></pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="trouble-item">
+                            <h4>Tab Completion Issues</h4>
+                            <div class="trouble-solution">
+                                <p><strong>Problem:</strong> Tab completion not working</p>
+                                <p><strong>Solution:</strong> Ensure you're using an interactive terminal that supports readline</p>
+                                <div class="code-block">
+                                    <pre><code># Tab completion works in interactive mode
+./target/release/rush-sh
+
+# Not available in script mode
+./target/release/rush-sh script.sh</code></pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Navigation Footer -->
+                <div class="section-nav">
+                    <div class="nav-links">
+                        <a href="features.html" class="nav-button secondary">
+                            <span>← Features</span>
+                        </a>
+                        <a href="usage.html" class="nav-button primary">
+                            <span>Usage Guide</span>
+                            <span class="nav-arrow">→</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
