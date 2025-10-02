@@ -11,7 +11,6 @@
 //! - Script execution modes
 
 use std::fs;
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 mod benchmark;
@@ -546,37 +545,29 @@ fn register_script_benchmarks(suite: &mut BenchmarkSuite) {
     // Script execution mode benchmarks
     suite.add_benchmark(Benchmark::new(
         "script_execution",
-        "Script file execution",
+        "Script file execution (multi-line script)",
         Box::new(|iterations| {
-            // Create a temporary script file
-            let script_content = r#"#!/usr/bin/env rush-sh
-echo "Script execution test"
-for i in 1 2 3; do
-    echo "Iteration $i"
-done
-MY_VAR="test_value"
-echo "Variable: $MY_VAR"
-echo "Arithmetic: $((2 + 3))"
-echo "Command substitution: $(date)"
-if true; then
-    echo "If statement works"
-fi
-"#;
+            // Multi-line script content to execute
+            let script_lines = vec![
+                "echo \"Script execution test\"",
+                "for i in 1 2 3; do echo \"Iteration $i\"; done",
+                "MY_VAR=\"test_value\"",
+                "echo \"Variable: $MY_VAR\"",
+                "echo \"Arithmetic: $((2 + 3))\"",
+                "if true; then echo \"If statement works\"; fi",
+            ];
 
             let start = Instant::now();
             for _ in 0..iterations {
-                // Create temporary script file
-                let temp_file = format!("/tmp/rush_benchmark_{}.sh", std::process::id());
-                if let Ok(_) = fs::write(&temp_file, script_content) {
-                    // Execute the script using rush-sh binary
-                    let _ = Command::new("cargo")
-                        .args(&["run", "--", &temp_file])
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .output();
-
-                    // Clean up
-                    let _ = fs::remove_file(&temp_file);
+                let mut shell_state = rush_sh::state::ShellState::new();
+                
+                // Execute each line of the script
+                for line in &script_lines {
+                    if let Ok(tokens) = rush_sh::lexer::lex(line, &shell_state) {
+                        if let Ok(ast) = rush_sh::parser::parse(tokens) {
+                            let _ = rush_sh::executor::execute(ast, &mut shell_state);
+                        }
+                    }
                 }
             }
             start.elapsed()
@@ -586,7 +577,7 @@ fi
     // Command-line execution mode
     suite.add_benchmark(Benchmark::new(
         "command_line_execution",
-        "Command-line execution mode",
+        "Command-line execution mode (single commands)",
         Box::new(|iterations| {
             let commands = vec![
                 "echo 'Command line test'",
@@ -598,11 +589,12 @@ fi
             let start = Instant::now();
             for _ in 0..iterations {
                 for cmd in &commands {
-                    let _ = Command::new("cargo")
-                        .args(&["run", "--", "-c", cmd])
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .output();
+                    let mut shell_state = rush_sh::state::ShellState::new();
+                    if let Ok(tokens) = rush_sh::lexer::lex(cmd, &shell_state) {
+                        if let Ok(ast) = rush_sh::parser::parse(tokens) {
+                            let _ = rush_sh::executor::execute(ast, &mut shell_state);
+                        }
+                    }
                 }
             }
             start.elapsed()
