@@ -173,30 +173,15 @@
                     <div class="interactive-sections">
                         <div class="interactive-section">
                             <h3>Basic Commands</h3>
-                            <div class="command-examples">
-                                <div class="example-item">
-                                    <div class="command">
-                                        <span class="prompt">/h/d/p/r/rush-sh $</span>
-                                        <span class="cmd">echo "Hello, Rush!"</span>
-                                    </div>
-                                    <div class="output">Hello, Rush!</div>
-                                </div>
+                            <div class="code-block">
+                                <pre><code>/h/d/p/r/rush-sh $ echo "Hello, Rush!"
+Hello, Rush!
 
-                                <div class="example-item">
-                                    <div class="command">
-                                        <span class="prompt">/h/d/p/r/rush-sh $</span>
-                                        <span class="cmd">pwd</span>
-                                    </div>
-                                    <div class="output">/home/drew/projects/rush-sh</div>
-                                </div>
+/h/d/p/r/rush-sh $ pwd
+/home/drew/projects/rush-sh
 
-                                <div class="example-item">
-                                    <div class="command">
-                                        <span class="prompt">/h/d/p/r/rush-sh $</span>
-                                        <span class="cmd">ls -la</span>
-                                    </div>
-                                    <div class="output">drwxr-xr-x 12 drew drew 4096 Oct  2 01:00 .</div>
-                                </div>
+/h/d/p/r/rush-sh $ ls -la
+drwxr-xr-x 12 drew drew 4096 Oct  2 01:00 .</code></pre>
                             </div>
                         </div>
 
@@ -220,19 +205,18 @@ popd</code></pre>
                         <div class="interactive-section">
                             <h3>Tab Completion</h3>
                             <p>Use Tab for intelligent completion:</p>
-                            <div class="completion-examples">
-                                <div class="completion-item">
-                                    <span class="completion-input">cd<TAB></span>
-                                    <span class="completion-output">cd (shows: cd, env, exit, ...)</span>
-                                </div>
-                                <div class="completion-item">
-                                    <span class="completion-input">cat f<TAB></span>
-                                    <span class="completion-output">cat file.txt</span>
-                                </div>
-                                <div class="completion-item">
-                                    <span class="completion-input">ls src/m<TAB></span>
-                                    <span class="completion-output">ls src/main/</span>
-                                </div>
+                            <div class="code-block">
+                                <pre><code># Command completion
+cd<TAB>
+# Shows: cd, env, exit, ...
+
+# File completion
+cat f<TAB>
+# Completes to: cat file.txt
+
+# Path completion
+ls src/m<TAB>
+# Completes to: ls src/main/</code></pre>
                             </div>
                         </div>
                     </div>
