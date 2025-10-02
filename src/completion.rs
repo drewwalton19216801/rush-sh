@@ -24,6 +24,12 @@ lazy_static::lazy_static! {
 
 pub struct RushCompleter {}
 
+impl Default for RushCompleter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RushCompleter {
     pub fn new() -> Self {
         Self {}
