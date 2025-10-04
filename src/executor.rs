@@ -480,9 +480,14 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
 }
 
 /// Execute a trap handler command
+/// Note: Signal masking during trap execution will be added in a future update
 pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32 {
     // Save current exit code to preserve it across trap execution
     let saved_exit_code = shell_state.last_exit_code;
+    
+    // TODO: Add signal masking to prevent recursive trap calls
+    // This requires careful handling of the nix sigprocmask API
+    // For now, traps execute without signal masking
     
     // Parse and execute the trap command
     let result = match crate::lexer::lex(trap_cmd, shell_state) {
@@ -556,6 +561,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
                     return exit_code;
+                }
+                
+                // Check if exit was requested (e.g., from trap handler)
+                if shell_state.exit_requested {
+                    return shell_state.exit_code;
                 }
             }
             exit_code
@@ -641,6 +651,14 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             
             // Execute the loop body for each item
             for item in items {
+                // Process any pending signals before executing the body
+                crate::state::process_pending_signals(shell_state);
+                
+                // Check if exit was requested (e.g., from trap handler)
+                if shell_state.exit_requested {
+                    return shell_state.exit_code;
+                }
+                
                 // Set the loop variable
                 shell_state.set_var(&variable, item.clone());
                 
@@ -650,6 +668,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
                     return exit_code;
+                }
+                
+                // Check if exit was requested after executing the body
+                if shell_state.exit_requested {
+                    return shell_state.exit_code;
                 }
             }
             
@@ -668,6 +691,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                     return cond_exit;
                 }
                 
+                // Check if exit was requested (e.g., from trap handler)
+                if shell_state.exit_requested {
+                    return shell_state.exit_code;
+                }
+                
                 // If condition is false (non-zero exit code), break
                 if cond_exit != 0 {
                     break;
@@ -679,6 +707,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
                     return exit_code;
+                }
+                
+                // Check if exit was requested (e.g., from trap handler)
+                if shell_state.exit_requested {
+                    return shell_state.exit_code;
                 }
             }
             

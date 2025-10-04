@@ -859,7 +859,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 current.push_str(&sub_command);
                 current.push('`');
             }
-            ';' => {
+            ';' if !in_double_quote && !in_single_quote => {
                 if !current.is_empty() {
                     if let Some(keyword) = is_keyword(&current) {
                         tokens.push(keyword);
@@ -1916,6 +1916,52 @@ mod tests {
             vec![
                 Token::Local,
                 Token::Word("var=value".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_single_quotes_with_semicolons() {
+        // Test that semicolons inside single quotes are preserved as part of the string
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("trap 'echo \"A\"; echo \"B\"' EXIT", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("trap".to_string()),
+                Token::Word("echo \"A\"; echo \"B\"".to_string()),
+                Token::Word("EXIT".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_double_quotes_with_semicolons() {
+        // Test that semicolons inside double quotes are preserved as part of the string
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo \"command1; command2\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("command1; command2".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_semicolons_outside_quotes() {
+        // Test that semicolons outside quotes still work as command separators
+        let shell_state = crate::state::ShellState::new();
+        let result = lex("echo hello; echo world", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string()),
+                Token::Semicolon,
+                Token::Word("echo".to_string()),
+                Token::Word("world".to_string())
             ]
         );
     }

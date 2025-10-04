@@ -1,10 +1,43 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::rc::Rc;
 use std::cell::RefCell;
 use super::parser::Ast;
 use std::env;
 use std::io::IsTerminal;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    /// Global queue for pending signal events
+    /// Signals are enqueued by the signal handler thread and dequeued by the main thread
+    pub static ref SIGNAL_QUEUE: Arc<Mutex<VecDeque<SignalEvent>>> =
+        Arc::new(Mutex::new(VecDeque::new()));
+}
+
+/// Maximum number of signals to queue before dropping old ones
+const MAX_SIGNAL_QUEUE_SIZE: usize = 100;
+
+/// Represents a signal event that needs to be processed
+#[derive(Debug, Clone)]
+pub struct SignalEvent {
+    /// Signal name (e.g., "INT", "TERM")
+    pub signal_name: String,
+    /// Signal number (e.g., 2, 15)
+    pub signal_number: i32,
+    /// When the signal was received
+    pub timestamp: Instant,
+}
+
+impl SignalEvent {
+    pub fn new(signal_name: String, signal_number: i32) -> Self {
+        Self {
+            signal_name,
+            signal_number,
+            timestamp: Instant::now(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ColorScheme {
@@ -74,6 +107,13 @@ pub struct ShellState {
     pub trap_handlers: Arc<Mutex<HashMap<String, String>>>,
     /// Flag to track if EXIT trap has been executed
     pub exit_trap_executed: bool,
+    /// Flag to indicate that the shell should exit
+    pub exit_requested: bool,
+    /// Exit code to use when exiting
+    pub exit_code: i32,
+    /// Flag to indicate pending signals need processing
+    /// Set by signal handler, checked by executor
+    pub pending_signals: bool,
 }
 
 impl ShellState {
@@ -127,6 +167,9 @@ impl ShellState {
             condensed_cwd,
             trap_handlers: Arc::new(Mutex::new(HashMap::new())),
             exit_trap_executed: false,
+            exit_requested: false,
+            exit_code: 0,
+            pending_signals: false,
         }
     }
 
@@ -482,8 +525,42 @@ impl ShellState {
             handlers.clear();
         }
     }
+}
 
+/// Enqueue a signal event for later processing
+/// If the queue is full, the oldest event is dropped
+pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
+    if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
+        // If queue is full, remove oldest event
+        if queue.len() >= MAX_SIGNAL_QUEUE_SIZE {
+            queue.pop_front();
+            eprintln!("Warning: Signal queue overflow, dropping oldest signal");
+        }
+        
+        queue.push_back(SignalEvent::new(
+            signal_name.to_string(),
+            signal_number,
+        ));
+    }
+}
 
+/// Process all pending signals in the queue
+/// This should be called at safe points during command execution
+pub fn process_pending_signals(shell_state: &mut ShellState) {
+    // Try to lock the queue with a timeout to avoid blocking
+    if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
+        // Process all pending signals
+        while let Some(signal_event) = queue.pop_front() {
+            // Check if a trap is set for this signal
+            if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name) {
+                if !trap_cmd.is_empty() {
+                    // Execute the trap handler
+                    // Note: This preserves the exit code as per POSIX requirements
+                    crate::executor::execute_trap_handler(&trap_cmd, shell_state);
+                }
+            }
+        }
+    }
 }
 
 

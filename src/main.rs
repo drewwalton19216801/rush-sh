@@ -5,7 +5,10 @@ use signal_hook::{consts::SIGINT, consts::SIGTERM, iterator::Signals};
 use std::env;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 use std::thread;
+use lazy_static::lazy_static;
 
 mod arithmetic;
 mod brace_expansion;
@@ -44,6 +47,7 @@ struct Args {
     script_args: Vec<String>,
 }
 
+
 fn main() {
     let args_parsed = Args::parse();
 
@@ -74,12 +78,17 @@ fn main() {
             match sig {
                 SIGINT => {
                     // SIGINT should interrupt current input but not exit shell
-                    // We'll handle this by breaking out of readline gracefully
                     println!("^C"); // Show the interrupt indicator
+                    
+                    // Enqueue signal for trap execution
+                    state::enqueue_signal("INT", 2);
                 }
                 SIGTERM => {
                     // SIGTERM should cause graceful shutdown
                     SHUTDOWN.store(true, Ordering::Relaxed);
+                    
+                    // Enqueue signal for trap execution
+                    state::enqueue_signal("TERM", 15);
                 }
                 _ => {}
             }
@@ -139,6 +148,9 @@ fn main() {
             );
 
             loop {
+                // Process any pending signals before showing prompt
+                state::process_pending_signals(&mut shell_state);
+                
                 if SHUTDOWN.load(Ordering::Relaxed) {
                     println!("\nReceived SIGTERM, exiting gracefully.");
                     execute_exit_trap(&mut shell_state);
@@ -162,8 +174,14 @@ fn main() {
                             break;
                         }
                         execute_line(&line, &mut shell_state);
+                        
+                        // Process any signals that arrived during command execution
+                        state::process_pending_signals(&mut shell_state);
                     }
                     Err(err) => {
+                        // Process signals even on error
+                        state::process_pending_signals(&mut shell_state);
+                        
                         // Check if it's a signal-related error or if shutdown was requested
                         if SHUTDOWN.load(Ordering::Relaxed) {
                             println!("\nReceived SIGTERM, exiting gracefully.");
@@ -302,6 +320,20 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut while_depth = 0;
 
     for line in content.lines() {
+        // Process pending signals at the start of each line
+        state::process_pending_signals(shell_state);
+        
+        // Check for shutdown signal
+        if SHUTDOWN.load(Ordering::Relaxed) {
+            eprintln!("Script interrupted by SIGTERM");
+            break;
+        }
+        
+        // Check if exit was requested (e.g., from trap handler)
+        if shell_state.exit_requested {
+            break;
+        }
+        
         // Skip shebang lines
         if line.starts_with("#!") {
             continue;
@@ -353,12 +385,22 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             in_function_block = false;
             execute_line(&current_block, shell_state);
             current_block.clear();
+            
+            // Check if exit was requested
+            if shell_state.exit_requested {
+                break;
+            }
         } else if in_if_block && trimmed == "fi" {
             if_depth -= 1;
             if if_depth == 0 {
                 in_if_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
+                
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         } else if in_for_block && trimmed == "done" {
             for_depth -= 1;
@@ -366,6 +408,11 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 in_for_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
+                
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         } else if in_while_block && trimmed == "done" {
             while_depth -= 1;
@@ -373,15 +420,30 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 in_while_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
+                
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         } else if in_case_block && trimmed == "esac" {
             in_case_block = false;
             execute_line(&current_block, shell_state);
             current_block.clear();
+            
+            // Check if exit was requested
+            if shell_state.exit_requested {
+                break;
+            }
         } else if !in_if_block && !in_case_block && !in_function_block && !in_for_block && !in_while_block {
             // Execute single-line commands immediately
             execute_line(&current_block, shell_state);
             current_block.clear();
+            
+            // Check if exit was requested after executing the line
+            if shell_state.exit_requested {
+                break;
+            }
         }
     }
 
@@ -389,6 +451,9 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     if !current_block.trim().is_empty() {
         execute_line(&current_block, shell_state);
     }
+    
+    // Final signal processing
+    state::process_pending_signals(shell_state);
 }
 
 fn execute_command_string(command_string: &str, shell_state: &mut state::ShellState) {
@@ -841,6 +906,128 @@ mod tests {
         assert_eq!(shell_state.get_trap("INT"), Some("echo signal".to_string()));
         assert_eq!(shell_state.get_trap("TERM"), Some("echo signal".to_string()));
         assert_eq!(shell_state.get_trap("HUP"), Some("echo signal".to_string()));
+
+    #[test]
+    fn test_signal_queue_enqueue_dequeue() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+        
+        // Enqueue a signal
+        state::enqueue_signal("INT", 2);
+        
+        // Verify it was enqueued
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 1);
+            assert_eq!(queue.front().unwrap().signal_name, "INT");
+            assert_eq!(queue.front().unwrap().signal_number, 2);
+        }
+        
+        // Clear for other tests
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+    }
+
+    #[test]
+    fn test_signal_queue_overflow() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+        
+        // Fill the queue beyond capacity
+        for _i in 0..100 + 10 {
+            state::enqueue_signal("INT", 2);
+        }
+        
+        // Verify queue size is capped
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 100);
+        }
+        
+        // Clear for other tests
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+    }
+
+    #[test]
+    fn test_process_pending_signals_with_trap() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Set a trap for INT
+        shell_state.set_trap("INT", "echo 'INT trapped'".to_string());
+        
+        // Enqueue a signal
+        state::enqueue_signal("INT", 2);
+        
+        // Process signals
+        state::process_pending_signals(&mut shell_state);
+        
+        // Verify queue is empty after processing
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_trap_execution_during_repl() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Set a trap for INT
+        shell_state.set_trap("INT", "echo 'Caught SIGINT'".to_string());
+        
+        // Simulate receiving SIGINT
+        state::enqueue_signal("INT", 2);
+        
+        // Process signals (simulating REPL loop)
+        state::process_pending_signals(&mut shell_state);
+        
+        // Verify queue is empty
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_multiple_signals_in_sequence() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Set traps for multiple signals
+        shell_state.set_trap("INT", "echo 'INT'".to_string());
+        shell_state.set_trap("TERM", "echo 'TERM'".to_string());
+        shell_state.set_trap("HUP", "echo 'HUP'".to_string());
+        
+        // Enqueue multiple signals
+        state::enqueue_signal("INT", 2);
+        state::enqueue_signal("TERM", 15);
+        state::enqueue_signal("HUP", 1);
+        
+        // Process all signals
+        state::process_pending_signals(&mut shell_state);
+        
+        // Verify all were processed
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 0);
+        }
+    }
     }
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
