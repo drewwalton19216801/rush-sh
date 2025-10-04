@@ -559,6 +559,9 @@ mod tests {
     // Mutex to serialize tests that modify environment variables
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+    // Mutex to serialize tests that access the global SIGNAL_QUEUE
+    static SIGNAL_QUEUE_LOCK: Mutex<()> = Mutex::new(());
+
     #[test]
     fn test_integration_true() {
         let line = "true";
@@ -938,6 +941,9 @@ mod tests {
 
     #[test]
     fn test_signal_queue_enqueue_dequeue() {
+        // Lock to prevent parallel tests from interfering with the signal queue
+        let _lock = SIGNAL_QUEUE_LOCK.lock().unwrap();
+
         // Clear the queue first
         if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
             queue.clear();
@@ -961,6 +967,9 @@ mod tests {
 
     #[test]
     fn test_signal_queue_overflow() {
+        // Lock to prevent parallel tests from interfering with the signal queue
+        let _lock = SIGNAL_QUEUE_LOCK.lock().unwrap();
+
         // Lock the queue for the entire test to prevent interference
         if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
             // Clear the queue first
@@ -985,6 +994,9 @@ mod tests {
 
     #[test]
     fn test_process_pending_signals_with_trap() {
+        // Lock to prevent parallel tests from interfering with the signal queue
+        let _lock = SIGNAL_QUEUE_LOCK.lock().unwrap();
+
         // Clear the queue first
         if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
             queue.clear();
@@ -1009,6 +1021,9 @@ mod tests {
 
     #[test]
     fn test_trap_execution_during_repl() {
+        // Lock to prevent parallel tests from interfering with the signal queue
+        let _lock = SIGNAL_QUEUE_LOCK.lock().unwrap();
+
         // Clear the queue first
         if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
             queue.clear();
@@ -1033,6 +1048,9 @@ mod tests {
 
     #[test]
     fn test_multiple_signals_in_sequence() {
+        // Lock to prevent parallel tests from interfering with the signal queue
+        let _lock = SIGNAL_QUEUE_LOCK.lock().unwrap();
+
         // Clear the queue first
         if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
             queue.clear();

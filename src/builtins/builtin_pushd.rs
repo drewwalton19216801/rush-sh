@@ -83,9 +83,20 @@ impl super::Builtin for PushdBuiltin {
 mod tests {
     use super::*;
     use crate::builtins::Builtin;
+    use std::sync::Mutex;
+
+    // Import the DIR_CHANGE_LOCK from main.rs tests
+    // Since we can't directly access it, we'll create our own for this module
+    static DIR_CHANGE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_execute_builtin_pushd() {
+        // Lock to prevent parallel tests from interfering with directory changes
+        let _lock = DIR_CHANGE_LOCK.lock().unwrap();
+
+        // First, ensure we're in a safe directory that definitely exists
+        std::env::set_current_dir("/tmp").unwrap();
+
         let original_dir = std::env::current_dir().unwrap();
         let cmd = ShellCommand {
             args: vec!["pushd".to_string(), "/tmp".to_string()],
