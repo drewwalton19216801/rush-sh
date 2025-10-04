@@ -116,7 +116,7 @@ impl super::Builtin for TestBuiltin {
                 } else if args[1] == "!=" {
                     return if args[0] != args[2] { 0 } else { 1 };
                 }
-                
+
                 // Check for numeric comparison operators
                 if let Some(operator) = args[1].strip_prefix('-') {
                     match operator {

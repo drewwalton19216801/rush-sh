@@ -48,16 +48,17 @@ impl RushCompleter {
                     for entry in entries.flatten() {
                         if let Ok(file_type) = entry.file_type()
                             && file_type.is_file()
-                            && let Some(name) = entry.file_name().to_str() {
-                                // Check if executable (on Unix-like systems)
-                                use std::os::unix::fs::PermissionsExt;
-                                if let Ok(metadata) = entry.metadata() {
-                                    let permissions = metadata.permissions();
-                                    if permissions.mode() & 0o111 != 0 {
-                                        executables.push(name.to_string());
-                                    }
+                            && let Some(name) = entry.file_name().to_str()
+                        {
+                            // Check if executable (on Unix-like systems)
+                            use std::os::unix::fs::PermissionsExt;
+                            if let Ok(metadata) = entry.metadata() {
+                                let permissions = metadata.permissions();
+                                if permissions.mode() & 0o111 != 0 {
+                                    executables.push(name.to_string());
                                 }
                             }
+                        }
                     }
                 }
             }
@@ -105,19 +106,20 @@ impl RushCompleter {
 
     fn is_repeated_completion(word: &str, pos: usize) -> bool {
         if let Ok(context) = COMPLETION_STATE.lock()
-            && let Some(ref ctx) = *context {
-                // Check if this is the same word and position (within a reasonable time window)
-                if ctx.word == word && ctx.pos == pos {
-                    let current_time = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs();
-                    // Consider it a repeated attempt if within 2 seconds
-                    if current_time - ctx.timestamp <= 2 {
-                        return true;
-                    }
+            && let Some(ref ctx) = *context
+        {
+            // Check if this is the same word and position (within a reasonable time window)
+            if ctx.word == word && ctx.pos == pos {
+                let current_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs();
+                // Consider it a repeated attempt if within 2 seconds
+                if current_time - ctx.timestamp <= 2 {
+                    return true;
                 }
             }
+        }
         false
     }
 
@@ -146,13 +148,17 @@ impl RushCompleter {
 
     fn get_current_attempt_count(&self) -> u32 {
         if let Ok(context) = COMPLETION_STATE.lock()
-            && let Some(ref ctx) = *context {
-                return ctx.attempt_count;
-            }
+            && let Some(ref ctx) = *context
+        {
+            return ctx.attempt_count;
+        }
         1
     }
 
-    fn get_next_completion_candidate(candidates: &[RushCandidate], attempt_count: u32) -> Option<(usize, Vec<RushCandidate>)> {
+    fn get_next_completion_candidate(
+        candidates: &[RushCandidate],
+        attempt_count: u32,
+    ) -> Option<(usize, Vec<RushCandidate>)> {
         if candidates.len() <= 1 {
             return None;
         }
@@ -162,10 +168,13 @@ impl RushCompleter {
         let candidate = &candidates[index];
 
         // Return single candidate for cycling behavior
-        Some((0, vec![RushCandidate::new(
-            candidate.display.clone(),
-            candidate.replacement.clone(),
-        )]))
+        Some((
+            0,
+            vec![RushCandidate::new(
+                candidate.display.clone(),
+                candidate.replacement.clone(),
+            )],
+        ))
     }
 
     fn get_file_candidates(line: &str, pos: usize) -> Vec<RushCandidate> {
@@ -205,33 +214,33 @@ impl RushCompleter {
         if let Ok(entries) = fs::read_dir(&base_dir) {
             for entry in entries.flatten() {
                 if let Some(name) = entry.file_name().to_str()
-                    && name.starts_with(&prefix) {
-                        // Determine the replacement string
-                        let replacement = if current_word.is_empty() || current_word.ends_with('/')
-                        {
-                            // If completing from a directory, just append the name
-                            format!("{}{}", current_word, name)
-                        } else if let Some(last_slash) = current_word.rfind('/') {
-                            // If completing a partial name in a subdirectory
-                            format!("{}{}", &current_word[..=last_slash], name)
-                        } else {
-                            // Completing in current directory
-                            name.to_string()
-                        };
+                    && name.starts_with(&prefix)
+                {
+                    // Determine the replacement string
+                    let replacement = if current_word.is_empty() || current_word.ends_with('/') {
+                        // If completing from a directory, just append the name
+                        format!("{}{}", current_word, name)
+                    } else if let Some(last_slash) = current_word.rfind('/') {
+                        // If completing a partial name in a subdirectory
+                        format!("{}{}", &current_word[..=last_slash], name)
+                    } else {
+                        // Completing in current directory
+                        name.to_string()
+                    };
 
-                        // Add trailing slash for directories
-                        let display_name = if let Ok(file_type) = entry.file_type() {
-                            if file_type.is_dir() {
-                                format!("{}/", name)
-                            } else {
-                                name.to_string()
-                            }
+                    // Add trailing slash for directories
+                    let display_name = if let Ok(file_type) = entry.file_type() {
+                        if file_type.is_dir() {
+                            format!("{}/", name)
                         } else {
                             name.to_string()
-                        };
+                        }
+                    } else {
+                        name.to_string()
+                    };
 
-                        candidates.push(RushCandidate::new(display_name, replacement));
-                    }
+                    candidates.push(RushCandidate::new(display_name, replacement));
+                }
             }
         }
 
@@ -271,31 +280,32 @@ impl RushCompleter {
 
         // Handle home directory expansion
         if (word.starts_with("~/") || word == "~")
-            && let Ok(home_dir) = env::var("HOME") {
-                let home_path = Path::new(&home_dir);
-                let relative_path = if word == "~" {
-                    Path::new("")
-                } else {
-                    Path::new(&word[2..]) // Remove "~/"
-                };
+            && let Ok(home_dir) = env::var("HOME")
+        {
+            let home_path = Path::new(&home_dir);
+            let relative_path = if word == "~" {
+                Path::new("")
+            } else {
+                Path::new(&word[2..]) // Remove "~/"
+            };
 
-                // Check if the path ends with '/' - if so, we're completing from that directory
-                if word.ends_with('/') || word == "~" {
-                    return (home_path.join(relative_path), String::new());
-                }
-
-                if let Some(parent) = relative_path.parent() {
-                    let full_parent = home_path.join(parent);
-                    let prefix = relative_path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("")
-                        .to_string();
-                    return (full_parent, prefix);
-                } else {
-                    return (home_path.to_path_buf(), String::new());
-                }
+            // Check if the path ends with '/' - if so, we're completing from that directory
+            if word.ends_with('/') || word == "~" {
+                return (home_path.join(relative_path), String::new());
             }
+
+            if let Some(parent) = relative_path.parent() {
+                let full_parent = home_path.join(parent);
+                let prefix = relative_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+                    .to_string();
+                return (full_parent, prefix);
+            } else {
+                return (home_path.to_path_buf(), String::new());
+            }
+        }
 
         // Handle relative paths
         if word.ends_with('/') {
@@ -358,11 +368,14 @@ impl Completer for RushCompleter {
         let is_repeated = Self::is_repeated_completion(current_word, pos);
 
         // If this is a repeated attempt with multiple matches, cycle through candidates
-        if is_repeated && candidates.len() > 1
-            && let Some(completion_result) = Self::get_next_completion_candidate(&candidates, self.get_current_attempt_count()) {
-                Self::update_completion_context(current_word.to_string(), pos, true);
-                return Ok(completion_result);
-            }
+        if is_repeated
+            && candidates.len() > 1
+            && let Some(completion_result) =
+                Self::get_next_completion_candidate(&candidates, self.get_current_attempt_count())
+        {
+            Self::update_completion_context(current_word.to_string(), pos, true);
+            return Ok(completion_result);
+        }
 
         // Update completion context for next attempt
         Self::update_completion_context(current_word.to_string(), pos, is_repeated);
@@ -498,7 +511,7 @@ mod tests {
     fn test_directory_completion_formatting() {
         // Lock to prevent parallel tests from interfering with directory changes
         let _lock = COMPLETION_DIR_LOCK.lock().unwrap();
-        
+
         // Create a temporary directory for testing
         let temp_dir = env::temp_dir().join("rush_completion_test");
         let _ = fs::create_dir_all(&temp_dir);
@@ -549,7 +562,10 @@ mod tests {
         // Clean up
         let _ = fs::remove_dir_all(&temp_dir);
 
-        assert!(has_examples, "First word 'ex' should complete to 'examples/' when examples directory exists");
+        assert!(
+            has_examples,
+            "First word 'ex' should complete to 'examples/' when examples directory exists"
+        );
     }
 
     #[test]
@@ -593,9 +609,10 @@ mod tests {
     #[test]
     fn test_multi_match_completion_single_candidate() {
         // Test that single candidate doesn't trigger cycling behavior
-        let candidates = vec![
-            RushCandidate::new("single_file".to_string(), "single_file".to_string()),
-        ];
+        let candidates = vec![RushCandidate::new(
+            "single_file".to_string(),
+            "single_file".to_string(),
+        )];
 
         let result = RushCompleter::get_next_completion_candidate(&candidates, 1);
         assert!(result.is_none());

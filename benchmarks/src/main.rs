@@ -43,10 +43,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Generate and save report
     println!("\n📈 Generating report...");
     let report = generate_report(&results);
-    
+
     // Save HTML report
     fs::write("target/benchmark_report.html", &report)?;
-    
+
     // Save JSON results
     save_results(&results, "target/benchmark_results.json")?;
 
@@ -148,17 +148,14 @@ fn register_parser_benchmarks(suite: &mut BenchmarkSuite) {
         "parser_basic_commands",
         "Basic command parsing",
         Box::new(|iterations| {
-            let test_cases = vec![
-                "ls -la",
-                "echo hello world",
-                "printf test",
-                "cat file.txt",
-            ];
+            let test_cases = vec!["ls -la", "echo hello world", "printf test", "cat file.txt"];
 
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         let _ = rush_sh::parser::parse(tokens);
                     }
                 }
@@ -182,7 +179,9 @@ fn register_parser_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         let _ = rush_sh::parser::parse(tokens);
                     }
                 }
@@ -205,7 +204,9 @@ fn register_parser_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         let _ = rush_sh::parser::parse(tokens);
                     }
                 }
@@ -223,19 +224,19 @@ fn register_executor_benchmarks(suite: &mut BenchmarkSuite) {
         "executor_builtin_commands",
         "Builtin command execution",
         Box::new(|iterations| {
-            let test_cases = vec![
-                "true",
-                "false",
-                "echo hello world",
-                "printf test",
-            ];
+            let test_cases = vec!["true", "false", "echo hello world", "printf test"];
 
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -249,19 +250,19 @@ fn register_executor_benchmarks(suite: &mut BenchmarkSuite) {
         "executor_external_commands",
         "External command execution",
         Box::new(|iterations| {
-            let test_cases = vec![
-                "date",
-                "pwd",
-                "whoami",
-                "id",
-            ];
+            let test_cases = vec!["date", "pwd", "whoami", "id"];
 
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -285,9 +286,14 @@ fn register_executor_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -345,9 +351,14 @@ fn register_expansion_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -371,9 +382,14 @@ fn register_expansion_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -400,9 +416,14 @@ fn register_control_structure_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -424,9 +445,14 @@ fn register_control_structure_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -448,9 +474,14 @@ fn register_control_structure_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -477,9 +508,14 @@ fn register_pipeline_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -502,9 +538,14 @@ fn register_pipeline_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -527,9 +568,14 @@ fn register_pipeline_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 for case in &test_cases {
-                    if let Ok(tokens) = rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new()) {
+                    if let Ok(tokens) =
+                        rush_sh::lexer::lex(case, &rush_sh::state::ShellState::new())
+                    {
                         if let Ok(ast) = rush_sh::parser::parse(tokens) {
-                            let _ = rush_sh::executor::execute(ast, &mut rush_sh::state::ShellState::new());
+                            let _ = rush_sh::executor::execute(
+                                ast,
+                                &mut rush_sh::state::ShellState::new(),
+                            );
                         }
                     }
                 }
@@ -560,7 +606,7 @@ fn register_script_benchmarks(suite: &mut BenchmarkSuite) {
             let start = Instant::now();
             for _ in 0..iterations {
                 let mut shell_state = rush_sh::state::ShellState::new();
-                
+
                 // Execute each line of the script
                 for line in &script_lines {
                     if let Ok(tokens) = rush_sh::lexer::lex(line, &shell_state) {
@@ -612,8 +658,11 @@ fn check_for_regressions(results: &[BenchmarkResult]) {
     for result in results {
         // Simple heuristic: flag anything over 100ms as potentially slow
         if result.duration.as_millis() > 100 {
-            println!("⚠️  Potentially slow: {} ({:.2}ms)",
-                    result.name, result.duration.as_millis());
+            println!(
+                "⚠️  Potentially slow: {} ({:.2}ms)",
+                result.name,
+                result.duration.as_millis()
+            );
             regressions += 1;
         }
     }

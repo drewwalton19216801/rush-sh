@@ -31,11 +31,11 @@ impl super::Builtin for ExitBuiltin {
             // Use last exit code if no argument provided
             shell_state.last_exit_code
         };
-        
+
         // Set exit flag and code
         shell_state.exit_requested = true;
         shell_state.exit_code = exit_code;
-        
+
         exit_code
     }
 }

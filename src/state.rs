@@ -1,12 +1,12 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::rc::Rc;
-use std::cell::RefCell;
 use super::parser::Ast;
+use lazy_static::lazy_static;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::io::IsTerminal;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
-use lazy_static::lazy_static;
 
 lazy_static! {
     /// Global queue for pending signal events
@@ -235,7 +235,7 @@ impl ShellState {
                 return;
             }
         }
-        
+
         // Variable doesn't exist in local scopes, set it globally
         self.variables.insert(name.to_string(), value);
     }
@@ -346,12 +346,7 @@ impl ShellState {
         } else {
             self.get_full_cwd()
         };
-        format!(
-            "{}:{} {} ",
-            self.get_user_hostname(),
-            cwd,
-            prompt_char
-        )
+        format!("{}:{} {} ", self.get_user_hostname(), cwd, prompt_char)
     }
 
     /// Set an alias
@@ -446,7 +441,6 @@ impl ShellState {
         }
     }
 
-
     /// Enter a function context (push local scope if needed)
     pub fn enter_function(&mut self) {
         self.function_depth += 1;
@@ -536,11 +530,8 @@ pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
             queue.pop_front();
             eprintln!("Warning: Signal queue overflow, dropping oldest signal");
         }
-        
-        queue.push_back(SignalEvent::new(
-            signal_name.to_string(),
-            signal_number,
-        ));
+
+        queue.push_back(SignalEvent::new(signal_name.to_string(), signal_number));
     }
 }
 
@@ -562,7 +553,6 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
         }
     }
 }
-
 
 impl Default for ShellState {
     fn default() -> Self {
@@ -713,7 +703,10 @@ mod tests {
 
         // Set a global variable
         state.set_var("global_var", "global_value".to_string());
-        assert_eq!(state.get_var("global_var"), Some("global_value".to_string()));
+        assert_eq!(
+            state.get_var("global_var"),
+            Some("global_value".to_string())
+        );
 
         // Push local scope
         state.push_local_scope();
@@ -730,7 +723,10 @@ mod tests {
         state.pop_local_scope();
 
         // Should be back to global variable
-        assert_eq!(state.get_var("global_var"), Some("global_value".to_string()));
+        assert_eq!(
+            state.get_var("global_var"),
+            Some("global_value".to_string())
+        );
         assert_eq!(state.get_var("local_var"), None);
     }
 

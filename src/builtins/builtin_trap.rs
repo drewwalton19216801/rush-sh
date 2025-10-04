@@ -1,7 +1,7 @@
-use std::io::Write;
 use crate::builtins::Builtin;
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
+use std::io::Write;
 
 pub struct TrapBuiltin;
 
@@ -54,7 +54,7 @@ impl TrapBuiltin {
     /// Convert signal name or number to canonical name
     fn signal_to_name(signal: &str) -> Result<String, String> {
         let normalized = Self::normalize_signal_name(signal);
-        
+
         // Check if it's a number
         if let Ok(num) = normalized.parse::<i32>() {
             // Find signal by number
@@ -65,14 +65,14 @@ impl TrapBuiltin {
             }
             return Err(format!("Invalid signal number: {}", num));
         }
-        
+
         // Check if it's a valid signal name
         for (name, _) in SIGNAL_MAP {
             if *name == normalized {
                 return Ok(name.to_string());
             }
         }
-        
+
         Err(format!("Invalid signal name: {}", signal))
     }
 
@@ -85,7 +85,8 @@ impl TrapBuiltin {
     /// List all signal names
     fn list_signals(output: &mut dyn Write) -> i32 {
         for (name, num) in SIGNAL_MAP {
-            if *num > 0 {  // Skip EXIT (0)
+            if *num > 0 {
+                // Skip EXIT (0)
                 let _ = writeln!(output, "{}) SIG{}", num, name);
             }
         }
@@ -131,11 +132,7 @@ impl TrapBuiltin {
                 Ok(signal_name) => {
                     // Check if signal can be trapped
                     if !Self::is_trappable(&signal_name) {
-                        let _ = writeln!(
-                            output,
-                            "trap: {}: cannot trap signal",
-                            signal
-                        );
+                        let _ = writeln!(output, "trap: {}: cannot trap signal", signal);
                         exit_code = 1;
                         continue;
                     }
@@ -159,7 +156,11 @@ impl TrapBuiltin {
     }
 
     /// Reset trap handlers
-    fn reset_traps(signals: &[String], shell_state: &mut ShellState, output: &mut dyn Write) -> i32 {
+    fn reset_traps(
+        signals: &[String],
+        shell_state: &mut ShellState,
+        output: &mut dyn Write,
+    ) -> i32 {
         let mut exit_code = 0;
 
         for signal in signals {
@@ -220,7 +221,8 @@ impl Builtin for TrapBuiltin {
                 for signal in &args[2..] {
                     match Self::signal_to_name(signal) {
                         Ok(signal_name) => {
-                            exit_code = Self::display_trap(&signal_name, shell_state, output_writer);
+                            exit_code =
+                                Self::display_trap(&signal_name, shell_state, output_writer);
                         }
                         Err(e) => {
                             let _ = writeln!(output_writer, "trap: {}", e);
@@ -290,17 +292,21 @@ mod tests {
     fn test_trap_set_handler() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         let cmd = ShellCommand {
-            args: vec!["trap".to_string(), "echo hello".to_string(), "INT".to_string()],
+            args: vec![
+                "trap".to_string(),
+                "echo hello".to_string(),
+                "INT".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         assert_eq!(shell_state.get_trap("INT"), Some("echo hello".to_string()));
     }
@@ -309,11 +315,11 @@ mod tests {
     fn test_trap_reset_handler() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         // Set a trap
         shell_state.set_trap("INT", "echo hello".to_string());
         assert_eq!(shell_state.get_trap("INT"), Some("echo hello".to_string()));
-        
+
         // Reset the trap
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "-".to_string(), "INT".to_string()],
@@ -321,10 +327,10 @@ mod tests {
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         assert_eq!(shell_state.get_trap("INT"), None);
     }
@@ -333,17 +339,21 @@ mod tests {
     fn test_trap_invalid_signal() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         let cmd = ShellCommand {
-            args: vec!["trap".to_string(), "echo hello".to_string(), "INVALID".to_string()],
+            args: vec![
+                "trap".to_string(),
+                "echo hello".to_string(),
+                "INVALID".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 1);
         let output_str = String::from_utf8(output).unwrap();
         assert!(output_str.contains("Invalid signal"));
@@ -353,17 +363,21 @@ mod tests {
     fn test_trap_uncatchable_signal() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         let cmd = ShellCommand {
-            args: vec!["trap".to_string(), "echo hello".to_string(), "KILL".to_string()],
+            args: vec![
+                "trap".to_string(),
+                "echo hello".to_string(),
+                "KILL".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 1);
         let output_str = String::from_utf8(output).unwrap();
         assert!(output_str.contains("cannot trap"));
@@ -373,7 +387,7 @@ mod tests {
     fn test_trap_multiple_signals() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         let cmd = ShellCommand {
             args: vec![
                 "trap".to_string(),
@@ -386,13 +400,16 @@ mod tests {
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         assert_eq!(shell_state.get_trap("INT"), Some("echo signal".to_string()));
-        assert_eq!(shell_state.get_trap("TERM"), Some("echo signal".to_string()));
+        assert_eq!(
+            shell_state.get_trap("TERM"),
+            Some("echo signal".to_string())
+        );
         assert_eq!(shell_state.get_trap("HUP"), Some("echo signal".to_string()));
     }
 
@@ -401,7 +418,7 @@ mod tests {
         let mut shell_state = ShellState::new();
         shell_state.set_trap("INT", "echo int".to_string());
         shell_state.set_trap("TERM", "echo term".to_string());
-        
+
         let mut output = Vec::new();
         let cmd = ShellCommand {
             args: vec!["trap".to_string()],
@@ -409,10 +426,10 @@ mod tests {
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         let output_str = String::from_utf8(output).unwrap();
         assert!(output_str.contains("trap -- 'echo int' INT"));
@@ -423,17 +440,17 @@ mod tests {
     fn test_trap_list_signals() {
         let mut output = Vec::new();
         let mut shell_state = ShellState::new();
-        
+
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "-l".to_string()],
             input: None,
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         let output_str = String::from_utf8(output).unwrap();
         assert!(output_str.contains("2) SIGINT"));
@@ -444,17 +461,17 @@ mod tests {
     fn test_trap_empty_action() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "".to_string(), "INT".to_string()],
             input: None,
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         assert_eq!(shell_state.get_trap("INT"), Some("".to_string()));
     }
@@ -463,17 +480,21 @@ mod tests {
     fn test_trap_signal_numbers() {
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
-        
+
         let cmd = ShellCommand {
-            args: vec!["trap".to_string(), "echo signal".to_string(), "2".to_string()],
+            args: vec![
+                "trap".to_string(),
+                "echo signal".to_string(),
+                "2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
         };
-        
+
         let builtin = TrapBuiltin;
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-        
+
         assert_eq!(exit_code, 0);
         assert_eq!(shell_state.get_trap("INT"), Some("echo signal".to_string()));
     }

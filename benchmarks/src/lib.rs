@@ -9,4 +9,6 @@ pub mod test_cases;
 
 // Re-export main types for convenience
 pub use benchmark::{Benchmark, BenchmarkResult, BenchmarkSuite};
-pub use report::{generate_report, save_results, load_results, compare_with_baseline, RegressionInfo};
+pub use report::{
+    RegressionInfo, compare_with_baseline, generate_report, load_results, save_results,
+};

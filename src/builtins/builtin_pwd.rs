@@ -44,8 +44,7 @@ impl super::Builtin for PwdBuiltin {
                     let _ = writeln!(
                         output_writer,
                         "{}pwd: {}\x1b[0m",
-                        shell_state.color_scheme.error,
-                        e
+                        shell_state.color_scheme.error, e
                     );
                 } else {
                     let _ = writeln!(output_writer, "pwd: {}", e);

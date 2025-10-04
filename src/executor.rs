@@ -1,8 +1,8 @@
+use std::cell::RefCell;
 use std::fs::File;
 use std::io::pipe;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use super::parser::{Ast, ShellCommand};
 use super::state::ShellState;
@@ -12,51 +12,51 @@ use super::state::ShellState;
 fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
     // Create a pipe to capture stdout
     let (reader, writer) = pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
-    
+
     // We need to capture the output, so we'll redirect stdout to our pipe
     // For builtins, we can pass the writer directly
     // For external commands, we need to handle them specially
-    
+
     match &ast {
         Ast::Pipeline(commands) if commands.len() == 1 => {
             let cmd = &commands[0];
             if cmd.args.is_empty() {
                 return Ok(String::new());
             }
-            
+
             // Expand variables and wildcards
             let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
             let expanded_args = expand_wildcards(&var_expanded_args)
                 .map_err(|e| format!("Wildcard expansion failed: {}", e))?;
-            
+
             if expanded_args.is_empty() {
                 return Ok(String::new());
             }
-            
+
             // Check if it's a function call
             if shell_state.get_function(&expanded_args[0]).is_some() {
                 // Save previous capture state (for nested command substitutions)
                 let previous_capture = shell_state.capture_output.clone();
-                
+
                 // Enable output capture mode
                 let capture_buffer = Rc::new(RefCell::new(Vec::new()));
                 shell_state.capture_output = Some(capture_buffer.clone());
-                
+
                 // Create a FunctionCall AST and execute it
                 let function_call_ast = Ast::FunctionCall {
                     name: expanded_args[0].clone(),
                     args: expanded_args[1..].to_vec(),
                 };
-                
+
                 let exit_code = execute(function_call_ast, shell_state);
-                
+
                 // Retrieve captured output
                 let captured = capture_buffer.borrow().clone();
                 let output = String::from_utf8_lossy(&captured).trim_end().to_string();
-                
+
                 // Restore previous capture state
                 shell_state.capture_output = previous_capture;
-                
+
                 if exit_code == 0 {
                     Ok(output)
                 } else {
@@ -69,22 +69,23 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
                     output: None, // We're capturing output
                     append: None,
                 };
-                
+
                 // Execute builtin with our writer
                 let exit_code = crate::builtins::execute_builtin(
                     &temp_cmd,
                     shell_state,
                     Some(Box::new(writer)),
                 );
-                
+
                 // Read the captured output
                 drop(temp_cmd); // Ensure writer is dropped
                 let mut output = String::new();
                 use std::io::Read;
                 let mut reader = reader;
-                reader.read_to_string(&mut output)
+                reader
+                    .read_to_string(&mut output)
                     .map_err(|e| format!("Failed to read output: {}", e))?;
-                
+
                 if exit_code == 0 {
                     Ok(output.trim_end().to_string())
                 } else {
@@ -93,26 +94,32 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
             } else {
                 // External command - execute with output capture
                 drop(writer); // Close writer end before spawning
-                
+
                 let mut command = Command::new(&expanded_args[0]);
                 command.args(&expanded_args[1..]);
                 command.stdout(Stdio::piped());
                 command.stderr(Stdio::null()); // Suppress stderr for command substitution
-                
+
                 // Set environment
                 let child_env = shell_state.get_env_for_child();
                 command.env_clear();
                 for (key, value) in child_env {
                     command.env(key, value);
                 }
-                
-                let output = command.output()
+
+                let output = command
+                    .output()
                     .map_err(|e| format!("Failed to execute command: {}", e))?;
-                
+
                 if output.status.success() {
-                    Ok(String::from_utf8_lossy(&output.stdout).trim_end().to_string())
+                    Ok(String::from_utf8_lossy(&output.stdout)
+                        .trim_end()
+                        .to_string())
                 } else {
-                    Err(format!("Command failed with exit code {}", output.status.code().unwrap_or(1)))
+                    Err(format!(
+                        "Command failed with exit code {}",
+                        output.status.code().unwrap_or(1)
+                    ))
                 }
             }
         }
@@ -121,7 +128,7 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
             // and capture output differently. For now, fall back to executing and capturing
             // via a temporary approach
             drop(writer);
-            
+
             // Execute the AST normally but we can't easily capture output for complex cases
             // This is a limitation we'll need to address for full support
             Err("Complex command substitutions not yet fully supported".to_string())
@@ -150,7 +157,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
             // Check for command substitution $(...) or arithmetic expansion $((...))
             if let Some(&'(') = chars.peek() {
                 chars.next(); // consume first (
-                
+
                 // Check if this is arithmetic expansion $((...))
                 if let Some(&'(') = chars.peek() {
                     // Arithmetic expansion $((...))
@@ -158,7 +165,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     let mut arithmetic_expr = String::new();
                     let mut paren_depth = 1;
                     let mut found_closing = false;
-                    
+
                     while let Some(c) = chars.next() {
                         if c == '(' {
                             paren_depth += 1;
@@ -184,20 +191,27 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                             arithmetic_expr.push(c);
                         }
                     }
-                    
+
                     if found_closing {
                         // First expand variables in the arithmetic expression
                         // The arithmetic evaluator expects variable names without $ prefix
                         // So we need to expand $VAR to the value before evaluation
                         let mut expanded_expr = String::new();
                         let mut expr_chars = arithmetic_expr.chars().peekable();
-                        
+
                         while let Some(ch) = expr_chars.next() {
                             if ch == '$' {
                                 // Expand variable
                                 let mut var_name = String::new();
                                 if let Some(&c) = expr_chars.peek() {
-                                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' || c.is_ascii_digit() {
+                                    if c == '?'
+                                        || c == '$'
+                                        || c == '0'
+                                        || c == '#'
+                                        || c == '*'
+                                        || c == '@'
+                                        || c.is_ascii_digit()
+                                    {
                                         var_name.push(c);
                                         expr_chars.next();
                                     } else {
@@ -211,7 +225,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                                         }
                                     }
                                 }
-                                
+
                                 if !var_name.is_empty() {
                                     if let Some(value) = shell_state.get_var(&var_name) {
                                         expanded_expr.push_str(&value);
@@ -226,16 +240,21 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                                 expanded_expr.push(ch);
                             }
                         }
-                        
-                        match crate::arithmetic::evaluate_arithmetic_expression(&expanded_expr, shell_state) {
+
+                        match crate::arithmetic::evaluate_arithmetic_expression(
+                            &expanded_expr,
+                            shell_state,
+                        ) {
                             Ok(value) => {
                                 result.push_str(&value.to_string());
                             }
                             Err(e) => {
                                 // On arithmetic error, display a proper error message
                                 if shell_state.colors_enabled {
-                                    result.push_str(&format!("{}arithmetic error: {}{}",
-                                        shell_state.color_scheme.error, e, "\x1b[0m"));
+                                    result.push_str(&format!(
+                                        "{}arithmetic error: {}{}",
+                                        shell_state.color_scheme.error, e, "\x1b[0m"
+                                    ));
                                 } else {
                                     result.push_str(&format!("arithmetic error: {}", e));
                                 }
@@ -249,11 +268,11 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     }
                     continue;
                 }
-                
+
                 // Regular command substitution $(...)
                 let mut sub_command = String::new();
                 let mut paren_depth = 1;
-                
+
                 for c in chars.by_ref() {
                     if c == '(' {
                         paren_depth += 1;
@@ -268,7 +287,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                         sub_command.push(c);
                     }
                 }
-                
+
                 // Execute the command substitution within the current shell context
                 // Parse and execute the command using our own lexer/parser/executor
                 if let Ok(tokens) = crate::lexer::lex(&sub_command, shell_state) {
@@ -276,7 +295,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     let expanded_tokens = match crate::lexer::expand_aliases(
                         tokens,
                         shell_state,
-                        &mut std::collections::HashSet::new()
+                        &mut std::collections::HashSet::new(),
                     ) {
                         Ok(t) => t,
                         Err(_) => {
@@ -287,7 +306,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                             continue;
                         }
                     };
-                    
+
                     if let Ok(ast) = crate::parser::parse(expanded_tokens) {
                         // Execute within current shell context and capture output
                         match execute_and_capture_output(ast, shell_state) {
@@ -308,22 +327,23 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                             // Split by spaces and check if first token looks like a function call
                             let parts: Vec<&str> = tokens_str.split_whitespace().collect();
                             if let Some(first_token) = parts.first()
-                                && shell_state.get_function(first_token).is_some() {
-                                    // This is a function call, create AST manually
-                                    let function_call = Ast::FunctionCall {
-                                        name: first_token.to_string(),
-                                        args: parts[1..].iter().map(|s| s.to_string()).collect(),
-                                    };
-                                    match execute_and_capture_output(function_call, shell_state) {
-                                        Ok(output) => {
-                                            result.push_str(&output);
-                                            continue;
-                                        }
-                                        Err(_) => {
-                                            // Fall back to literal
-                                        }
+                                && shell_state.get_function(first_token).is_some()
+                            {
+                                // This is a function call, create AST manually
+                                let function_call = Ast::FunctionCall {
+                                    name: first_token.to_string(),
+                                    args: parts[1..].iter().map(|s| s.to_string()).collect(),
+                                };
+                                match execute_and_capture_output(function_call, shell_state) {
+                                    Ok(output) => {
+                                        result.push_str(&output);
+                                        continue;
+                                    }
+                                    Err(_) => {
+                                        // Fall back to literal
                                     }
                                 }
+                            }
                         }
                         // Keep the literal
                         result.push_str("$(");
@@ -370,9 +390,14 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     } else {
                         // Variable not found - for positional parameters, expand to empty string
                         // For other variables, keep the literal
-                        if var_name.chars().next().unwrap().is_ascii_digit() ||
-                           var_name == "?" || var_name == "$" || var_name == "0" ||
-                           var_name == "#" || var_name == "*" || var_name == "@" {
+                        if var_name.chars().next().unwrap().is_ascii_digit()
+                            || var_name == "?"
+                            || var_name == "$"
+                            || var_name == "0"
+                            || var_name == "#"
+                            || var_name == "*"
+                            || var_name == "@"
+                        {
                             // Expand to empty string for undefined positional parameters
                         } else {
                             // Keep the literal for regular variables
@@ -387,21 +412,21 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
         } else if ch == '`' {
             // Backtick command substitution
             let mut sub_command = String::new();
-            
+
             for c in chars.by_ref() {
                 if c == '`' {
                     break;
                 }
                 sub_command.push(c);
             }
-            
+
             // Execute the command substitution
             if let Ok(tokens) = crate::lexer::lex(&sub_command, shell_state) {
                 // Expand aliases before parsing
                 let expanded_tokens = match crate::lexer::expand_aliases(
                     tokens,
                     shell_state,
-                    &mut std::collections::HashSet::new()
+                    &mut std::collections::HashSet::new(),
                 ) {
                     Ok(t) => t,
                     Err(_) => {
@@ -412,7 +437,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                         continue;
                     }
                 };
-                
+
                 if let Ok(ast) = crate::parser::parse(expanded_tokens) {
                     // Execute and capture output
                     match execute_and_capture_output(ast, shell_state) {
@@ -484,24 +509,22 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
 pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32 {
     // Save current exit code to preserve it across trap execution
     let saved_exit_code = shell_state.last_exit_code;
-    
+
     // TODO: Add signal masking to prevent recursive trap calls
     // This requires careful handling of the nix sigprocmask API
     // For now, traps execute without signal masking
-    
+
     // Parse and execute the trap command
     let result = match crate::lexer::lex(trap_cmd, shell_state) {
         Ok(tokens) => {
             match crate::lexer::expand_aliases(
                 tokens,
                 shell_state,
-                &mut std::collections::HashSet::new()
+                &mut std::collections::HashSet::new(),
             ) {
                 Ok(expanded_tokens) => {
                     match crate::parser::parse(expanded_tokens) {
-                        Ok(ast) => {
-                            execute(ast, shell_state)
-                        }
+                        Ok(ast) => execute(ast, shell_state),
                         Err(_) => {
                             // Parse error in trap handler - silently continue
                             saved_exit_code
@@ -519,10 +542,10 @@ pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32
             saved_exit_code
         }
     };
-    
+
     // Restore the original exit code (trap handlers don't affect $?)
     shell_state.last_exit_code = saved_exit_code;
-    
+
     result
 }
 
@@ -562,7 +585,7 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 if shell_state.is_returning() {
                     return exit_code;
                 }
-                
+
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
                     return shell_state.exit_code;
@@ -646,75 +669,79 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 0
             }
         }
-        Ast::For { variable, items, body } => {
+        Ast::For {
+            variable,
+            items,
+            body,
+        } => {
             let mut exit_code = 0;
-            
+
             // Execute the loop body for each item
             for item in items {
                 // Process any pending signals before executing the body
                 crate::state::process_pending_signals(shell_state);
-                
+
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
                     return shell_state.exit_code;
                 }
-                
+
                 // Set the loop variable
                 shell_state.set_var(&variable, item.clone());
-                
+
                 // Execute the body
                 exit_code = execute(*body.clone(), shell_state);
-                
+
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
                     return exit_code;
                 }
-                
+
                 // Check if exit was requested after executing the body
                 if shell_state.exit_requested {
                     return shell_state.exit_code;
                 }
             }
-            
+
             exit_code
         }
         Ast::While { condition, body } => {
             let mut exit_code = 0;
-            
+
             // Execute the loop while condition is true (exit code 0)
             loop {
                 // Evaluate the condition
                 let cond_exit = execute(*condition.clone(), shell_state);
-                
+
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
                     return cond_exit;
                 }
-                
+
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
                     return shell_state.exit_code;
                 }
-                
+
                 // If condition is false (non-zero exit code), break
                 if cond_exit != 0 {
                     break;
                 }
-                
+
                 // Execute the body
                 exit_code = execute(*body.clone(), shell_state);
-                
+
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
                     return exit_code;
                 }
-                
+
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
                     return shell_state.exit_code;
                 }
             }
-            
+
             exit_code
         }
         Ast::FunctionDefinition { name, body } => {
@@ -726,7 +753,10 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             if let Some(function_body) = shell_state.get_function(&name).cloned() {
                 // Check recursion limit before entering function
                 if shell_state.function_depth >= shell_state.max_recursion_depth {
-                    eprintln!("Function recursion limit ({}) exceeded", shell_state.max_recursion_depth);
+                    eprintln!(
+                        "Function recursion limit ({}) exceeded",
+                        shell_state.max_recursion_depth
+                    );
                     return 1;
                 }
 
@@ -794,12 +824,12 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         Ast::And { left, right } => {
             // Execute left side first
             let left_exit = execute(*left, shell_state);
-            
+
             // Check if we got an early return from a function
             if shell_state.is_returning() {
                 return left_exit;
             }
-            
+
             // Only execute right side if left succeeded (exit code 0)
             if left_exit == 0 {
                 execute(*right, shell_state)
@@ -810,12 +840,12 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         Ast::Or { left, right } => {
             // Execute left side first
             let left_exit = execute(*left, shell_state);
-            
+
             // Check if we got an early return from a function
             if shell_state.is_returning() {
                 return left_exit;
             }
-            
+
             // Only execute right side if left failed (exit code != 0)
             if left_exit != 0 {
                 execute(*right, shell_state)
@@ -860,7 +890,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             output: cmd.output.clone(),
             append: cmd.append.clone(),
         };
-        
+
         // If we're capturing output, create a writer for it
         if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
             // Create a writer that writes to our capture buffer
@@ -876,7 +906,9 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     Ok(())
                 }
             }
-            let writer = CaptureWriter { buffer: capture_buffer.clone() };
+            let writer = CaptureWriter {
+                buffer: capture_buffer.clone(),
+            };
             crate::builtins::execute_builtin(&temp_cmd, shell_state, Some(Box::new(writer)))
         } else {
             crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
@@ -891,7 +923,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         for (key, value) in child_env {
             command.env(key, value);
         }
-        
+
         // If we're capturing output, redirect stdout to capture buffer
         let capturing = shell_state.capture_output.is_some();
         if capturing {
@@ -944,7 +976,11 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             }
         } else if let Some(ref append_file) = cmd.append {
             let expanded_append = expand_variables_in_string(append_file, shell_state);
-            match File::options().append(true).create(true).open(&expanded_append) {
+            match File::options()
+                .append(true)
+                .create(true)
+                .open(&expanded_append)
+            {
                 Ok(file) => {
                     command.stdout(Stdio::from(file));
                 }
@@ -967,28 +1003,27 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         match command.spawn() {
             Ok(mut child) => {
                 // If capturing, read stdout
-                if capturing
-                    && let Some(mut stdout) = child.stdout.take() {
-                        use std::io::Read;
-                        let mut output = Vec::new();
-                        if stdout.read_to_end(&mut output).is_ok()
-                            && let Some(ref capture_buffer) = shell_state.capture_output {
-                                capture_buffer.borrow_mut().extend_from_slice(&output);
-                            }
+                if capturing && let Some(mut stdout) = child.stdout.take() {
+                    use std::io::Read;
+                    let mut output = Vec::new();
+                    if stdout.read_to_end(&mut output).is_ok()
+                        && let Some(ref capture_buffer) = shell_state.capture_output
+                    {
+                        capture_buffer.borrow_mut().extend_from_slice(&output);
                     }
-                
+                }
+
                 match child.wait() {
                     Ok(status) => status.code().unwrap_or(0),
                     Err(e) => {
-                    if shell_state.colors_enabled {
-                        eprintln!(
-                            "{}Error waiting for command: {}\x1b[0m",
-                            shell_state.color_scheme.error,
-                            e
-                        );
-                    } else {
-                        eprintln!("Error waiting for command: {}", e);
-                    }
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Error waiting for command: {}\x1b[0m",
+                                shell_state.color_scheme.error, e
+                            );
+                        } else {
+                            eprintln!("Error waiting for command: {}", e);
+                        }
                         1
                     }
                 }
@@ -1047,8 +1082,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                         if shell_state.colors_enabled {
                             eprintln!(
                                 "{}Error creating pipe for builtin: {}\x1b[0m",
-                                shell_state.color_scheme.error,
-                                e
+                                shell_state.color_scheme.error, e
                             );
                         } else {
                             eprintln!("Error creating pipe for builtin: {}", e);
@@ -1092,27 +1126,28 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
             // Handle input redirection (only for first command)
             if i == 0
-                && let Some(ref input_file) = cmd.input {
-                    let expanded_input = expand_variables_in_string(input_file, shell_state);
-                    match File::open(&expanded_input) {
-                        Ok(file) => {
-                            command.stdin(Stdio::from(file));
+                && let Some(ref input_file) = cmd.input
+            {
+                let expanded_input = expand_variables_in_string(input_file, shell_state);
+                match File::open(&expanded_input) {
+                    Ok(file) => {
+                        command.stdin(Stdio::from(file));
+                    }
+                    Err(e) => {
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Error opening input file '{}{}",
+                                shell_state.color_scheme.error,
+                                input_file,
+                                &format!("': {}\x1b[0m", e)
+                            );
+                        } else {
+                            eprintln!("Error opening input file '{}': {}", input_file, e);
                         }
-                        Err(e) => {
-                            if shell_state.colors_enabled {
-                                eprintln!(
-                                    "{}Error opening input file '{}{}",
-                                    shell_state.color_scheme.error,
-                                    input_file,
-                                    &format!("': {}\x1b[0m", e)
-                                );
-                            } else {
-                                eprintln!("Error opening input file '{}': {}", input_file, e);
-                            }
-                            return 1;
-                        }
+                        return 1;
                     }
                 }
+            }
 
             // Handle output redirection (only for last command)
             if is_last {
@@ -1138,7 +1173,11 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                     }
                 } else if let Some(ref append_file) = cmd.append {
                     let expanded_append = expand_variables_in_string(append_file, shell_state);
-                    match File::options().append(true).create(true).open(&expanded_append) {
+                    match File::options()
+                        .append(true)
+                        .create(true)
+                        .open(&expanded_append)
+                    {
                         Ok(file) => {
                             command.stdout(Stdio::from(file));
                         }
@@ -1172,8 +1211,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                             if shell_state.colors_enabled {
                                 eprintln!(
                                     "{}Error waiting for command: {}\x1b[0m",
-                                    shell_state.color_scheme.error,
-                                    e
+                                    shell_state.color_scheme.error, e
                                 );
                             } else {
                                 eprintln!("Error waiting for command: {}", e);
@@ -1422,7 +1460,10 @@ mod tests {
         assert_eq!(exit_code, 0);
 
         // Global variable should not be modified during function definition
-        assert_eq!(shell_state.get_var("global_var"), Some("global_value".to_string()));
+        assert_eq!(
+            shell_state.get_var("global_var"),
+            Some("global_value".to_string())
+        );
 
         // Call the function
         let call_ast = Ast::FunctionCall {
@@ -1433,7 +1474,10 @@ mod tests {
         assert_eq!(exit_code, 0);
 
         // After function call, global variable should be modified since function assignments affect global scope
-        assert_eq!(shell_state.get_var("global_var"), Some("modified_in_function".to_string()));
+        assert_eq!(
+            shell_state.get_var("global_var"),
+            Some("modified_in_function".to_string())
+        );
     }
 
     #[test]
@@ -1498,6 +1542,9 @@ mod tests {
 
         // After nested function calls, global variable should be modified by inner function
         // (bash behavior: function variable assignments affect global scope)
-        assert_eq!(shell_state.get_var("global_var"), Some("inner_modified".to_string()));
+        assert_eq!(
+            shell_state.get_var("global_var"),
+            Some("inner_modified".to_string())
+        );
     }
 }

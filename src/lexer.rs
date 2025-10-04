@@ -31,9 +31,9 @@ pub enum Token {
     For,
     Do,
     Done,
-    While,    // while
-    And,      // &&
-    Or,       // ||
+    While, // while
+    And,   // &&
+    Or,    // ||
 }
 
 fn is_keyword(word: &str) -> Option<Token> {
@@ -330,7 +330,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             '"' if !in_single_quote => {
                 // Check if this quote is escaped (preceded by backslash in current)
                 let is_escaped = current.ends_with('\\');
-                
+
                 if is_escaped && in_double_quote {
                     // This is an escaped quote inside double quotes - treat as literal
                     current.pop(); // Remove the backslash
@@ -411,7 +411,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                                     if let Some(keyword) = is_keyword(&current) {
                                                         tokens.push(keyword);
                                                     } else {
-                                                        let word = expand_variables_in_command(&current, shell_state);
+                                                        let word = expand_variables_in_command(
+                                                            &current,
+                                                            shell_state,
+                                                        );
                                                         tokens.push(Token::Word(word));
                                                     }
                                                     current.clear();
@@ -428,7 +431,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                                 if let Some(keyword) = is_keyword(&current) {
                                                     tokens.push(keyword);
                                                 } else {
-                                                    let word = expand_variables_in_command(&current, shell_state);
+                                                    let word = expand_variables_in_command(
+                                                        &current,
+                                                        shell_state,
+                                                    );
                                                     tokens.push(Token::Word(word));
                                                 }
                                                 current.clear();
@@ -436,8 +442,12 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                             // For the error case, we need to split at the space to match test expectations
                                             if let Some(space_pos) = param_content.find(' ') {
                                                 // Split at the first space, but keep the closing brace with the first part
-                                                let first_part = format!("${{{}}}", &param_content[..space_pos]);
-                                                let second_part = format!("{}}}", &param_content[space_pos + 1..]);
+                                                let first_part =
+                                                    format!("${{{}}}", &param_content[..space_pos]);
+                                                let second_part = format!(
+                                                    "{}}}",
+                                                    &param_content[space_pos + 1..]
+                                                );
                                                 tokens.push(Token::Word(first_part));
                                                 tokens.push(Token::Word(second_part));
                                             } else {
@@ -620,11 +630,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 // Check if this is a file descriptor redirection like 2>&1
                 // Look back to see if current ends with a digit
                 let is_fd_redirect = if !current.is_empty() {
-                    current.chars().last().map(|c| c.is_ascii_digit()).unwrap_or(false)
+                    current
+                        .chars()
+                        .last()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(false)
                 } else {
                     false
                 };
-                
+
                 if is_fd_redirect {
                     // This might be a file descriptor redirection like 2>&1
                     chars.next(); // consume >
@@ -640,12 +654,12 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 break;
                             }
                         }
-                        
+
                         if !target.is_empty() {
                             // This is a valid fd redirection like 2>&1 or 2>&-
                             // Remove the trailing digit from current (the fd number)
                             current.pop();
-                            
+
                             // Push any remaining content as a token
                             if !current.is_empty() {
                                 if let Some(keyword) = is_keyword(&current) {
@@ -655,7 +669,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 }
                                 current.clear();
                             }
-                            
+
                             // For now, we'll just skip the fd redirection (treat as no-op)
                             // since we don't fully support it, but we won't treat it as an error
                             continue;
@@ -675,7 +689,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             }
                             current.clear();
                         }
-                        
+
                         if let Some(&next_ch) = chars.peek() {
                             if next_ch == '>' {
                                 chars.next();
@@ -941,7 +955,10 @@ pub fn expand_aliases(
             let expanded_alias_tokens = if !alias_tokens.is_empty() {
                 if let Token::Word(ref first_word) = alias_tokens[0] {
                     // Only expand if it's a different alias that we haven't seen yet
-                    if first_word != word && shell_state.get_alias(first_word).is_some() && !expanded.contains(first_word) {
+                    if first_word != word
+                        && shell_state.get_alias(first_word).is_some()
+                        && !expanded.contains(first_word)
+                    {
                         expand_aliases(alias_tokens, shell_state, expanded)?
                     } else {
                         alias_tokens
@@ -1598,8 +1615,11 @@ mod tests {
         // Accept either the original or a formatted version with the literal kept
         let second_token = &result[1];
         if let Token::Word(s) = second_token {
-            assert!(s.starts_with("$((") && s.contains("2") && s.contains("3"),
-                "Expected unmatched arithmetic to be kept as literal, got: {}", s);
+            assert!(
+                s.starts_with("$((") && s.contains("2") && s.contains("3"),
+                "Expected unmatched arithmetic to be kept as literal, got: {}",
+                s
+            );
         } else {
             panic!("Expected Word token");
         }
@@ -1615,7 +1635,11 @@ mod tests {
         assert_eq!(result[0], Token::Word("echo".to_string()));
         // The second token should contain an error message about division by zero
         if let Token::Word(s) = &result[1] {
-            assert!(s.contains("Division by zero"), "Expected division by zero error, got: {}", s);
+            assert!(
+                s.contains("Division by zero"),
+                "Expected division by zero error, got: {}",
+                s
+            );
         } else {
             panic!("Expected Word token");
         }
@@ -1898,13 +1922,7 @@ mod tests {
     fn test_local_keyword() {
         let shell_state = crate::state::ShellState::new();
         let result = lex("local myvar", &shell_state).unwrap();
-        assert_eq!(
-            result,
-            vec![
-                Token::Local,
-                Token::Word("myvar".to_string())
-            ]
-        );
+        assert_eq!(result, vec![Token::Local, Token::Word("myvar".to_string())]);
     }
 
     #[test]
@@ -1913,10 +1931,7 @@ mod tests {
         let result = lex("local var=value", &shell_state).unwrap();
         assert_eq!(
             result,
-            vec![
-                Token::Local,
-                Token::Word("var=value".to_string())
-            ]
+            vec![Token::Local, Token::Word("var=value".to_string())]
         );
     }
 
