@@ -24,8 +24,10 @@ pub struct SignalEvent {
     /// Signal name (e.g., "INT", "TERM")
     pub signal_name: String,
     /// Signal number (e.g., 2, 15)
+    #[allow(dead_code)]
     pub signal_number: i32,
     /// When the signal was received
+    #[allow(dead_code)]
     pub timestamp: Instant,
 }
 
@@ -113,6 +115,7 @@ pub struct ShellState {
     pub exit_code: i32,
     /// Flag to indicate pending signals need processing
     /// Set by signal handler, checked by executor
+    #[allow(dead_code)]
     pub pending_signals: bool,
 }
 
@@ -514,6 +517,7 @@ impl ShellState {
     }
 
     /// Clear all trap handlers
+    #[allow(dead_code)]
     pub fn clear_traps(&mut self) {
         if let Ok(mut handlers) = self.trap_handlers.lock() {
             handlers.clear();
