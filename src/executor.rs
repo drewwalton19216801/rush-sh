@@ -479,6 +479,48 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
     Ok(expanded_args)
 }
 
+/// Execute a trap handler command
+pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32 {
+    // Save current exit code to preserve it across trap execution
+    let saved_exit_code = shell_state.last_exit_code;
+    
+    // Parse and execute the trap command
+    let result = match crate::lexer::lex(trap_cmd, shell_state) {
+        Ok(tokens) => {
+            match crate::lexer::expand_aliases(
+                tokens,
+                shell_state,
+                &mut std::collections::HashSet::new()
+            ) {
+                Ok(expanded_tokens) => {
+                    match crate::parser::parse(expanded_tokens) {
+                        Ok(ast) => {
+                            execute(ast, shell_state)
+                        }
+                        Err(_) => {
+                            // Parse error in trap handler - silently continue
+                            saved_exit_code
+                        }
+                    }
+                }
+                Err(_) => {
+                    // Alias expansion error - silently continue
+                    saved_exit_code
+                }
+            }
+        }
+        Err(_) => {
+            // Lex error in trap handler - silently continue
+            saved_exit_code
+        }
+    };
+    
+    // Restore the original exit code (trap handlers don't affect $?)
+    shell_state.last_exit_code = saved_exit_code;
+    
+    result
+}
+
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {

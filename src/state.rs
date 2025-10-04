@@ -4,6 +4,7 @@ use std::cell::RefCell;
 use super::parser::Ast;
 use std::env;
 use std::io::IsTerminal;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct ColorScheme {
@@ -69,6 +70,10 @@ pub struct ShellState {
     pub capture_output: Option<Rc<RefCell<Vec<u8>>>>,
     /// Whether to use condensed cwd display in prompt
     pub condensed_cwd: bool,
+    /// Signal trap handlers: maps signal name to command string
+    pub trap_handlers: Arc<Mutex<HashMap<String, String>>>,
+    /// Flag to track if EXIT trap has been executed
+    pub exit_trap_executed: bool,
 }
 
 impl ShellState {
@@ -120,6 +125,8 @@ impl ShellState {
             return_value: None,
             capture_output: None,
             condensed_cwd,
+            trap_handlers: Arc::new(Mutex::new(HashMap::new())),
+            exit_trap_executed: false,
         }
     }
 
@@ -435,6 +442,45 @@ impl ShellState {
     /// Get return value if returning
     pub fn get_return_value(&self) -> Option<i32> {
         self.return_value
+    }
+
+    /// Set a trap handler for a signal
+    pub fn set_trap(&mut self, signal: &str, command: String) {
+        if let Ok(mut handlers) = self.trap_handlers.lock() {
+            handlers.insert(signal.to_uppercase(), command);
+        }
+    }
+
+    /// Get a trap handler for a signal
+    pub fn get_trap(&self, signal: &str) -> Option<String> {
+        if let Ok(handlers) = self.trap_handlers.lock() {
+            handlers.get(&signal.to_uppercase()).cloned()
+        } else {
+            None
+        }
+    }
+
+    /// Remove a trap handler for a signal
+    pub fn remove_trap(&mut self, signal: &str) {
+        if let Ok(mut handlers) = self.trap_handlers.lock() {
+            handlers.remove(&signal.to_uppercase());
+        }
+    }
+
+    /// Get all trap handlers
+    pub fn get_all_traps(&self) -> HashMap<String, String> {
+        if let Ok(handlers) = self.trap_handlers.lock() {
+            handlers.clone()
+        } else {
+            HashMap::new()
+        }
+    }
+
+    /// Clear all trap handlers
+    pub fn clear_traps(&mut self) {
+        if let Ok(mut handlers) = self.trap_handlers.lock() {
+            handlers.clear();
+        }
     }
 
 

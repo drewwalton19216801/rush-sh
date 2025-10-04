@@ -27,6 +27,7 @@ impl<W: Write> Write for ColoredWriter<W> {
 
 mod builtin_alias;
 mod builtin_cd;
+mod builtin_declare;
 mod builtin_dirs;
 mod builtin_env;
 mod builtin_exit;
@@ -41,9 +42,9 @@ mod builtin_set_condensed;
 mod builtin_shift;
 mod builtin_source;
 mod builtin_test;
+mod builtin_trap;
 mod builtin_unalias;
 mod builtin_unset;
-mod builtin_declare;
 
 pub trait Builtin {
     fn name(&self) -> &'static str;
@@ -78,6 +79,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_set_condensed::SetCondensedBuiltin),
         Box::new(builtin_shift::ShiftBuiltin),
         Box::new(builtin_declare::DeclareBuiltin),
+        Box::new(builtin_trap::TrapBuiltin),
     ]
 }
 
@@ -221,6 +223,6 @@ mod tests {
         assert!(commands.contains(&"set_colors".to_string()));
         assert!(commands.contains(&"set_color_scheme".to_string()));
         assert!(commands.contains(&"set_condensed".to_string()));
-        assert_eq!(commands.len(), 21);
+        assert_eq!(commands.len(), 22);
     }
 }

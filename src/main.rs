@@ -94,6 +94,8 @@ fn main() {
         } else {
             execute_command_string(&full_command, &mut shell_state);
         }
+        // Execute EXIT trap before exiting
+        execute_exit_trap(&mut shell_state);
     } else if let Some(script_path) = args_parsed.script {
         // Script mode
         // Set positional parameters from script arguments
@@ -105,6 +107,8 @@ fn main() {
             } else {
                 execute_script(&content, &mut shell_state);
             }
+            // Execute EXIT trap before exiting
+            execute_exit_trap(&mut shell_state);
         } else {
             if shell_state.colors_enabled {
                 eprintln!(
@@ -137,6 +141,7 @@ fn main() {
             loop {
                 if SHUTDOWN.load(Ordering::Relaxed) {
                     println!("\nReceived SIGTERM, exiting gracefully.");
+                    execute_exit_trap(&mut shell_state);
                     break;
                 }
                 let base_prompt = shell_state.get_prompt();
@@ -153,6 +158,7 @@ fn main() {
                     Ok(line) => {
                         let _ = rl.add_history_entry(line.as_str());
                         if line == "exit" {
+                            execute_exit_trap(&mut shell_state);
                             break;
                         }
                         execute_line(&line, &mut shell_state);
@@ -161,6 +167,7 @@ fn main() {
                         // Check if it's a signal-related error or if shutdown was requested
                         if SHUTDOWN.load(Ordering::Relaxed) {
                             println!("\nReceived SIGTERM, exiting gracefully.");
+                            execute_exit_trap(&mut shell_state);
                             break;
                         } else {
                             // Check if this is a signal interruption (SIGINT)
@@ -192,6 +199,28 @@ fn main() {
             if io::stdin().read_to_string(&mut input).is_ok() {
                 execute_script(&input, &mut shell_state);
             }
+            // Execute EXIT trap before exiting
+            execute_exit_trap(&mut shell_state);
+        }
+    }
+    // Execute EXIT trap at the very end if not already executed
+    execute_exit_trap(&mut shell_state);
+}
+
+fn execute_exit_trap(shell_state: &mut state::ShellState) {
+    // Only execute once
+    if shell_state.exit_trap_executed {
+        return;
+    }
+    
+    // Check if EXIT trap is set
+    if let Some(trap_cmd) = shell_state.get_trap("EXIT") {
+        if !trap_cmd.is_empty() {
+            // Mark as executed to prevent double execution
+            shell_state.exit_trap_executed = true;
+            
+            // Execute the trap handler
+            executor::execute_trap_handler(&trap_cmd, shell_state);
         }
     }
 }
@@ -749,6 +778,70 @@ mod tests {
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
         let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+
+    #[test]
+    fn test_trap_exit_execution() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set an EXIT trap
+        shell_state.set_trap("EXIT", "echo 'EXIT trap executed'".to_string());
+        
+        // Execute the EXIT trap
+        execute_exit_trap(&mut shell_state);
+        
+        // Verify it was marked as executed
+        assert!(shell_state.exit_trap_executed);
+        
+        // Calling again should not execute it
+        execute_exit_trap(&mut shell_state);
+    }
+
+    #[test]
+    fn test_trap_builtin_integration() {
+        let line = "trap 'echo trapped' INT";
+        let mut shell_state = state::ShellState::new();
+        execute_line(line, &mut shell_state);
+        
+        // Verify trap was set
+        assert_eq!(shell_state.get_trap("INT"), Some("echo trapped".to_string()));
+    }
+
+    #[test]
+    fn test_trap_display_integration() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_trap("INT", "echo int handler".to_string());
+        shell_state.set_trap("TERM", "echo term handler".to_string());
+        
+        let line = "trap";
+        execute_line(line, &mut shell_state);
+        
+        // Just verify it doesn't crash - output goes to stdout
+    }
+
+    #[test]
+    fn test_trap_reset_integration() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_trap("INT", "echo handler".to_string());
+        
+        // Reset the trap
+        let line = "trap - INT";
+        execute_line(line, &mut shell_state);
+        
+        // Verify trap was removed
+        assert_eq!(shell_state.get_trap("INT"), None);
+    }
+
+    #[test]
+    fn test_trap_multiple_signals() {
+        let line = "trap 'echo signal' INT TERM HUP";
+        let mut shell_state = state::ShellState::new();
+        execute_line(line, &mut shell_state);
+        
+        // Verify all traps were set
+        assert_eq!(shell_state.get_trap("INT"), Some("echo signal".to_string()));
+        assert_eq!(shell_state.get_trap("TERM"), Some("echo signal".to_string()));
+        assert_eq!(shell_state.get_trap("HUP"), Some("echo signal".to_string()));
+    }
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
