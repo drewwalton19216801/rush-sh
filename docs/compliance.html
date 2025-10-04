@@ -53,7 +53,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.4.4</span>
+                    <span class="version">v0.5.0</span>
                     <span class="status">~88% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -115,7 +115,7 @@
                                 <div class="stat-label">Overall Compliance</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-number">19</div>
+                                <div class="stat-number">20</div>
                                 <div class="stat-label">Built-in Commands</div>
                             </div>
                             <div class="stat-item">
@@ -454,8 +454,8 @@
                         <div class="status-summary">
                             <h3>Implementation Status</h3>
                             <div class="status-badges">
-                                <span class="badge implemented">19 Implemented</span>
-                                <span class="badge missing">10 Missing</span>
+                                <span class="badge implemented">20 Implemented</span>
+                                <span class="badge missing">9 Missing</span>
                             </div>
                         </div>
 
@@ -531,7 +531,7 @@
                             </div>
 
                             <div class="builtins-column">
-                                <h4>Currently Implemented (18)</h4>
+                                <h4>Currently Implemented (20)</h4>
                                 <div class="implemented-list">
                                     <div class="builtin-tag">alias</div>
                                     <div class="builtin-tag">cd</div>
@@ -546,6 +546,7 @@
                                     <div class="builtin-tag">pwd</div>
                                     <div class="builtin-tag">set_color_scheme</div>
                                     <div class="builtin-tag">set_colors</div>
+                                    <div class="builtin-tag">set_condensed</div>
                                     <div class="builtin-tag">shift</div>
                                     <div class="builtin-tag">source</div>
                                     <div class="builtin-tag">test</div>
@@ -577,8 +578,7 @@
                                         <li>set (options and positional parameters)</li>
                                         <li>eval</li>
                                         <li>exec</li>
-                                        <li>trap</li>
-                                        <li>readonly, return, etc.</li>
+                                        <li>readonly, return, break, continue, etc.</li>
                                     </ul>
                                 </li>
                                 <li><strong>Parameter Expansion</strong>
@@ -633,7 +633,7 @@
                                 <div class="test-label">Core Components Covered</div>
                             </div>
                             <div class="test-stat">
-                                <div class="test-number">19</div>
+                                <div class="test-number">20</div>
                                 <div class="test-label">Built-ins Tested</div>
                             </div>
                         </div>
@@ -693,7 +693,7 @@
                                 </div>
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
-                                    <span class="item-text">Missing built-in functionality (eval, exec, trap, etc.)</span>
+                                    <span class="item-text">Missing built-in functionality (eval, exec, set, etc.)</span>
                                 </div>
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
@@ -722,7 +722,7 @@
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Built-in Commands</span>
-                                    <span class="percentage implemented">88%</span>
+                                    <span class="percentage implemented">65%</span>
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Expansions</span>

@@ -1,6 +1,6 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.4.4** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.5.0** - A comprehensive POSIX sh-compatible shell implementation
 
 [![Repository Statistics](https://tokei.rs/b1/github/drewwalton19216801/rush-sh)](https://github.com/drewwalton19216801/rush-sh) [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
@@ -76,7 +76,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
     - Local variables: `local var=value`
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
-- **Built-in Commands** (19 total):
+- **Built-in Commands** (20 total):
   - `cd`: Change directory
   - `exit`: Exit the shell
   - `pwd`: Print working directory
@@ -119,7 +119,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of 18 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 20 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
