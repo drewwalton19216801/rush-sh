@@ -53,8 +53,8 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.4.4</span>
-                    <span class="status">~87% POSIX Compliant</span>
+                    <span class="version">v0.5.0</span>
+                    <span class="status">~88% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
                     <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
@@ -441,7 +441,7 @@ kill %1</code></pre>
                         </div>
 
                         <div class="advanced-section">
-                            <h3>Signal Handling</h3>
+                            <h3>Signal Handling with trap</h3>
                             <div class="code-block">
                                 <pre><code># Trap signals
 trap 'echo "Interrupted!"; exit' INT
@@ -451,7 +451,16 @@ cleanup() {
     echo "Cleaning up..."
     rm -f temp_*
 }
-trap cleanup EXIT</code></pre>
+trap cleanup EXIT
+
+# Multiple signals
+trap 'echo "Signal received"' INT TERM HUP
+
+# Display current traps
+trap
+
+# Reset trap to default
+trap - INT</code></pre>
                             </div>
                         </div>
                     </div>
