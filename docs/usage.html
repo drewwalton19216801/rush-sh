@@ -474,24 +474,35 @@ trap cleanup EXIT</code></pre>
                         </div>
 
                         <div class="tip-card">
-                            <div class="tip-icon">🔍</div>
-                            <h3>History Search</h3>
+                            <div class="tip-icon">📁</div>
+                            <h3>Directory Stack</h3>
                             <ul>
-                                <li><kbd>Ctrl+R</kbd> - Reverse search history</li>
-                                <li><code>history</code> - Show command history</li>
-                                <li><code>!n</code> - Execute command by number</li>
-                                <li><code>!!</code> - Execute last command</li>
+                                <li><code>pushd <em>dir</em></code> - Push directory to stack</li>
+                                <li><code>popd</code> - Pop directory from stack</li>
+                                <li><code>dirs</code> - Show directory stack</li>
+                                <li>Great for navigating between multiple directories</li>
                             </ul>
                         </div>
 
                         <div class="tip-card">
-                            <div class="tip-icon">⚙️</div>
-                            <h3>Shell Options</h3>
+                            <div class="tip-icon">🎨</div>
+                            <h3>Customization</h3>
                             <ul>
-                                <li><code>set -e</code> - Exit on error</li>
-                                <li><code>set -u</code> - Error on undefined variables</li>
-                                <li><code>set -x</code> - Debug mode (trace commands)</li>
-                                <li><code>set +x</code> - Disable debug mode</li>
+                                <li><code>set_colors <em>on/off</em></code> - Enable/disable colors</li>
+                                <li><code>set_color_scheme <em>scheme</em></code> - Change color scheme</li>
+                                <li><code>set_condensed <em>on/off</em></code> - Toggle condensed prompt</li>
+                                <li><code>source ~/.rushrc</code> - Load custom configuration</li>
+                            </ul>
+                        </div>
+
+                        <div class="tip-card">
+                            <div class="tip-icon">🛠️</div>
+                            <h3>Built-in Commands</h3>
+                            <ul>
+                                <li><code>alias</code> / <code>unalias</code> - Manage command aliases</li>
+                                <li><code>export <em>var</em>=<em>value</em></code> - Export variables to environment</li>
+                                <li><code>unset <em>var</em></code> - Remove variables</li>
+                                <li><code>help</code> - Show available built-in commands</li>
                             </ul>
                         </div>
 
@@ -500,9 +511,20 @@ trap cleanup EXIT</code></pre>
                             <h3>Best Practices</h3>
                             <ul>
                                 <li>Always quote variables: <code>"$variable"</code></li>
-                                <li>Use <code>set -euo pipefail</code> for strict error handling</li>
-                                <li>Prefer <code>$(command)</code> over backticks</li>
+                                <li>Prefer <code>$(command)</code> over backticks for command substitution</li>
+                                <li>Use <code>export</code> to make variables available to child processes</li>
                                 <li>Use descriptive variable names</li>
+                            </ul>
+                        </div>
+
+                        <div class="tip-card">
+                            <div class="tip-icon">🔧</div>
+                            <h3>Scripting Features</h3>
+                            <ul>
+                                <li><code>source <em>script.sh</em></code> - Execute script in current shell</li>
+                                <li>Full support for <code>$(...)</code> command substitution</li>
+                                <li>Parameter expansion: <code>${VAR:-default}</code></li>
+                                <li>Brace expansion: <code>{1..5}</code> and <code>{a,b,c}</code></li>
                             </ul>
                         </div>
                     </div>
