@@ -337,11 +337,8 @@ ps aux
 # Monitor resource usage
 top
 
-# Kill process
-kill -TERM 1234
-
-# Background process
-long_command &</code></pre>
+# Kill process by PID
+kill -TERM 1234</code></pre>
                             </div>
                         </div>
 
@@ -410,33 +407,8 @@ lscpu</code></pre>
 find . -name "*.log" -exec wc -l {} \; | \
     awk '{sum += $1} END {print "Total lines:", sum}'
 
-# Process substitution
-diff <(ls dir1) <(ls dir2)
-
-# Named pipes
-mkfifo mypipe
-producer > mypipe &
-consumer < mypipe</code></pre>
-                            </div>
-                        </div>
-
-                        <div class="advanced-section">
-                            <h3>Job Control</h3>
-                            <div class="code-block">
-                                <pre><code># Run in background
-long_command &
-
-# List jobs
-jobs
-
-# Bring to foreground
-fg %1
-
-# Send to background
-bg %1
-
-# Kill job
-kill %1</code></pre>
+# Chained commands
+cat file.txt | grep "pattern" | sort | uniq -c</code></pre>
                             </div>
                         </div>
 
