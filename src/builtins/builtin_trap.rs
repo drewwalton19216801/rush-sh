@@ -236,7 +236,7 @@ impl Builtin for TrapBuiltin {
 
         // trap - signal... - reset traps to default
         if args.len() >= 3 && args[1] == "-" {
-            return Self::reset_traps(&args[2..].to_vec(), shell_state, output_writer);
+            return Self::reset_traps(&args[2..], shell_state, output_writer);
         }
 
         // trap action signal... - set trap handler

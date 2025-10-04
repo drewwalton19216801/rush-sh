@@ -547,13 +547,12 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
         // Process all pending signals
         while let Some(signal_event) = queue.pop_front() {
             // Check if a trap is set for this signal
-            if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name) {
-                if !trap_cmd.is_empty() {
+            if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name)
+                && !trap_cmd.is_empty() {
                     // Execute the trap handler
                     // Note: This preserves the exit code as per POSIX requirements
                     crate::executor::execute_trap_handler(&trap_cmd, shell_state);
                 }
-            }
         }
     }
 }
