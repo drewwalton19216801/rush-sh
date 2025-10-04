@@ -56,9 +56,7 @@ pub struct BenchmarkResult {
 
 impl BenchmarkResult {
     pub fn avg_time_per_iteration(&self) -> Duration {
-        Duration::from_nanos(
-            (self.duration.as_nanos() / self.iterations as u128) as u64
-        )
+        Duration::from_nanos((self.duration.as_nanos() / self.iterations as u128) as u64)
     }
 
     pub fn iterations_per_second(&self) -> f64 {
@@ -98,7 +96,10 @@ impl BenchmarkSuite {
     /// This method is currently unused but provides flexibility for future
     /// benchmark scenarios where different iteration counts are needed.
     #[allow(dead_code)]
-    pub fn run_with_iterations(&self, iterations: usize) -> Result<Vec<BenchmarkResult>, Box<dyn std::error::Error>> {
+    pub fn run_with_iterations(
+        &self,
+        iterations: usize,
+    ) -> Result<Vec<BenchmarkResult>, Box<dyn std::error::Error>> {
         let mut results = Vec::new();
 
         for benchmark in &self.benchmarks {

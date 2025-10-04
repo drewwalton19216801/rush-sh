@@ -49,12 +49,8 @@ pub mod lexer_tests {
 
 #[allow(dead_code)]
 pub mod parser_tests {
-    pub const BASIC_COMMANDS: &[&str] = &[
-        "ls -la",
-        "echo hello world",
-        "printf test",
-        "cat file.txt",
-    ];
+    pub const BASIC_COMMANDS: &[&str] =
+        &["ls -la", "echo hello world", "printf test", "cat file.txt"];
 
     pub const COMPLEX_STRUCTURES: &[&str] = &[
         "if true; then echo yes; fi",
@@ -72,19 +68,9 @@ pub mod parser_tests {
 
 #[allow(dead_code)]
 pub mod executor_tests {
-    pub const BUILTIN_COMMANDS: &[&str] = &[
-        "true",
-        "false",
-        "echo hello world",
-        "printf test",
-    ];
+    pub const BUILTIN_COMMANDS: &[&str] = &["true", "false", "echo hello world", "printf test"];
 
-    pub const EXTERNAL_COMMANDS: &[&str] = &[
-        "date",
-        "pwd",
-        "whoami",
-        "id",
-    ];
+    pub const EXTERNAL_COMMANDS: &[&str] = &["date", "pwd", "whoami", "id"];
 
     pub const VARIABLE_OPERATIONS: &[&str] = &[
         "MY_VAR=test_value",
@@ -202,8 +188,15 @@ pub fn generate_complexity_variants(base_command: &str, levels: usize) -> Vec<St
         let variant = match level {
             0 => format!("{} {}", base_command, level),
             1 => format!("echo $({} {})", base_command, level),
-            2 => format!("for i in $(seq {}); do {} $i; done", level + 1, base_command),
-            3 => format!("if [ $({} {}) -eq {} ]; then echo 'match'; fi", base_command, level, level),
+            2 => format!(
+                "for i in $(seq {}); do {} $i; done",
+                level + 1,
+                base_command
+            ),
+            3 => format!(
+                "if [ $({} {}) -eq {} ]; then echo 'match'; fi",
+                base_command, level, level
+            ),
             _ => format!("{} {} | wc -l", base_command, level),
         };
         variants.push(variant);
@@ -275,12 +268,18 @@ pub mod utils {
 
         // CPU info
         if let Ok(output) = Command::new("uname").arg("-a").output() {
-            info.insert("system".to_string(), String::from_utf8_lossy(&output.stdout).trim().to_string());
+            info.insert(
+                "system".to_string(),
+                String::from_utf8_lossy(&output.stdout).trim().to_string(),
+            );
         }
 
         // Memory info (Linux specific)
         if let Ok(output) = Command::new("free").arg("-h").output() {
-            info.insert("memory".to_string(), String::from_utf8_lossy(&output.stdout).trim().to_string());
+            info.insert(
+                "memory".to_string(),
+                String::from_utf8_lossy(&output.stdout).trim().to_string(),
+            );
         }
 
         info

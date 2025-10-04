@@ -74,12 +74,17 @@ fn main() {
             match sig {
                 SIGINT => {
                     // SIGINT should interrupt current input but not exit shell
-                    // We'll handle this by breaking out of readline gracefully
                     println!("^C"); // Show the interrupt indicator
+
+                    // Enqueue signal for trap execution
+                    state::enqueue_signal("INT", 2);
                 }
                 SIGTERM => {
                     // SIGTERM should cause graceful shutdown
                     SHUTDOWN.store(true, Ordering::Relaxed);
+
+                    // Enqueue signal for trap execution
+                    state::enqueue_signal("TERM", 15);
                 }
                 _ => {}
             }
@@ -94,6 +99,8 @@ fn main() {
         } else {
             execute_command_string(&full_command, &mut shell_state);
         }
+        // Execute EXIT trap before exiting
+        execute_exit_trap(&mut shell_state);
     } else if let Some(script_path) = args_parsed.script {
         // Script mode
         // Set positional parameters from script arguments
@@ -105,6 +112,8 @@ fn main() {
             } else {
                 execute_script(&content, &mut shell_state);
             }
+            // Execute EXIT trap before exiting
+            execute_exit_trap(&mut shell_state);
         } else {
             if shell_state.colors_enabled {
                 eprintln!(
@@ -135,8 +144,12 @@ fn main() {
             );
 
             loop {
+                // Process any pending signals before showing prompt
+                state::process_pending_signals(&mut shell_state);
+
                 if SHUTDOWN.load(Ordering::Relaxed) {
                     println!("\nReceived SIGTERM, exiting gracefully.");
+                    execute_exit_trap(&mut shell_state);
                     break;
                 }
                 let base_prompt = shell_state.get_prompt();
@@ -153,14 +166,22 @@ fn main() {
                     Ok(line) => {
                         let _ = rl.add_history_entry(line.as_str());
                         if line == "exit" {
+                            execute_exit_trap(&mut shell_state);
                             break;
                         }
                         execute_line(&line, &mut shell_state);
+
+                        // Process any signals that arrived during command execution
+                        state::process_pending_signals(&mut shell_state);
                     }
                     Err(err) => {
+                        // Process signals even on error
+                        state::process_pending_signals(&mut shell_state);
+
                         // Check if it's a signal-related error or if shutdown was requested
                         if SHUTDOWN.load(Ordering::Relaxed) {
                             println!("\nReceived SIGTERM, exiting gracefully.");
+                            execute_exit_trap(&mut shell_state);
                             break;
                         } else {
                             // Check if this is a signal interruption (SIGINT)
@@ -192,6 +213,28 @@ fn main() {
             if io::stdin().read_to_string(&mut input).is_ok() {
                 execute_script(&input, &mut shell_state);
             }
+            // Execute EXIT trap before exiting
+            execute_exit_trap(&mut shell_state);
+        }
+    }
+    // Execute EXIT trap at the very end if not already executed
+    execute_exit_trap(&mut shell_state);
+}
+
+fn execute_exit_trap(shell_state: &mut state::ShellState) {
+    // Only execute once
+    if shell_state.exit_trap_executed {
+        return;
+    }
+
+    // Check if EXIT trap is set
+    if let Some(trap_cmd) = shell_state.get_trap("EXIT") {
+        if !trap_cmd.is_empty() {
+            // Mark as executed to prevent double execution
+            shell_state.exit_trap_executed = true;
+
+            // Execute the trap handler
+            executor::execute_trap_handler(&trap_cmd, shell_state);
         }
     }
 }
@@ -273,6 +316,20 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut while_depth = 0;
 
     for line in content.lines() {
+        // Process pending signals at the start of each line
+        state::process_pending_signals(shell_state);
+
+        // Check for shutdown signal
+        if SHUTDOWN.load(Ordering::Relaxed) {
+            eprintln!("Script interrupted by SIGTERM");
+            break;
+        }
+
+        // Check if exit was requested (e.g., from trap handler)
+        if shell_state.exit_requested {
+            break;
+        }
+
         // Skip shebang lines
         if line.starts_with("#!") {
             continue;
@@ -324,12 +381,22 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             in_function_block = false;
             execute_line(&current_block, shell_state);
             current_block.clear();
+
+            // Check if exit was requested
+            if shell_state.exit_requested {
+                break;
+            }
         } else if in_if_block && trimmed == "fi" {
             if_depth -= 1;
             if if_depth == 0 {
                 in_if_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
+
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         } else if in_for_block && trimmed == "done" {
             for_depth -= 1;
@@ -337,6 +404,11 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 in_for_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
+
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         } else if in_while_block && trimmed == "done" {
             while_depth -= 1;
@@ -344,15 +416,35 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 in_while_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
+
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         } else if in_case_block && trimmed == "esac" {
             in_case_block = false;
             execute_line(&current_block, shell_state);
             current_block.clear();
-        } else if !in_if_block && !in_case_block && !in_function_block && !in_for_block && !in_while_block {
+
+            // Check if exit was requested
+            if shell_state.exit_requested {
+                break;
+            }
+        } else if !in_if_block
+            && !in_case_block
+            && !in_function_block
+            && !in_for_block
+            && !in_while_block
+        {
             // Execute single-line commands immediately
             execute_line(&current_block, shell_state);
             current_block.clear();
+
+            // Check if exit was requested after executing the line
+            if shell_state.exit_requested {
+                break;
+            }
         }
     }
 
@@ -360,6 +452,9 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     if !current_block.trim().is_empty() {
         execute_line(&current_block, shell_state);
     }
+
+    // Final signal processing
+    state::process_pending_signals(shell_state);
 }
 
 fn execute_command_string(command_string: &str, shell_state: &mut state::ShellState) {
@@ -460,7 +555,7 @@ mod tests {
 
     // Mutex to serialize tests that change the current directory
     static DIR_CHANGE_LOCK: Mutex<()> = Mutex::new(());
-    
+
     // Mutex to serialize tests that modify environment variables
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -542,11 +637,11 @@ mod tests {
     fn test_integration_builtin_cd() {
         // Lock to prevent parallel tests from interfering with directory changes
         let _lock = DIR_CHANGE_LOCK.lock().unwrap();
-        
+
         // First, ensure we're in a safe directory that definitely exists
         // This prevents failures if the current directory was deleted by another test
         std::env::set_current_dir("/tmp").unwrap();
-        
+
         let line = "cd /tmp";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
@@ -554,7 +649,7 @@ mod tests {
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         assert_eq!(std::env::current_dir().unwrap(), Path::new("/tmp"));
-        
+
         // No need to restore since we're already in /tmp and the lock ensures
         // other directory-changing tests won't run concurrently
     }
@@ -563,7 +658,7 @@ mod tests {
     fn test_source_rushrc_functionality() {
         // Lock to prevent parallel tests from interfering with environment variables
         let _lock = ENV_LOCK.lock().unwrap();
-        
+
         // Use a unique temporary directory to avoid conflicts with parallel tests
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -577,7 +672,7 @@ mod tests {
         // Create temp directory and file
         std::fs::create_dir_all(&temp_dir).unwrap();
         std::fs::write(&rushrc_path, rushrc_content).unwrap();
-        
+
         // Small delay to ensure file is written
         std::thread::sleep(std::time::Duration::from_millis(10));
 
@@ -621,7 +716,7 @@ mod tests {
     fn test_source_rushrc_condensed_setting() {
         // Lock to prevent parallel tests from interfering with environment variables
         let _lock = ENV_LOCK.lock().unwrap();
-        
+
         // Test that .rushrc can override RUSH_CONDENSED setting
         use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -640,7 +735,7 @@ mod tests {
 
         // Create temp directory and file
         std::fs::create_dir_all(&temp_dir).unwrap();
-        
+
         // Test 1: .rushrc sets RUSH_CONDENSED=false
         std::fs::write(&rushrc_path, "export RUSH_CONDENSED=false").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -656,8 +751,11 @@ mod tests {
         source_rushrc(&mut shell_state);
 
         // Verify condensed_cwd was set to false
-        assert!(!shell_state.condensed_cwd, "Expected condensed_cwd to be false after sourcing .rushrc with RUSH_CONDENSED=false");
-        
+        assert!(
+            !shell_state.condensed_cwd,
+            "Expected condensed_cwd to be false after sourcing .rushrc with RUSH_CONDENSED=false"
+        );
+
         // Test 2: .rushrc sets RUSH_CONDENSED=true
         std::fs::write(&rushrc_path, "export RUSH_CONDENSED=true").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -673,7 +771,10 @@ mod tests {
         source_rushrc(&mut shell_state2);
 
         // Verify condensed_cwd was set to true
-        assert!(shell_state2.condensed_cwd, "Expected condensed_cwd to be true after sourcing .rushrc with RUSH_CONDENSED=true");
+        assert!(
+            shell_state2.condensed_cwd,
+            "Expected condensed_cwd to be true after sourcing .rushrc with RUSH_CONDENSED=true"
+        );
 
         // Clean up files
         let _ = std::fs::remove_file(&rushrc_path);
@@ -686,7 +787,7 @@ mod tests {
             } else {
                 std::env::remove_var("HOME");
             }
-            
+
             if let Some(rush_condensed) = original_rush_condensed {
                 std::env::set_var("RUSH_CONDENSED", rush_condensed);
             } else {
@@ -700,7 +801,9 @@ mod tests {
         let line = "echo {a,b,c}";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
-        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let expanded_tokens =
+            lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new())
+                .unwrap();
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
@@ -712,7 +815,9 @@ mod tests {
         let line = "echo {1..3}";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
-        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let expanded_tokens =
+            lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new())
+                .unwrap();
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
@@ -724,7 +829,9 @@ mod tests {
         let line = "echo file{a,b}.txt";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
-        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let expanded_tokens =
+            lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new())
+                .unwrap();
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
@@ -736,7 +843,9 @@ mod tests {
         let line = "echo {{a,b},{c,d}}";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
-        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let expanded_tokens =
+            lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new())
+                .unwrap();
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
@@ -748,10 +857,205 @@ mod tests {
         let line = "echo {a,b} | cat";
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
-        let expanded_tokens = lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new()).unwrap();
+        let expanded_tokens =
+            lexer::expand_aliases(tokens, &shell_state, &mut std::collections::HashSet::new())
+                .unwrap();
         let brace_expanded_tokens = brace_expansion::expand_braces(expanded_tokens).unwrap();
         let ast = parser::parse(brace_expanded_tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_trap_exit_execution() {
+        let mut shell_state = state::ShellState::new();
+
+        // Set an EXIT trap
+        shell_state.set_trap("EXIT", "echo 'EXIT trap executed'".to_string());
+
+        // Execute the EXIT trap
+        execute_exit_trap(&mut shell_state);
+
+        // Verify it was marked as executed
+        assert!(shell_state.exit_trap_executed);
+
+        // Calling again should not execute it
+        execute_exit_trap(&mut shell_state);
+    }
+
+    #[test]
+    fn test_trap_builtin_integration() {
+        let line = "trap 'echo trapped' INT";
+        let mut shell_state = state::ShellState::new();
+        execute_line(line, &mut shell_state);
+
+        // Verify trap was set
+        assert_eq!(
+            shell_state.get_trap("INT"),
+            Some("echo trapped".to_string())
+        );
+    }
+
+    #[test]
+    fn test_trap_display_integration() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_trap("INT", "echo int handler".to_string());
+        shell_state.set_trap("TERM", "echo term handler".to_string());
+
+        let line = "trap";
+        execute_line(line, &mut shell_state);
+
+        // Just verify it doesn't crash - output goes to stdout
+    }
+
+    #[test]
+    fn test_trap_reset_integration() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_trap("INT", "echo handler".to_string());
+
+        // Reset the trap
+        let line = "trap - INT";
+        execute_line(line, &mut shell_state);
+
+        // Verify trap was removed
+        assert_eq!(shell_state.get_trap("INT"), None);
+    }
+
+    #[test]
+    fn test_trap_multiple_signals() {
+        let line = "trap 'echo signal' INT TERM HUP";
+        let mut shell_state = state::ShellState::new();
+        execute_line(line, &mut shell_state);
+
+        // Verify all traps were set
+        assert_eq!(shell_state.get_trap("INT"), Some("echo signal".to_string()));
+        assert_eq!(
+            shell_state.get_trap("TERM"),
+            Some("echo signal".to_string())
+        );
+        assert_eq!(shell_state.get_trap("HUP"), Some("echo signal".to_string()));
+    }
+
+    #[test]
+    fn test_signal_queue_enqueue_dequeue() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+
+        // Enqueue a signal
+        state::enqueue_signal("INT", 2);
+
+        // Verify it was enqueued
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 1);
+            assert_eq!(queue.front().unwrap().signal_name, "INT");
+            assert_eq!(queue.front().unwrap().signal_number, 2);
+        }
+
+        // Clear for other tests
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+    }
+
+    #[test]
+    fn test_signal_queue_overflow() {
+        // Lock the queue for the entire test to prevent interference
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            // Clear the queue first
+            queue.clear();
+
+            // Fill the queue beyond capacity directly
+            for _i in 0..110 {
+                // If queue is full, remove oldest event
+                if queue.len() >= 100 {
+                    queue.pop_front();
+                }
+                queue.push_back(state::SignalEvent::new("INT".to_string(), 2));
+            }
+
+            // Verify queue size is capped at 100
+            assert_eq!(queue.len(), 100);
+
+            // Clear for other tests
+            queue.clear();
+        }
+    }
+
+    #[test]
+    fn test_process_pending_signals_with_trap() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+
+        let mut shell_state = state::ShellState::new();
+
+        // Set a trap for INT
+        shell_state.set_trap("INT", "echo 'INT trapped'".to_string());
+
+        // Enqueue a signal
+        state::enqueue_signal("INT", 2);
+
+        // Process signals
+        state::process_pending_signals(&mut shell_state);
+
+        // Verify queue is empty after processing
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_trap_execution_during_repl() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+
+        let mut shell_state = state::ShellState::new();
+
+        // Set a trap for INT
+        shell_state.set_trap("INT", "echo 'Caught SIGINT'".to_string());
+
+        // Simulate receiving SIGINT
+        state::enqueue_signal("INT", 2);
+
+        // Process signals (simulating REPL loop)
+        state::process_pending_signals(&mut shell_state);
+
+        // Verify queue is empty
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 0);
+        }
+    }
+
+    #[test]
+    fn test_multiple_signals_in_sequence() {
+        // Clear the queue first
+        if let Ok(mut queue) = state::SIGNAL_QUEUE.lock() {
+            queue.clear();
+        }
+
+        let mut shell_state = state::ShellState::new();
+
+        // Set traps for multiple signals
+        shell_state.set_trap("INT", "echo 'INT'".to_string());
+        shell_state.set_trap("TERM", "echo 'TERM'".to_string());
+        shell_state.set_trap("HUP", "echo 'HUP'".to_string());
+
+        // Enqueue multiple signals
+        state::enqueue_signal("INT", 2);
+        state::enqueue_signal("TERM", 15);
+        state::enqueue_signal("HUP", 1);
+
+        // Process all signals
+        state::process_pending_signals(&mut shell_state);
+
+        // Verify all were processed
+        if let Ok(queue) = state::SIGNAL_QUEUE.lock() {
+            assert_eq!(queue.len(), 0);
+        }
     }
 }

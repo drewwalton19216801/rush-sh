@@ -12,17 +12,23 @@ pub fn generate_report(results: &[BenchmarkResult]) -> String {
     html.push_str("<html lang=\"en\">\n");
     html.push_str("<head>\n");
     html.push_str("    <meta charset=\"UTF-8\">\n");
-    html.push_str("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+    html.push_str(
+        "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+    );
     html.push_str("    <title>Rush Shell Benchmark Report</title>\n");
     html.push_str("    <style>\n");
     html.push_str("        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #0f172a; }\n");
     html.push_str("        .container { max-width: 1200px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }\n");
     html.push_str("        h1 { color: #f8fafc; text-align: center; margin-bottom: 30px; }\n");
-    html.push_str("        h2 { color: #cbd5e1; border-bottom: 2px solid #334155; padding-bottom: 10px; }\n");
+    html.push_str(
+        "        h2 { color: #cbd5e1; border-bottom: 2px solid #334155; padding-bottom: 10px; }\n",
+    );
     html.push_str("        .summary { background: #334155; padding: 20px; border-radius: 5px; margin-bottom: 30px; }\n");
     html.push_str("        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }\n");
     html.push_str("        .summary-item { text-align: center; }\n");
-    html.push_str("        .summary-value { font-size: 2em; font-weight: bold; color: #34d399; }\n");
+    html.push_str(
+        "        .summary-value { font-size: 2em; font-weight: bold; color: #34d399; }\n",
+    );
     html.push_str("        .summary-label { color: #94a3b8; font-size: 0.9em; }\n");
     html.push_str("        table { width: 100%; border-collapse: collapse; margin-top: 20px; }\n");
     html.push_str("        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #475569; color: #f8fafc; }\n");
@@ -33,7 +39,9 @@ pub fn generate_report(results: &[BenchmarkResult]) -> String {
     html.push_str("        .fast { background-color: #064e3b; color: #34d399; }\n");
     html.push_str("        .medium { background-color: #451a03; color: #fbbf24; }\n");
     html.push_str("        .slow { background-color: #7f1d1d; color: #f87171; }\n");
-    html.push_str("        .timestamp { color: #94a3b8; font-size: 0.9em; margin-bottom: 20px; }\n");
+    html.push_str(
+        "        .timestamp { color: #94a3b8; font-size: 0.9em; margin-bottom: 20px; }\n",
+    );
     html.push_str("    </style>\n");
     html.push_str("</head>\n");
     html.push_str("<body>\n");
@@ -130,9 +138,18 @@ pub fn generate_report(results: &[BenchmarkResult]) -> String {
     html.push_str("        <h2>Performance Analysis</h2>\n");
     html.push_str("        <div class=\"summary\">\n");
 
-    let fast_count = results.iter().filter(|r| r.duration.as_millis() < 10).count();
-    let medium_count = results.iter().filter(|r| r.duration.as_millis() >= 10 && r.duration.as_millis() < 100).count();
-    let slow_count = results.iter().filter(|r| r.duration.as_millis() >= 100).count();
+    let fast_count = results
+        .iter()
+        .filter(|r| r.duration.as_millis() < 10)
+        .count();
+    let medium_count = results
+        .iter()
+        .filter(|r| r.duration.as_millis() >= 10 && r.duration.as_millis() < 100)
+        .count();
+    let slow_count = results
+        .iter()
+        .filter(|r| r.duration.as_millis() >= 100)
+        .count();
 
     html.push_str(&format!(
         "            <p style=\"color: #f8fafc;\"><strong>Performance Distribution:</strong></p>\n            <ul style=\"color: #f8fafc;\">\n                <li>Fast (<10ms): {} benchmarks</li>\n                <li>Medium (10-100ms): {} benchmarks</li>\n                <li>Slow (≥100ms): {} benchmarks</li>\n            </ul>\n",
@@ -183,7 +200,7 @@ fn get_performance_label(duration: &std::time::Duration) -> &'static str {
 /// Save benchmark results to JSON file
 pub fn save_results(
     results: &[BenchmarkResult],
-    filename: &str
+    filename: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let json_data = serde_json::to_string_pretty(results)?;
     fs::write(filename, json_data)?;
@@ -208,15 +225,13 @@ pub fn load_results(filename: &str) -> Result<Vec<BenchmarkResult>, Box<dyn std:
 #[allow(dead_code)]
 pub fn compare_with_baseline(
     current: &[BenchmarkResult],
-    baseline: &[BenchmarkResult]
+    baseline: &[BenchmarkResult],
 ) -> Vec<RegressionInfo> {
     let mut regressions = Vec::new();
 
     // Create lookup map for baseline results
-    let baseline_map: HashMap<String, &BenchmarkResult> = baseline
-        .iter()
-        .map(|r| (r.name.clone(), r))
-        .collect();
+    let baseline_map: HashMap<String, &BenchmarkResult> =
+        baseline.iter().map(|r| (r.name.clone(), r)).collect();
 
     for current_result in current {
         if let Some(baseline_result) = baseline_map.get(&current_result.name) {

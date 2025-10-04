@@ -121,20 +121,20 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ❌ set (not implemented)
 - ✅ shift (implemented)
 - ❌ times (not implemented)
-- ❌ trap (not implemented)
+- ✅ trap (implemented)
 - ❌ umask (not implemented)
 - ✅ unset (implemented)
 - ❌ wait (not implemented)
 
 ### Current Built-in Status
 
-**Implemented (18):**
+**Implemented (20):**
 
-- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, shift, source, test, unalias, unset
+- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, set_condensed, shift, source, test, trap, unalias, unset
 
 **Missing POSIX Built-ins:**
 
-- **Special Built-ins**: :, break, continue, eval, exec, readonly, return, set, times, trap, umask, wait
+- **Special Built-ins**: :, break, continue, eval, exec, readonly, return, set, times, umask, wait
 - **Note**: Many common built-ins are implemented (alias, dirs, pushd/popd, source, test, color management)
 
 ## 4. Regular Built-in Utilities
@@ -215,8 +215,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - set (options and positional parameters)
     - eval
     - exec
-    - trap
-    - readonly, return, etc.
+    - readonly, return, break, continue, etc.
 
 3. **Parameter Expansion**
     - Positional parameters ($1, $2, ...) - **IMPLEMENTED**
@@ -243,7 +242,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ **Lexer tests** (tokenization, expansion, quoting, arithmetic, parameter expansion)
 - ✅ **Parser tests** (AST construction, control structures, if/elif/else, case statements)
 - ✅ **Executor tests** (command execution, pipelines, redirections, built-in commands)
-- ✅ **Built-in tests** (all 17 implemented commands with comprehensive coverage)
+- ✅ **Built-in tests** (all 20 implemented commands with comprehensive coverage)
 - ✅ **Integration tests** (end-to-end scenarios, variable expansion, control structures)
 - ✅ **Arithmetic expansion tests** (operators, precedence, variables, error handling)
 - ✅ **Parameter expansion tests** (all modifiers, pattern matching, edge cases)
@@ -252,7 +251,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Test Statistics
 
-- **269 individual test cases** across all components
+- **293+ individual test cases** across all components
 - **Comprehensive edge case coverage** for error conditions
 - **Feature-specific test suites** for complex functionality
 - **Integration test coverage** for end-to-end workflows
@@ -261,18 +260,18 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 - ❌ Here-document processing
 - ❌ Advanced redirection scenarios (file descriptors, here-strings)
-- ❌ Missing built-in functionality (eval, exec, trap, etc.)
+- ❌ Missing built-in functionality (eval, exec, etc.)
 - ❌ Job control features
 
 ## Compliance Metrics
 
-### Estimated Current Compliance: ~87%
+### Estimated Current Compliance: ~88%
 
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions implemented)
-- **Built-in Commands**: 85% ✅ (18 built-ins implemented, many common ones available)
+- **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 60% ⚠️ (Basic I/O redirection implemented, advanced features missing)
 - **Job Control**: 0% ❌ (optional POSIX feature)

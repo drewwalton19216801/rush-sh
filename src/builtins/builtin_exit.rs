@@ -20,12 +20,23 @@ impl super::Builtin for ExitBuiltin {
 
     fn run(
         &self,
-        _cmd: &ShellCommand,
-        _shell_state: &mut ShellState,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
         _output_writer: &mut dyn Write,
     ) -> i32 {
-        // For now, just return 0; main handles exit
-        0
+        // Parse exit code from arguments
+        let exit_code = if cmd.args.len() > 1 {
+            cmd.args[1].parse::<i32>().unwrap_or(0)
+        } else {
+            // Use last exit code if no argument provided
+            shell_state.last_exit_code
+        };
+
+        // Set exit flag and code
+        shell_state.exit_requested = true;
+        shell_state.exit_code = exit_code;
+
+        exit_code
     }
 }
 

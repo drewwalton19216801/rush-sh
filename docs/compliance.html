@@ -53,8 +53,8 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.4.4</span>
-                    <span class="status">~87% POSIX Compliant</span>
+                    <span class="version">v0.5.0</span>
+                    <span class="status">~88% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
                     <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
@@ -103,23 +103,23 @@
                         <div class="compliance-meter">
                             <div class="meter-container">
                                 <div class="meter-bar">
-                                    <div class="meter-fill" style="width: 87%"></div>
+                                    <div class="meter-fill" style="width: 88%"></div>
                                 </div>
-                                <div class="meter-label">87% Complete</div>
+                                <div class="meter-label">88% Complete</div>
                             </div>
                         </div>
 
                         <div class="compliance-stats">
                             <div class="stat-item">
-                                <div class="stat-number">87%</div>
+                                <div class="stat-number">88%</div>
                                 <div class="stat-label">Overall Compliance</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-number">18</div>
+                                <div class="stat-number">20</div>
                                 <div class="stat-label">Built-in Commands</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-number">269+</div>
+                                <div class="stat-number">293+</div>
                                 <div class="stat-label">Test Cases</div>
                             </div>
                         </div>
@@ -147,7 +147,15 @@
                             </div>
                             <div class="compliance-item implemented">
                                 <span class="status-icon">✅</span>
+                                <span class="item-text">Real-time signal trap execution</span>
+                            </div>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
                                 <span class="item-text">Signal handling (SIGINT, SIGTERM)</span>
+                            </div>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
+                                <span class="item-text">Signal queue with bounded memory</span>
                             </div>
                         </div>
                     </div>
@@ -446,8 +454,8 @@
                         <div class="status-summary">
                             <h3>Implementation Status</h3>
                             <div class="status-badges">
-                                <span class="badge implemented">18 Implemented</span>
-                                <span class="badge missing">11 Missing</span>
+                                <span class="badge implemented">20 Implemented</span>
+                                <span class="badge missing">9 Missing</span>
                             </div>
                         </div>
 
@@ -503,8 +511,8 @@
                                         <span class="status-icon">❌</span>
                                         <span class="item-text">times</span>
                                     </div>
-                                    <div class="compliance-item missing">
-                                        <span class="status-icon">❌</span>
+                                    <div class="compliance-item implemented">
+                                        <span class="status-icon">✅</span>
                                         <span class="item-text">trap</span>
                                     </div>
                                     <div class="compliance-item missing">
@@ -523,7 +531,7 @@
                             </div>
 
                             <div class="builtins-column">
-                                <h4>Currently Implemented (18)</h4>
+                                <h4>Currently Implemented (20)</h4>
                                 <div class="implemented-list">
                                     <div class="builtin-tag">alias</div>
                                     <div class="builtin-tag">cd</div>
@@ -538,9 +546,11 @@
                                     <div class="builtin-tag">pwd</div>
                                     <div class="builtin-tag">set_color_scheme</div>
                                     <div class="builtin-tag">set_colors</div>
+                                    <div class="builtin-tag">set_condensed</div>
                                     <div class="builtin-tag">shift</div>
                                     <div class="builtin-tag">source</div>
                                     <div class="builtin-tag">test</div>
+                                    <div class="builtin-tag">trap</div>
                                     <div class="builtin-tag">unalias</div>
                                     <div class="builtin-tag">unset</div>
                                 </div>
@@ -568,8 +578,7 @@
                                         <li>set (options and positional parameters)</li>
                                         <li>eval</li>
                                         <li>exec</li>
-                                        <li>trap</li>
-                                        <li>readonly, return, etc.</li>
+                                        <li>readonly, return, break, continue, etc.</li>
                                     </ul>
                                 </li>
                                 <li><strong>Parameter Expansion</strong>
@@ -616,7 +625,7 @@
                     <div class="testing-overview">
                         <div class="testing-stats">
                             <div class="test-stat">
-                                <div class="test-number">269+</div>
+                                <div class="test-number">293+</div>
                                 <div class="test-label">Individual Test Cases</div>
                             </div>
                             <div class="test-stat">
@@ -624,7 +633,7 @@
                                 <div class="test-label">Core Components Covered</div>
                             </div>
                             <div class="test-stat">
-                                <div class="test-number">18</div>
+                                <div class="test-number">20</div>
                                 <div class="test-label">Built-ins Tested</div>
                             </div>
                         </div>
@@ -684,7 +693,7 @@
                                 </div>
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
-                                    <span class="item-text">Missing built-in functionality (eval, exec, trap, etc.)</span>
+                                    <span class="item-text">Missing built-in functionality (eval, exec, set, etc.)</span>
                                 </div>
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
@@ -713,7 +722,7 @@
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Built-in Commands</span>
-                                    <span class="percentage implemented">85%</span>
+                                    <span class="percentage implemented">65%</span>
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Expansions</span>

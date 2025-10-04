@@ -64,95 +64,97 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
     if tokens.len() >= 4
         && let (Token::Word(_), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
-        {
-            // Look for the matching RightBrace
-            // Start from the opening brace (token 3) and find its match
-            let mut brace_depth = 1; // We've already seen the opening brace at position 3
-            let mut function_end = tokens.len();
-            let mut j = 4; // Start after the opening brace
+    {
+        // Look for the matching RightBrace
+        // Start from the opening brace (token 3) and find its match
+        let mut brace_depth = 1; // We've already seen the opening brace at position 3
+        let mut function_end = tokens.len();
+        let mut j = 4; // Start after the opening brace
 
-            while j < tokens.len() {
-                match &tokens[j] {
-                    Token::LeftBrace => {
-                        brace_depth += 1;
+        while j < tokens.len() {
+            match &tokens[j] {
+                Token::LeftBrace => {
+                    brace_depth += 1;
+                    j += 1;
+                }
+                Token::RightBrace => {
+                    brace_depth -= 1;
+                    if brace_depth == 0 {
+                        function_end = j + 1; // Include the closing brace
+                        break;
+                    }
+                    j += 1;
+                }
+                Token::If => {
+                    // Skip to matching fi to avoid confusion
+                    let mut if_depth = 1;
+                    j += 1;
+                    while j < tokens.len() && if_depth > 0 {
+                        match tokens[j] {
+                            Token::If => if_depth += 1,
+                            Token::Fi => if_depth -= 1,
+                            _ => {}
+                        }
                         j += 1;
-                    },
-                    Token::RightBrace => {
-                        brace_depth -= 1;
-                        if brace_depth == 0 {
-                            function_end = j + 1; // Include the closing brace
+                    }
+                }
+                Token::For | Token::While => {
+                    // Skip to matching done
+                    let mut for_depth = 1;
+                    j += 1;
+                    while j < tokens.len() && for_depth > 0 {
+                        match tokens[j] {
+                            Token::For | Token::While => for_depth += 1,
+                            Token::Done => for_depth -= 1,
+                            _ => {}
+                        }
+                        j += 1;
+                    }
+                }
+                Token::Case => {
+                    // Skip to matching esac
+                    j += 1;
+                    while j < tokens.len() {
+                        if tokens[j] == Token::Esac {
+                            j += 1;
                             break;
                         }
                         j += 1;
                     }
-                    Token::If => {
-                        // Skip to matching fi to avoid confusion
-                        let mut if_depth = 1;
-                        j += 1;
-                        while j < tokens.len() && if_depth > 0 {
-                            match tokens[j] {
-                                Token::If => if_depth += 1,
-                                Token::Fi => if_depth -= 1,
-                                _ => {}
-                            }
-                            j += 1;
-                        }
-                    }
-                    Token::For | Token::While => {
-                        // Skip to matching done
-                        let mut for_depth = 1;
-                        j += 1;
-                        while j < tokens.len() && for_depth > 0 {
-                            match tokens[j] {
-                                Token::For | Token::While => for_depth += 1,
-                                Token::Done => for_depth -= 1,
-                                _ => {}
-                            }
-                            j += 1;
-                        }
-                    }
-                    Token::Case => {
-                        // Skip to matching esac
-                        j += 1;
-                        while j < tokens.len() {
-                            if tokens[j] == Token::Esac {
-                                j += 1;
-                                break;
-                            }
-                            j += 1;
-                        }
-                    }
-                    _ => {
-                        j += 1;
-                    }
                 }
-            }
-
-            if brace_depth == 0 && function_end <= tokens.len() {
-                // We found the complete function definition
-                let function_tokens = &tokens[0..function_end];
-                let remaining_tokens = &tokens[function_end..];
-
-                let function_ast = parse_function_definition(function_tokens)?;
-
-                if remaining_tokens.is_empty() {
-                    return Ok(function_ast);
-                } else {
-                    // There are more commands after the function
-                    let remaining_ast = parse_commands_sequentially(remaining_tokens)?;
-                    return Ok(Ast::Sequence(vec![function_ast, remaining_ast]));
+                _ => {
+                    j += 1;
                 }
             }
         }
 
+        if brace_depth == 0 && function_end <= tokens.len() {
+            // We found the complete function definition
+            let function_tokens = &tokens[0..function_end];
+            let remaining_tokens = &tokens[function_end..];
+
+            let function_ast = parse_function_definition(function_tokens)?;
+
+            if remaining_tokens.is_empty() {
+                return Ok(function_ast);
+            } else {
+                // There are more commands after the function
+                let remaining_ast = parse_commands_sequentially(remaining_tokens)?;
+                return Ok(Ast::Sequence(vec![function_ast, remaining_ast]));
+            }
+        }
+    }
+
     // Also check for legacy function definition format (word with parentheses followed by brace)
     if tokens.len() >= 2
         && let Token::Word(ref word) = tokens[0]
-            && let Some(paren_pos) = word.find('(')
-                && word.ends_with(')') && paren_pos > 0
-                    && tokens[1] == Token::LeftBrace {
-                        return parse_function_definition(&tokens);
-                    }
+        && let Some(paren_pos) = word.find('(')
+        && word.ends_with(')')
+        && paren_pos > 0
+        && tokens[1] == Token::LeftBrace
+    {
+        return parse_function_definition(&tokens);
+    }
 
     // Fall back to normal parsing
     parse_commands_sequentially(&tokens)
@@ -168,91 +170,103 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         // Check for pattern: VAR= VALUE
         if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1])
             && let Some(eq_pos) = var_eq.find('=')
-                && eq_pos > 0 && eq_pos < var_eq.len() - 1 {
-                    let var = var_eq[..eq_pos].to_string();
-                    let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
-                    // Basic validation: variable name should start with letter or underscore
-                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
-                        return Ok(Ast::Assignment {
-                            var,
-                            value: full_value,
-                        });
-                    }
-                }
+            && eq_pos > 0
+            && eq_pos < var_eq.len() - 1
+        {
+            let var = var_eq[..eq_pos].to_string();
+            let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
+            // Basic validation: variable name should start with letter or underscore
+            if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+                return Ok(Ast::Assignment {
+                    var,
+                    value: full_value,
+                });
+            }
+        }
     }
 
     // Check if it's an assignment (VAR= VALUE)
     if tokens.len() == 2
         && let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1])
-            && let Some(eq_pos) = var_eq.find('=')
-                && eq_pos > 0 && eq_pos == var_eq.len() - 1 {
-                    let var = var_eq[..eq_pos].to_string();
-                    // Basic validation: variable name should start with letter or underscore
-                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
-                        return Ok(Ast::Assignment {
-                            var,
-                            value: value.clone(),
-                        });
-                    }
-                }
+        && let Some(eq_pos) = var_eq.find('=')
+        && eq_pos > 0
+        && eq_pos == var_eq.len() - 1
+    {
+        let var = var_eq[..eq_pos].to_string();
+        // Basic validation: variable name should start with letter or underscore
+        if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+            return Ok(Ast::Assignment {
+                var,
+                value: value.clone(),
+            });
+        }
+    }
 
     // Check if it's a local assignment (local VAR VALUE or local VAR= VALUE)
     if tokens.len() == 3
-        && let (Token::Local, Token::Word(var), Token::Word(value)) = (&tokens[0], &tokens[1], &tokens[2]) {
-            // Strip trailing = if present (handles "local var= value" format)
-            let clean_var = if var.ends_with('=') {
-                &var[..var.len() - 1]
-            } else {
-                var
-            };
-            // Basic validation: variable name should start with letter or underscore
-            if clean_var.chars().next().unwrap().is_alphabetic() || clean_var.starts_with('_') {
-                return Ok(Ast::LocalAssignment {
-                    var: clean_var.to_string(),
-                    value: value.clone(),
-                });
-            }
+        && let (Token::Local, Token::Word(var), Token::Word(value)) =
+            (&tokens[0], &tokens[1], &tokens[2])
+    {
+        // Strip trailing = if present (handles "local var= value" format)
+        let clean_var = if var.ends_with('=') {
+            &var[..var.len() - 1]
+        } else {
+            var
+        };
+        // Basic validation: variable name should start with letter or underscore
+        if clean_var.chars().next().unwrap().is_alphabetic() || clean_var.starts_with('_') {
+            return Ok(Ast::LocalAssignment {
+                var: clean_var.to_string(),
+                value: value.clone(),
+            });
         }
+    }
 
     // Check if it's a return statement
-    if !tokens.is_empty() && tokens.len() <= 2
-        && let Token::Return = &tokens[0] {
-            if tokens.len() == 1 {
-                // return (with no value, defaults to 0)
-                return Ok(Ast::Return { value: None });
-            } else if let Token::Word(word) = &tokens[1] {
-                // return value
-                return Ok(Ast::Return {
-                    value: Some(word.clone()),
-                });
-            }
+    if !tokens.is_empty()
+        && tokens.len() <= 2
+        && let Token::Return = &tokens[0]
+    {
+        if tokens.len() == 1 {
+            // return (with no value, defaults to 0)
+            return Ok(Ast::Return { value: None });
+        } else if let Token::Word(word) = &tokens[1] {
+            // return value
+            return Ok(Ast::Return {
+                value: Some(word.clone()),
+            });
         }
+    }
 
     // Check if it's a local assignment (local VAR=VALUE)
     if tokens.len() == 2
         && let (Token::Local, Token::Word(var_eq)) = (&tokens[0], &tokens[1])
-            && let Some(eq_pos) = var_eq.find('=')
-                && eq_pos > 0 && eq_pos < var_eq.len() - 1 {
-                    let var = var_eq[..eq_pos].to_string();
-                    let value = var_eq[eq_pos + 1..].to_string();
-                    // Basic validation: variable name should start with letter or underscore
-                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
-                        return Ok(Ast::LocalAssignment { var, value });
-                    }
-                }
+        && let Some(eq_pos) = var_eq.find('=')
+        && eq_pos > 0
+        && eq_pos < var_eq.len() - 1
+    {
+        let var = var_eq[..eq_pos].to_string();
+        let value = var_eq[eq_pos + 1..].to_string();
+        // Basic validation: variable name should start with letter or underscore
+        if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+            return Ok(Ast::LocalAssignment { var, value });
+        }
+    }
 
     // Check if it's an assignment (single token with =)
     if tokens.len() == 1
         && let Token::Word(ref word) = tokens[0]
-            && let Some(eq_pos) = word.find('=')
-                && eq_pos > 0 && eq_pos < word.len() - 1 {
-                    let var = word[..eq_pos].to_string();
-                    let value = word[eq_pos + 1..].to_string();
-                    // Basic validation: variable name should start with letter or underscore
-                    if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
-                        return Ok(Ast::Assignment { var, value });
-                    }
-                }
+        && let Some(eq_pos) = word.find('=')
+        && eq_pos > 0
+        && eq_pos < word.len() - 1
+    {
+        let var = word[..eq_pos].to_string();
+        let value = word[eq_pos + 1..].to_string();
+        // Basic validation: variable name should start with letter or underscore
+        if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+            return Ok(Ast::Assignment { var, value });
+        }
+    }
 
     // Check if it's an if statement
     if let Token::If = tokens[0] {
@@ -279,21 +293,25 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     if tokens.len() >= 4
         && let (Token::Word(word), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
-            && (word.chars().next().unwrap().is_alphabetic() || word.starts_with('_')) {
-                return parse_function_definition(tokens);
-            }
+        && (word.chars().next().unwrap().is_alphabetic() || word.starts_with('_'))
+    {
+        return parse_function_definition(tokens);
+    }
 
     // Also check for function definition with parentheses in the word (legacy support)
     if tokens.len() >= 2
         && let Token::Word(ref word) = tokens[0]
-            && let Some(paren_pos) = word.find('(')
-                && word.ends_with(')') && paren_pos > 0 {
-                    let func_name = &word[..paren_pos];
-                    if (func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_'))
-                        && tokens[1] == Token::LeftBrace {
-                            return parse_function_definition(tokens);
-                        }
-                }
+        && let Some(paren_pos) = word.find('(')
+        && word.ends_with(')')
+        && paren_pos > 0
+    {
+        let func_name = &word[..paren_pos];
+        if (func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_'))
+            && tokens[1] == Token::LeftBrace
+        {
+            return parse_function_definition(tokens);
+        }
+    }
 
     // Check if it's a function call (word followed by arguments)
     // For Phase 1, we'll parse as regular pipeline and handle function calls in executor
@@ -420,8 +438,11 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             // For simple commands, stop at newline, semicolon, &&, or ||
             // But check if the next token after newline is a control flow keyword
             while i < tokens.len() {
-                if tokens[i] == Token::Newline || tokens[i] == Token::Semicolon
-                    || tokens[i] == Token::And || tokens[i] == Token::Or {
+                if tokens[i] == Token::Newline
+                    || tokens[i] == Token::Semicolon
+                    || tokens[i] == Token::And
+                    || tokens[i] == Token::Or
+                {
                     // Look ahead to see if the next non-newline token is else/elif/fi
                     let mut j = i + 1;
                     while j < tokens.len() && tokens[j] == Token::Newline {
@@ -462,21 +483,21 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             }
 
             let ast = parse_slice(command_tokens)?;
-            
+
             // Check if the next token is && or ||
             if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
                 let operator = tokens[i].clone();
                 i += 1; // Skip the operator
-                
+
                 // Skip any newlines after the operator
                 while i < tokens.len() && tokens[i] == Token::Newline {
                     i += 1;
                 }
-                
+
                 // Parse the right side recursively
                 let remaining_tokens = &tokens[i..];
                 let right_ast = parse_commands_sequentially(remaining_tokens)?;
-                
+
                 // Create And or Or node
                 let combined_ast = match operator {
                     Token::And => Ast::And {
@@ -489,7 +510,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     },
                     _ => unreachable!(),
                 };
-                
+
                 commands.push(combined_ast);
                 break; // We've consumed the rest of the tokens
             } else {
@@ -543,34 +564,39 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             Token::RedirIn => {
                 i += 1;
                 if i < tokens.len()
-                    && let Token::Word(ref file) = tokens[i] {
-                        current_cmd.input = Some(file.clone());
-                    }
+                    && let Token::Word(ref file) = tokens[i]
+                {
+                    current_cmd.input = Some(file.clone());
+                }
             }
             Token::RedirOut => {
                 i += 1;
                 if i < tokens.len()
-                    && let Token::Word(ref file) = tokens[i] {
-                        current_cmd.output = Some(file.clone());
-                    }
+                    && let Token::Word(ref file) = tokens[i]
+                {
+                    current_cmd.output = Some(file.clone());
+                }
             }
             Token::RedirAppend => {
                 i += 1;
                 if i < tokens.len()
-                    && let Token::Word(ref file) = tokens[i] {
-                        current_cmd.append = Some(file.clone());
-                    }
+                    && let Token::Word(ref file) = tokens[i]
+                {
+                    current_cmd.append = Some(file.clone());
+                }
             }
             Token::RightParen => {
                 // Check if this looks like a function call pattern: Word LeftParen ... RightParen
                 // If so, treat it as a function call even if the function doesn't exist
-                if !current_cmd.args.is_empty() && i > 0
-                    && let Token::LeftParen = tokens[i-1] {
-                        // This looks like a function call pattern, treat as function call
-                        // For now, we'll handle this in the executor by checking if it's a function
-                        // If not a function, the executor will handle the error gracefully
-                        break;
-                    }
+                if !current_cmd.args.is_empty()
+                    && i > 0
+                    && let Token::LeftParen = tokens[i - 1]
+                {
+                    // This looks like a function call pattern, treat as function call
+                    // For now, we'll handle this in the executor by checking if it's a function
+                    // If not a function, the executor will handle the error gracefully
+                    break;
+                }
                 return Err("Unexpected ) in pipeline".to_string());
             }
             Token::Newline => {
@@ -578,7 +604,13 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 i += 1;
                 continue;
             }
-            Token::Do | Token::Done | Token::Then | Token::Else | Token::Elif | Token::Fi | Token::Esac => {
+            Token::Do
+            | Token::Done
+            | Token::Then
+            | Token::Else
+            | Token::Elif
+            | Token::Fi
+            | Token::Esac => {
                 // These are control flow keywords that should be handled at a higher level
                 // If we encounter them here, it means we've reached the end of the current command
                 break;
@@ -1128,18 +1160,19 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
     };
 
     // Find the opening brace and body
-    let brace_pos = if tokens.len() >= 4 && tokens[1] == Token::LeftParen && tokens[2] == Token::RightParen {
-        // Standard format: name() {
-        if tokens[3] != Token::LeftBrace {
-            return Err("Expected { after function name".to_string());
-        }
-        3
-    } else if tokens.len() >= 2 && tokens[1] == Token::LeftBrace {
-        // Legacy format: name() {
-        1
-    } else {
-        return Err("Expected ( after function name or { for legacy format".to_string());
-    };
+    let brace_pos =
+        if tokens.len() >= 4 && tokens[1] == Token::LeftParen && tokens[2] == Token::RightParen {
+            // Standard format: name() {
+            if tokens[3] != Token::LeftBrace {
+                return Err("Expected { after function name".to_string());
+            }
+            3
+        } else if tokens.len() >= 2 && tokens[1] == Token::LeftBrace {
+            // Legacy format: name() {
+            1
+        } else {
+            return Err("Expected ( after function name or { for legacy format".to_string());
+        };
 
     // Find the matching closing brace, accounting for nested function definitions and control structures
     let mut brace_depth = 0;
@@ -1171,7 +1204,7 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
             // Don't increment i again - continue from current position
             continue;
         }
-        
+
         match &tokens[i] {
             Token::LeftBrace => {
                 brace_depth += 1;
@@ -1669,10 +1702,7 @@ mod tests {
 
     #[test]
     fn test_parse_local_assignment() {
-        let tokens = vec![
-            Token::Local,
-            Token::Word("MY_VAR=test_value".to_string()),
-        ];
+        let tokens = vec![Token::Local, Token::Word("MY_VAR=test_value".to_string())];
         let result = parse(tokens).unwrap();
         if let Ast::LocalAssignment { var, value } = result {
             assert_eq!(var, "MY_VAR");
@@ -1701,10 +1731,7 @@ mod tests {
     #[test]
     fn test_parse_local_assignment_invalid_var_name() {
         // Variable name starting with number should not be parsed as local assignment
-        let tokens = vec![
-            Token::Local,
-            Token::Word("123VAR=value".to_string()),
-        ];
+        let tokens = vec![Token::Local, Token::Word("123VAR=value".to_string())];
         let result = parse(tokens);
         // Should return an error since 123VAR is not a valid variable name
         assert!(result.is_err());

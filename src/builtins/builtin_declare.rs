@@ -34,8 +34,7 @@ impl super::Builtin for DeclareBuiltin {
                         let _ = writeln!(
                             output_writer,
                             "{}{}\x1b[0m",
-                            shell_state.color_scheme.builtin,
-                            name
+                            shell_state.color_scheme.builtin, name
                         );
                     } else {
                         let _ = writeln!(output_writer, "{}", name);
@@ -54,8 +53,7 @@ impl super::Builtin for DeclareBuiltin {
                         let _ = writeln!(
                             output_writer,
                             "{}{}\x1b[0m",
-                            shell_state.color_scheme.success,
-                            definition
+                            shell_state.color_scheme.success, definition
                         );
                     } else {
                         let _ = writeln!(output_writer, "{}", definition);
@@ -66,11 +64,11 @@ impl super::Builtin for DeclareBuiltin {
                         let _ = writeln!(
                             output_writer,
                             "{}declare: function 'declare: function '{}' not found\x1b[0m",
-                            shell_state.color_scheme.error,
-                            func_name
+                            shell_state.color_scheme.error, func_name
                         );
                     } else {
-                        let _ = writeln!(output_writer, "declare: function '{}' not found", func_name);
+                        let _ =
+                            writeln!(output_writer, "declare: function '{}' not found", func_name);
                     }
                     1
                 }
@@ -83,8 +81,7 @@ impl super::Builtin for DeclareBuiltin {
                     let _ = writeln!(
                         output_writer,
                         "{}{}\x1b[0m",
-                        shell_state.color_scheme.builtin,
-                        name
+                        shell_state.color_scheme.builtin, name
                     );
                 } else {
                     let _ = writeln!(output_writer, "{}", name);
@@ -151,7 +148,10 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
         Ast::LocalAssignment { var, value } => {
             format!("{} local {}={}", indent, var, value)
         }
-        Ast::If { branches, else_branch } => {
+        Ast::If {
+            branches,
+            else_branch,
+        } => {
             let mut result = String::new();
 
             for (i, (condition, then_branch)) in branches.iter().enumerate() {
@@ -173,7 +173,11 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             result.push_str(&format!("\n{}fi", indent));
             result
         }
-        Ast::Case { word, cases, default } => {
+        Ast::Case {
+            word,
+            cases,
+            default,
+        } => {
             let mut result = String::new();
             result.push_str(&format!("{}case {} in\n", indent, word));
 
@@ -194,7 +198,11 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             result.push_str(&format!("{}esac", indent));
             result
         }
-        Ast::For { variable, items, body } => {
+        Ast::For {
+            variable,
+            items,
+            body,
+        } => {
             let mut result = String::new();
             result.push_str(&format!("{}for {} in", indent, variable));
             for item in items {
@@ -215,7 +223,13 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             result
         }
         Ast::FunctionDefinition { name, body } => {
-            format!("{}() {{\n{}    {}\n{}}}\n", name, indent, format_ast_body(body, indent_level), indent)
+            format!(
+                "{}() {{\n{}    {}\n{}}}\n",
+                name,
+                indent,
+                format_ast_body(body, indent_level),
+                indent
+            )
         }
         Ast::FunctionCall { name, args } => {
             if args.is_empty() {
@@ -232,10 +246,18 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             }
         }
         Ast::And { left, right } => {
-            format!("{} && {}", format_ast_body(left, 0).trim(), format_ast_body(right, 0).trim())
+            format!(
+                "{} && {}",
+                format_ast_body(left, 0).trim(),
+                format_ast_body(right, 0).trim()
+            )
         }
         Ast::Or { left, right } => {
-            format!("{} || {}", format_ast_body(left, 0).trim(), format_ast_body(right, 0).trim())
+            format!(
+                "{} || {}",
+                format_ast_body(left, 0).trim(),
+                format_ast_body(right, 0).trim()
+            )
         }
     }
 }
@@ -297,7 +319,11 @@ mod tests {
     #[test]
     fn test_declare_builtin_run_show_function() {
         let cmd = crate::parser::ShellCommand {
-            args: vec!["declare".to_string(), "-f".to_string(), "test_func".to_string()],
+            args: vec![
+                "declare".to_string(),
+                "-f".to_string(),
+                "test_func".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -329,7 +355,11 @@ mod tests {
     #[test]
     fn test_declare_builtin_run_nonexistent_function() {
         let cmd = crate::parser::ShellCommand {
-            args: vec!["declare".to_string(), "-f".to_string(), "nonexistent".to_string()],
+            args: vec![
+                "declare".to_string(),
+                "-f".to_string(),
+                "nonexistent".to_string(),
+            ],
             input: None,
             output: None,
             append: None,

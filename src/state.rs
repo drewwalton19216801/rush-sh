@@ -1,9 +1,45 @@
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
-use std::cell::RefCell;
 use super::parser::Ast;
+use lazy_static::lazy_static;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
 use std::io::IsTerminal;
+use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+
+lazy_static! {
+    /// Global queue for pending signal events
+    /// Signals are enqueued by the signal handler thread and dequeued by the main thread
+    pub static ref SIGNAL_QUEUE: Arc<Mutex<VecDeque<SignalEvent>>> =
+        Arc::new(Mutex::new(VecDeque::new()));
+}
+
+/// Maximum number of signals to queue before dropping old ones
+const MAX_SIGNAL_QUEUE_SIZE: usize = 100;
+
+/// Represents a signal event that needs to be processed
+#[derive(Debug, Clone)]
+pub struct SignalEvent {
+    /// Signal name (e.g., "INT", "TERM")
+    pub signal_name: String,
+    /// Signal number (e.g., 2, 15)
+    #[allow(dead_code)]
+    pub signal_number: i32,
+    /// When the signal was received
+    #[allow(dead_code)]
+    pub timestamp: Instant,
+}
+
+impl SignalEvent {
+    pub fn new(signal_name: String, signal_number: i32) -> Self {
+        Self {
+            signal_name,
+            signal_number,
+            timestamp: Instant::now(),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ColorScheme {
@@ -69,6 +105,18 @@ pub struct ShellState {
     pub capture_output: Option<Rc<RefCell<Vec<u8>>>>,
     /// Whether to use condensed cwd display in prompt
     pub condensed_cwd: bool,
+    /// Signal trap handlers: maps signal name to command string
+    pub trap_handlers: Arc<Mutex<HashMap<String, String>>>,
+    /// Flag to track if EXIT trap has been executed
+    pub exit_trap_executed: bool,
+    /// Flag to indicate that the shell should exit
+    pub exit_requested: bool,
+    /// Exit code to use when exiting
+    pub exit_code: i32,
+    /// Flag to indicate pending signals need processing
+    /// Set by signal handler, checked by executor
+    #[allow(dead_code)]
+    pub pending_signals: bool,
 }
 
 impl ShellState {
@@ -120,6 +168,11 @@ impl ShellState {
             return_value: None,
             capture_output: None,
             condensed_cwd,
+            trap_handlers: Arc::new(Mutex::new(HashMap::new())),
+            exit_trap_executed: false,
+            exit_requested: false,
+            exit_code: 0,
+            pending_signals: false,
         }
     }
 
@@ -185,7 +238,7 @@ impl ShellState {
                 return;
             }
         }
-        
+
         // Variable doesn't exist in local scopes, set it globally
         self.variables.insert(name.to_string(), value);
     }
@@ -296,12 +349,7 @@ impl ShellState {
         } else {
             self.get_full_cwd()
         };
-        format!(
-            "{}:{} {} ",
-            self.get_user_hostname(),
-            cwd,
-            prompt_char
-        )
+        format!("{}:{} {} ", self.get_user_hostname(), cwd, prompt_char)
     }
 
     /// Set an alias
@@ -396,7 +444,6 @@ impl ShellState {
         }
     }
 
-
     /// Enter a function context (push local scope if needed)
     pub fn enter_function(&mut self) {
         self.function_depth += 1;
@@ -437,9 +484,79 @@ impl ShellState {
         self.return_value
     }
 
+    /// Set a trap handler for a signal
+    pub fn set_trap(&mut self, signal: &str, command: String) {
+        if let Ok(mut handlers) = self.trap_handlers.lock() {
+            handlers.insert(signal.to_uppercase(), command);
+        }
+    }
 
+    /// Get a trap handler for a signal
+    pub fn get_trap(&self, signal: &str) -> Option<String> {
+        if let Ok(handlers) = self.trap_handlers.lock() {
+            handlers.get(&signal.to_uppercase()).cloned()
+        } else {
+            None
+        }
+    }
+
+    /// Remove a trap handler for a signal
+    pub fn remove_trap(&mut self, signal: &str) {
+        if let Ok(mut handlers) = self.trap_handlers.lock() {
+            handlers.remove(&signal.to_uppercase());
+        }
+    }
+
+    /// Get all trap handlers
+    pub fn get_all_traps(&self) -> HashMap<String, String> {
+        if let Ok(handlers) = self.trap_handlers.lock() {
+            handlers.clone()
+        } else {
+            HashMap::new()
+        }
+    }
+
+    /// Clear all trap handlers
+    #[allow(dead_code)]
+    pub fn clear_traps(&mut self) {
+        if let Ok(mut handlers) = self.trap_handlers.lock() {
+            handlers.clear();
+        }
+    }
 }
 
+/// Enqueue a signal event for later processing
+/// If the queue is full, the oldest event is dropped
+pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
+    if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
+        // If queue is full, remove oldest event
+        if queue.len() >= MAX_SIGNAL_QUEUE_SIZE {
+            queue.pop_front();
+            eprintln!("Warning: Signal queue overflow, dropping oldest signal");
+        }
+
+        queue.push_back(SignalEvent::new(signal_name.to_string(), signal_number));
+    }
+}
+
+/// Process all pending signals in the queue
+/// This should be called at safe points during command execution
+pub fn process_pending_signals(shell_state: &mut ShellState) {
+    // Try to lock the queue with a timeout to avoid blocking
+    if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
+        // Process all pending signals
+        while let Some(signal_event) = queue.pop_front() {
+            // Check if a trap is set for this signal
+            if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name) {
+                if !trap_cmd.is_empty() {
+                    // Execute the trap handler
+                    // Note: This preserves the exit code as per POSIX requirements
+                    crate::executor::execute_trap_handler(&trap_cmd, shell_state);
+                }
+            }
+        }
+    }
+}
 
 impl Default for ShellState {
     fn default() -> Self {
@@ -590,7 +707,10 @@ mod tests {
 
         // Set a global variable
         state.set_var("global_var", "global_value".to_string());
-        assert_eq!(state.get_var("global_var"), Some("global_value".to_string()));
+        assert_eq!(
+            state.get_var("global_var"),
+            Some("global_value".to_string())
+        );
 
         // Push local scope
         state.push_local_scope();
@@ -607,7 +727,10 @@ mod tests {
         state.pop_local_scope();
 
         // Should be back to global variable
-        assert_eq!(state.get_var("global_var"), Some("global_value".to_string()));
+        assert_eq!(
+            state.get_var("global_var"),
+            Some("global_value".to_string())
+        );
         assert_eq!(state.get_var("local_var"), None);
     }
 

@@ -1,6 +1,6 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.4.4** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.5.0** - A comprehensive POSIX sh-compatible shell implementation
 
 [![Repository Statistics](https://tokei.rs/b1/github/drewwalton19216801/rush-sh)](https://github.com/drewwalton19216801/rush-sh) [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
@@ -76,7 +76,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
     - Local variables: `local var=value`
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
-- **Built-in Commands** (19 total):
+- **Built-in Commands** (20 total):
   - `cd`: Change directory
   - `exit`: Exit the shell
   - `pwd`: Print working directory
@@ -95,6 +95,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - `set_color_scheme`: Switch between color themes (default/dark/light)
   - `set_condensed`: Enable/disable condensed cwd display in prompt
   - `declare`: Display function definitions and list function names
+  - `trap`: Set or display signal handlers
   - `help`: Show available commands
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
@@ -103,7 +104,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - **Directory Traversal**: Support for nested paths (`src/`, `../`, `/usr/bin/`)
   - **Home Directory Expansion**: Completion for `~/` and `~/Documents/` paths
   - **Multi-Match Cycling**: Subsequent tab presses cycle through available completions when multiple matches exist
-- **Signal Handling**: Graceful handling of SIGINT (Ctrl+C) and SIGTERM.
+- **Real-Time Signal Handling**: Traps execute immediately when signals are received during interactive sessions and script execution
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
 ## What's New
@@ -118,7 +119,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of 18 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 20 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
@@ -845,6 +846,126 @@ else
 fi
 ```
 
+### Signal Handling with Trap
+
+Rush now provides comprehensive signal handling through the POSIX-compliant `trap` builtin, enabling scripts to respond to signals and perform cleanup operations:
+
+- **Real-Time Signal Execution**: Traps execute immediately when signals are received during interactive sessions and script execution
+- **Signal Handlers**: Set custom handlers for signals like INT, TERM, HUP, etc.
+- **EXIT Trap**: Execute cleanup code when the shell exits
+- **Signal Names and Numbers**: Support for both signal names (INT, TERM) and numbers (2, 15)
+- **Multiple Signals**: Set the same handler for multiple signals at once
+- **Trap Display**: View all active traps with `trap` command
+- **Trap Reset**: Reset traps to default behavior with `trap - SIGNAL`
+- **Signal Listing**: List all available signals with `trap -l`
+- **Exit Code Preservation**: Trap handlers preserve the original `$?` exit code per POSIX requirements
+
+**Basic Usage:**
+
+```bash
+# Set trap for SIGINT (Ctrl+C)
+trap 'echo "Interrupted! Cleaning up..."; exit 1' INT
+
+# Set EXIT trap for cleanup
+trap 'rm -rf /tmp/mytemp; echo "Cleanup complete"' EXIT
+
+# Set trap for multiple signals
+trap 'echo "Signal received"' INT TERM HUP
+
+# Display all traps
+trap
+
+# Display specific trap
+trap -p INT
+
+# Reset trap to default
+trap - INT
+
+# Ignore signal
+trap '' HUP
+
+# List all signals
+trap -l
+```
+
+**Advanced Usage:**
+
+```bash
+# Cleanup trap for temporary files
+TEMP_DIR="/tmp/script_$$"
+mkdir -p "$TEMP_DIR"
+trap 'rm -rf "$TEMP_DIR"; echo "Temp files removed"' EXIT
+
+# Signal handling in long operations
+trap 'echo "Operation cancelled"; exit 130' INT TERM
+for i in {1..100}; do
+    echo "Processing $i..."
+    sleep 1
+done
+
+# Variable expansion in traps
+SCRIPT_START=$(date)
+trap 'echo "Script started at: $SCRIPT_START"' EXIT
+
+# Multiple commands in trap
+trap 'echo "Cleaning up..."; rm -f *.tmp; echo "Done"' EXIT
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Full compatibility with POSIX trap specifications
+- **32 Signals Supported**: All standard Unix signals including HUP, INT, QUIT, TERM, USR1, USR2, etc.
+- **EXIT Trap**: Special trap that executes on shell exit (normal or error)
+- **Signal Validation**: Rejects uncatchable signals (KILL, STOP)
+- **Flexible Syntax**: Supports signal names, numbers, and SIG prefix
+- **Error Handling**: Graceful handling of invalid signals and malformed commands
+
+**Real-Time Execution:**
+
+As of v0.5.0, Rush Shell supports real-time signal trap execution during interactive sessions and script execution:
+
+- **Immediate Response**: Traps execute as soon as signals are received, not just at shell exit
+- **Safe Execution Points**: Signals are processed at safe points in the REPL loop and script execution
+- **Signal Queue**: Signals are queued and processed to prevent race conditions
+- **Performance**: <5μs overhead per REPL iteration with no noticeable impact on interactive performance
+- **Bounded Queue**: Maximum 100 queued signals to prevent memory issues
+
+**Implementation Details:**
+
+- Trap handlers are stored in thread-safe storage (Arc<Mutex<HashMap>>)
+- Signal events are queued by a dedicated signal handler thread
+- Main thread processes signals at safe points (before prompt, after commands, during script execution)
+- EXIT traps execute at all shell exit points
+- Trap commands preserve the original exit code ($?)
+- Variable expansion occurs at trap execution time
+- Trap handlers can access all shell features (functions, variables, etc.)
+
+**Integration with Shell Features:**
+
+```bash
+# Trap with command substitution
+trap 'echo "Files in directory: $(ls | wc -l)"' WINCH
+
+# Trap with arithmetic expansion
+COUNT=0
+trap 'COUNT=$((COUNT + 1)); echo "Signal count: $COUNT"' USR1
+
+# Trap with functions
+cleanup() {
+    echo "Cleanup function called"
+    rm -rf /tmp/mytemp
+}
+trap cleanup EXIT
+
+# Trap in scripts
+#!/usr/bin/env rush-sh
+trap 'echo "Script interrupted at line $LINENO"' INT
+# ... rest of script
+```
+
+The trap builtin provides robust signal handling for production shell scripts while maintaining full backward compatibility with existing Rush shell functionality.
+
+
 The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
 
 ### Positional Parameters
@@ -1491,7 +1612,7 @@ Rush consists of the following components:
 
 ### Comprehensive Test Suite
 
-Rush includes an extensive test suite with **275+ test cases** ensuring reliability and correctness:
+Rush includes an extensive test suite with **288+ test cases** ensuring reliability and correctness:
 
 - **Unit Tests**: Individual component testing for lexer, parser, arithmetic engine, and parameter expansion
 - **Integration Tests**: End-to-end command execution, pipelines, redirections, and control structures
