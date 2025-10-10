@@ -339,35 +339,26 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else {
                     chars.next(); // consume the quote
                     if in_double_quote {
-                        // End of double quote - push the accumulated content as a word
-                        // Even if empty, we need to preserve it as an empty string token
-                        // Don't expand variables here - keep them as literals for execution-time expansion
-                        tokens.push(Token::Word(current.clone()));
-                        current.clear();
+                        // End of double quote - the content stays in current
+                        // We don't push it yet - it might be part of a larger word
+                        // like in: alias ls="ls --color"
                         in_double_quote = false;
                     } else {
-                        // Start of double quote - push any accumulated content first
-                        if !current.is_empty() {
-                            if let Some(keyword) = is_keyword(&current) {
-                                tokens.push(keyword);
-                            } else {
-                                // Don't expand variables here - keep them as literals
-                                tokens.push(Token::Word(current.clone()));
-                            }
-                            current.clear();
-                        }
+                        // Start of double quote - don't push current yet
+                        // The quoted content will be appended to current
                         in_double_quote = true;
                     }
                 }
             }
             '\'' => {
                 if in_single_quote {
-                    // End of single quote - preserve even empty strings
-                    tokens.push(Token::Word(current.clone()));
-                    current.clear();
+                    // End of single quote - the content stays in current
+                    // We don't push it yet - it might be part of a larger word
+                    // like in: trap 'echo "..."' EXIT
                     in_single_quote = false;
                 } else if !in_double_quote {
-                    // Start of single quote - don't push current word, just enter quote mode
+                    // Start of single quote - don't push current yet
+                    // The quoted content will be appended to current
                     in_single_quote = true;
                 }
                 chars.next();
