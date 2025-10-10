@@ -177,23 +177,23 @@ pub fn parse_parameter_expansion(content: &str) -> Result<ParameterExpansion, St
     }
 
     // No modifier found - check if this is an indirect expansion
-    let (final_var_name, modifier) = if var_name.starts_with('!') {
-        if var_name.ends_with('*') {
+    let (final_var_name, modifier) = if let Some(stripped) = var_name.strip_prefix('!') {
+        if let Some(prefix_var) = stripped.strip_suffix('*') {
             // Strip both the '!' prefix and '*' suffix from the var_name for IndirectPrefix
             (
-                var_name[1..var_name.len() - 1].to_string(),
+                prefix_var.to_string(),
                 ParameterModifier::IndirectPrefix,
             )
-        } else if var_name.ends_with('@') {
+        } else if let Some(prefix_var) = stripped.strip_suffix('@') {
             // Strip both the '!' prefix and '@' suffix from the var_name for IndirectPrefixAt
             (
-                var_name[1..var_name.len() - 1].to_string(),
+                prefix_var.to_string(),
                 ParameterModifier::IndirectPrefixAt,
             )
         } else {
             // ${!name} - basic indirect expansion
             (
-                var_name[1..].to_string(),
+                stripped.to_string(),
                 ParameterModifier::Indirect,
             )
         }
