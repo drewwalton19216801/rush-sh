@@ -133,6 +133,8 @@ pub enum ParameterModifier {
     Substitute(String, String),
     /// ${VAR//pattern/replacement} - substitute all matches
     SubstituteAll(String, String),
+    /// ${!name} - indirect expansion (value of variable named by name)
+    Indirect,
     /// ${!prefix*} - names of variables starting with prefix
     IndirectPrefix,
     /// ${!prefix@} - names of variables starting with prefix (same as IndirectPrefix)
@@ -177,19 +179,23 @@ pub fn parse_parameter_expansion(content: &str) -> Result<ParameterExpansion, St
     // No modifier found - check if this is an indirect expansion
     let (final_var_name, modifier) = if var_name.starts_with('!') {
         if var_name.ends_with('*') {
-            // Strip the '*' from the var_name for IndirectPrefix
+            // Strip both the '!' prefix and '*' suffix from the var_name for IndirectPrefix
             (
-                var_name[..var_name.len() - 1].to_string(),
+                var_name[1..var_name.len() - 1].to_string(),
                 ParameterModifier::IndirectPrefix,
             )
         } else if var_name.ends_with('@') {
-            // Strip the '@' from the var_name for IndirectPrefixAt
+            // Strip both the '!' prefix and '@' suffix from the var_name for IndirectPrefixAt
             (
-                var_name[..var_name.len() - 1].to_string(),
+                var_name[1..var_name.len() - 1].to_string(),
                 ParameterModifier::IndirectPrefixAt,
             )
         } else {
-            return Err("Invalid indirect expansion: must end with * or @".to_string());
+            // ${!name} - basic indirect expansion
+            (
+                var_name[1..].to_string(),
+                ParameterModifier::Indirect,
+            )
         }
     } else {
         (var_name, ParameterModifier::None)
@@ -328,6 +334,32 @@ fn parse_modifier(modifier_str: &str) -> Result<ParameterModifier, String> {
     }
 }
 
+/// Collect all variable names that start with the given prefix from all scopes
+fn collect_variable_names_with_prefix(prefix: &str, shell_state: &ShellState) -> Vec<String> {
+    let mut matching_vars = std::collections::HashSet::new();
+
+    // Collect from global variables
+    for var_name in shell_state.variables.keys() {
+        if var_name.starts_with(prefix) {
+            matching_vars.insert(var_name.clone());
+        }
+    }
+
+    // Collect from local variable scopes
+    for scope in &shell_state.local_vars {
+        for var_name in scope.keys() {
+            if var_name.starts_with(prefix) {
+                matching_vars.insert(var_name.clone());
+            }
+        }
+    }
+
+    // Convert to sorted vector for consistent output
+    let mut result: Vec<String> = matching_vars.into_iter().collect();
+    result.sort();
+    result
+}
+
 /// Expand a parameter expression using the given shell state
 pub fn expand_parameter(
     expansion: &ParameterExpansion,
@@ -337,6 +369,16 @@ pub fn expand_parameter(
         ParameterModifier::None => {
             // Simple variable expansion
             shell_state.get_var(&expansion.var_name)
+        }
+        ParameterModifier::Indirect => {
+            // ${!name} - indirect expansion
+            // Get the value of the variable named by expansion.var_name
+            // Then use that value as a variable name to get the final value
+            if let Some(indirect_name) = shell_state.get_var(&expansion.var_name) {
+                shell_state.get_var(&indirect_name)
+            } else {
+                Some("".to_string())
+            }
         }
         ParameterModifier::Default(ref default) => {
             // ${VAR:-word} - use default if VAR is unset or null
@@ -462,10 +504,9 @@ pub fn expand_parameter(
             }
         }
         ParameterModifier::IndirectPrefix | ParameterModifier::IndirectPrefixAt => {
-            // ${!prefix*}
-            // For now, return empty string as this is complex to implement
-            // TODO: Implement indirect expansion properly
-            Some("".to_string())
+            // ${!prefix*} - names of variables starting with prefix
+            let matching_vars = collect_variable_names_with_prefix(&expansion.var_name, shell_state);
+            Some(matching_vars.join(" "))
         }
     };
 
@@ -603,7 +644,7 @@ mod tests {
     #[test]
     fn test_parse_indirect_prefix() {
         let result = parse_parameter_expansion("!PREFIX*").unwrap();
-        assert_eq!(result.var_name, "!PREFIX");
+        assert_eq!(result.var_name, "PREFIX");
         assert_eq!(result.modifier, ParameterModifier::IndirectPrefix);
     }
 
@@ -672,5 +713,216 @@ mod tests {
 
         let result = expand_parameter(&expansion, &shell_state).unwrap();
         assert_eq!(result, "world");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_basic() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("MY_VAR1", "value1".to_string());
+        shell_state.set_var("MY_VAR2", "value2".to_string());
+        shell_state.set_var("OTHER_VAR", "other".to_string());
+        shell_state.set_var("MY_PREFIX_VAR", "prefix".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "MY_".to_string(),
+            modifier: ParameterModifier::IndirectPrefix,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should return variable names starting with "MY_" in sorted order
+        assert_eq!(result, "MY_PREFIX_VAR MY_VAR1 MY_VAR2");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_with_locals() {
+        let mut shell_state = ShellState::new();
+
+        // Set global variables
+        shell_state.set_var("GLOBAL_VAR", "global".to_string());
+        shell_state.set_var("TEST_VAR1", "test1".to_string());
+
+        // Push local scope and set local variables
+        shell_state.push_local_scope();
+        shell_state.set_local_var("LOCAL_VAR", "local".to_string());
+        shell_state.set_local_var("TEST_VAR2", "test2".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "TEST_".to_string(),
+            modifier: ParameterModifier::IndirectPrefix,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should find both global and local variables starting with "TEST_"
+        assert_eq!(result, "TEST_VAR1 TEST_VAR2");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_no_matches() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("VAR1", "value1".to_string());
+        shell_state.set_var("VAR2", "value2".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "NONEXISTENT_".to_string(),
+            modifier: ParameterModifier::IndirectPrefix,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should return empty string when no variables match
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_empty_prefix() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("VAR1", "value1".to_string());
+        shell_state.set_var("VAR2", "value2".to_string());
+        shell_state.set_var("ANOTHER_VAR", "another".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "".to_string(),
+            modifier: ParameterModifier::IndirectPrefix,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Empty prefix should match all variables
+        assert_eq!(result, "ANOTHER_VAR VAR1 VAR2");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_at() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("PREFIX_VAR1", "value1".to_string());
+        shell_state.set_var("PREFIX_VAR2", "value2".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "PREFIX_".to_string(),
+            modifier: ParameterModifier::IndirectPrefixAt,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should work the same as IndirectPrefix for now
+        assert_eq!(result, "PREFIX_VAR1 PREFIX_VAR2");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_mixed_scopes() {
+        let mut shell_state = ShellState::new();
+
+        // Set global variables
+        shell_state.set_var("APP_CONFIG", "global_config".to_string());
+        shell_state.set_var("APP_DEBUG", "false".to_string());
+
+        // Push first local scope
+        shell_state.push_local_scope();
+        shell_state.set_local_var("APP_TEMP", "temp_value".to_string());
+
+        // Push second local scope
+        shell_state.push_local_scope();
+        shell_state.set_local_var("APP_SECRET", "secret_value".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "APP_".to_string(),
+            modifier: ParameterModifier::IndirectPrefix,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should find variables from all scopes
+        assert_eq!(result, "APP_CONFIG APP_DEBUG APP_SECRET APP_TEMP");
+    }
+
+    #[test]
+    fn test_expand_indirect_prefix_special_characters() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("TEST-VAR", "dash".to_string());
+        shell_state.set_var("TEST.VAR", "dot".to_string());
+        shell_state.set_var("TEST_VAR", "underscore".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "TEST".to_string(),
+            modifier: ParameterModifier::IndirectPrefix,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should find all variables starting with "TEST"
+        assert_eq!(result, "TEST-VAR TEST.VAR TEST_VAR");
+    }
+
+    #[test]
+    fn test_parse_indirect_basic() {
+        let result = parse_parameter_expansion("!VAR_NAME").unwrap();
+        assert_eq!(result.var_name, "VAR_NAME");
+        assert_eq!(result.modifier, ParameterModifier::Indirect);
+    }
+
+    #[test]
+    fn test_expand_indirect_basic() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("VAR_NAME", "TARGET_VAR".to_string());
+        shell_state.set_var("TARGET_VAR", "final_value".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "VAR_NAME".to_string(),
+            modifier: ParameterModifier::Indirect,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should resolve VAR_NAME -> "TARGET_VAR" -> "final_value"
+        assert_eq!(result, "final_value");
+    }
+
+    #[test]
+    fn test_expand_indirect_basic_unset_intermediate() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("TARGET_VAR", "final_value".to_string());
+        // VAR_NAME is not set
+
+        let expansion = ParameterExpansion {
+            var_name: "VAR_NAME".to_string(),
+            modifier: ParameterModifier::Indirect,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should return empty string when intermediate variable is unset
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_expand_indirect_basic_unset_target() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("VAR_NAME", "NONEXISTENT".to_string());
+        // NONEXISTENT is not set
+
+        let expansion = ParameterExpansion {
+            var_name: "VAR_NAME".to_string(),
+            modifier: ParameterModifier::Indirect,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should return empty string when target variable is unset
+        assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_expand_indirect_basic_with_local_scope() {
+        let mut shell_state = ShellState::new();
+        
+        // Set global variables
+        shell_state.set_var("VAR_NAME", "GLOBAL_TARGET".to_string());
+        shell_state.set_var("GLOBAL_TARGET", "global_value".to_string());
+        
+        // Push local scope and override
+        shell_state.push_local_scope();
+        shell_state.set_local_var("VAR_NAME", "LOCAL_TARGET".to_string());
+        shell_state.set_local_var("LOCAL_TARGET", "local_value".to_string());
+
+        let expansion = ParameterExpansion {
+            var_name: "VAR_NAME".to_string(),
+            modifier: ParameterModifier::Indirect,
+        };
+
+        let result = expand_parameter(&expansion, &shell_state).unwrap();
+        // Should use local scope value
+        assert_eq!(result, "local_value");
     }
 }
