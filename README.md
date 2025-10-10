@@ -8,6 +8,27 @@
 
 Rush is a POSIX sh-compatible shell implemented in Rust. It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports basic shell features like command execution, pipes, redirections, environment variables, and built-in commands.
 
+## Table of Contents
+
+- [Features](#features)
+- [What's New](#whats-new)
+  - [🚀 Major Feature Additions](#-major-feature-additions)
+  - [Detailed Feature Updates](#detailed-feature-updates)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Interactive Mode](#interactive-mode)
+  - [Script Mode](#script-mode)
+  - [Command Mode](#command-mode)
+  - [Source Command](#source-command)
+  - [Examples](#examples)
+- [Architecture](#architecture)
+- [Dependencies](#dependencies)
+- [Quality Assurance](#quality-assurance)
+  - [Comprehensive Test Suite](#comprehensive-test-suite)
+  - [Performance Benchmarking](#performance-benchmarking)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Pun-der the Hood
 
 - In a hurry? Don’t bash your head against it—Rush it.
