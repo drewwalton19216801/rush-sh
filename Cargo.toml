@@ -16,7 +16,7 @@ version = "0.5.1"
 edition = "2024"
 description = "A POSIX sh-compatible shell written in Rust"
 license = "MIT"
-documentation = "https://github.com/drewwalton19216801/rush-sh"
+documentation = "https://drewwalton19216801.github.io/rush-sh/"
 repository = "https://github.com/drewwalton19216801/rush-sh"
 
 [lib]
