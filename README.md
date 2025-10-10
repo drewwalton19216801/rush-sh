@@ -57,6 +57,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
     - `${VAR%%pattern}` - remove longest match from end
     - `${VAR/pattern/replacement}` - pattern substitution
     - `${VAR//pattern/replacement}` - global pattern substitution
+    - `${!name}` - indirect expansion (bash extension)
+    - `${!prefix*}` and `${!prefix@}` - variable name expansion (bash extension)
   - Export mechanism: `export VAR` and `export VAR=value`
   - Variable scoping: Shell variables vs exported environment variables
 - **Positional Parameters**: Complete support for script arguments and parameter manipulation.
@@ -483,6 +485,7 @@ set_condensed status          # Show current setting
 **Example Prompt Displays:**
 
 Condensed mode (default):
+
 ```bash
 /h/d/p/r/rush $
 /u/b/s/project $
@@ -490,6 +493,7 @@ Condensed mode (default):
 ```
 
 Full path mode:
+
 ```bash
 /home/drew/projects/rush-sh $
 /usr/bin/src/project $
@@ -965,7 +969,6 @@ trap 'echo "Script interrupted at line $LINENO"' INT
 
 The trap builtin provides robust signal handling for production shell scripts while maintaining full backward compatibility with existing Rush shell functionality.
 
-
 The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
 
 ### Positional Parameters
@@ -1129,7 +1132,9 @@ Rush now supports comprehensive POSIX sh parameter expansion with modifiers, pro
 - **Pattern Substitution**:
   - `${VAR/pattern/replacement}` - Replace first occurrence
   - `${VAR//pattern/replacement}` - Replace all occurrences
-- **Indirect Expansion**: `${!prefix*}` - Names of variables starting with prefix
+- **Indirect Expansion** (bash extension):
+  - `${!name}` - Indirect variable reference (value of variable named by name)
+  - `${!prefix*}` and `${!prefix@}` - Names of variables starting with prefix
 
 **Basic Usage:**
 
@@ -1212,10 +1217,46 @@ echo "Path: ${URL#*/}"                             # "path/to/resource"
 CONFIG_FILE="/etc/app.conf"
 echo "Config: ${CONFIG_FILE:-/etc/default.conf}"
 
-# Dynamic variable names (indirect expansion)
-VAR_PREFIX="MY"
-VAR_NAME="${VAR_PREFIX}_VAR"
-echo "Indirect: ${!MY*}"                           # Lists variables starting with MY
+# Indirect expansion - dynamic variable access
+VAR_NAME="MESSAGE"
+MESSAGE="Hello World"
+echo "Indirect: ${!VAR_NAME}"                      # "Hello World"
+
+# Indirect expansion - list matching variables
+MY_VAR1="value1"
+MY_VAR2="value2"
+MY_VAR3="value3"
+echo "All MY_ vars: ${!MY_*}"                      # "MY_VAR1 MY_VAR2 MY_VAR3"
+```
+
+**Indirect Expansion:**
+
+```bash
+# Basic indirect expansion - ${!name}
+# Access variable whose name is stored in another variable
+TARGET="HOME"
+echo "Value: ${!TARGET}"                           # Expands to value of $HOME
+
+# Practical use case - configuration selection
+ENV="production"
+production_db="prod.example.com"
+development_db="dev.example.com"
+DB_VAR="${ENV}_db"
+echo "Database: ${!DB_VAR}"                        # "prod.example.com"
+
+# Prefix-based indirect expansion - ${!prefix*}
+# List all variables starting with a prefix
+PATH_VAR1="/usr/bin"
+PATH_VAR2="/usr/local/bin"
+PATH_VAR3="/opt/bin"
+echo "All PATH_ vars: ${!PATH_*}"                  # "PATH_VAR1 PATH_VAR2 PATH_VAR3"
+
+# Works with both global and local variables
+myfunc() {
+    local LOCAL_VAR1="a"
+    local LOCAL_VAR2="b"
+    echo "Local vars: ${!LOCAL_*}"                 # "LOCAL_VAR1 LOCAL_VAR2"
+}
 ```
 
 **Integration with Other Features:**
@@ -1553,6 +1594,7 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Pattern removal: `echo "Basename: ${FULL_PATH##*/}"`
   - Pattern substitution: `echo "Replaced: ${TEXT/old/new}"`
   - Length operations: `echo "Length: ${#VARIABLE}"`
+  - Indirect expansion: `echo "Value: ${!VAR_NAME}"` and `echo "Vars: ${!PREFIX*}"`
 - Brace expansion:
   - Simple lists: `echo {a,b,c}` → `a b c`
   - Numeric ranges: `echo {1..5}` → `1 2 3 4 5`
@@ -1592,6 +1634,7 @@ Rush consists of the following components:
 - **Parameter Expansion Engine**: A comprehensive parameter expansion system implemented in [`src/parameter_expansion.rs`](src/parameter_expansion.rs) that supports:
   - **Modifier parsing**: Sophisticated parsing of POSIX sh parameter expansion modifiers
   - **String operations**: Default values, substring extraction, pattern removal, and substitution
+  - **Indirect expansion**: Dynamic variable access with `${!name}` and variable name listing with `${!prefix*}`
   - **Error handling**: Robust error reporting for malformed expressions and edge cases
   - **Performance**: Efficient string manipulation with minimal memory allocation
 - **Shell State**: Comprehensive state management for environment variables, exported variables, special variables (`$?`, `$$`, `$0`), current directory, directory stack, and command aliases.

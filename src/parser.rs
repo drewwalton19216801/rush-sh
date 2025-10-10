@@ -171,7 +171,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         if let (Token::Word(var_eq), Token::Word(value)) = (&tokens[0], &tokens[1])
             && let Some(eq_pos) = var_eq.find('=')
             && eq_pos > 0
-            && eq_pos < var_eq.len() - 1
+            && eq_pos <= var_eq.len() - 1
         {
             let var = var_eq[..eq_pos].to_string();
             let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
@@ -243,7 +243,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         && let (Token::Local, Token::Word(var_eq)) = (&tokens[0], &tokens[1])
         && let Some(eq_pos) = var_eq.find('=')
         && eq_pos > 0
-        && eq_pos < var_eq.len() - 1
+        && eq_pos <= var_eq.len() - 1
     {
         let var = var_eq[..eq_pos].to_string();
         let value = var_eq[eq_pos + 1..].to_string();
@@ -258,7 +258,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         && let Token::Word(ref word) = tokens[0]
         && let Some(eq_pos) = word.find('=')
         && eq_pos > 0
-        && eq_pos < word.len() - 1
+        && eq_pos <= word.len() - 1
     {
         let var = word[..eq_pos].to_string();
         let value = word[eq_pos + 1..].to_string();

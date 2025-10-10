@@ -399,6 +399,7 @@
                                 <ul>
                                     <li><strong>Modifier Parsing:</strong> Sophisticated parsing of POSIX sh parameter expansion modifiers</li>
                                     <li><strong>String Operations:</strong> Default values, substring extraction, pattern removal, and substitution</li>
+                                    <li><strong>Indirect Expansion:</strong> Dynamic variable access (${!name}) and variable name listing (${!prefix*})</li>
                                     <li><strong>Error Handling:</strong> Robust error reporting for malformed expressions and edge cases</li>
                                     <li><strong>Performance:</strong> Efficient string manipulation with minimal memory allocation</li>
                                 </ul>
@@ -420,6 +421,10 @@
                                     <div class="modifier-group">
                                         <h5>Substitution</h5>
                                         <code>${VAR/pattern/replacement} ${VAR//pattern/replacement}</code>
+                                    </div>
+                                    <div class="modifier-group">
+                                        <h5>Indirect (bash extension)</h5>
+                                        <code>${!name} ${!prefix*} ${!prefix@}</code>
                                     </div>
                                 </div>
                             </div>

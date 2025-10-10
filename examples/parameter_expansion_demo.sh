@@ -198,16 +198,57 @@ echo ""
 echo "=== INDIRECT EXPANSION ==="
 echo ""
 
-# Set up some variables for indirect expansion
-echo "Setting up variables for indirect expansion:"
-MY_PREFIX_VAR="FRUIT"
-echo "  MY_PREFIX_VAR='$MY_PREFIX_VAR'"
+# Basic indirect expansion: ${!name}
+echo "Basic indirect expansion \${!name}:"
+echo "  (where name contains the name of another variable)"
+echo ""
+
+VAR_NAME="MESSAGE"
+echo "  VAR_NAME='$VAR_NAME'"
+echo "  MESSAGE='$MESSAGE'"
+echo "  \${!VAR_NAME} = ${!VAR_NAME}"
+echo ""
+
+TARGET="FRUIT"
+echo "  TARGET='$TARGET'"
+echo "  FRUIT='$FRUIT'"
+echo "  \${!TARGET} = ${!TARGET}"
 echo ""
 
 # ${!prefix*} - names of variables starting with prefix
-echo "Indirect expansion with \${!prefix*} (Note: Currently returns empty in this implementation):"
-echo "  \${!MY_} = ${!MY_}"
-echo "  \${!FRUIT*} = ${!FRUIT*}"
+echo "Prefix-based indirect expansion \${!prefix*}:"
+echo "  (lists all variable names starting with prefix)"
+echo ""
+
+# Set up some variables for indirect expansion
+MY_PREFIX_VAR="FRUIT"
+echo "  MY_PREFIX_VAR='$MY_PREFIX_VAR'"
+echo "  \${!MY_*} = ${!MY_*}"
+echo ""
+
+# Set up more variables to demonstrate indirect expansion
+APP_CONFIG="debug"
+APP_DEBUG="true"
+APP_TIMEOUT="30"
+USER_NAME="john"
+USER_ID="1001"
+
+echo "Set up additional variables for indirect expansion demo:"
+echo "  APP_CONFIG='$APP_CONFIG'"
+echo "  APP_DEBUG='$APP_DEBUG'"
+echo "  APP_TIMEOUT='$APP_TIMEOUT'"
+echo "  USER_NAME='$USER_NAME'"
+echo "  USER_ID='$USER_ID'"
+echo ""
+
+echo "Indirect expansion examples:"
+echo "  Variables starting with 'APP_': \${!APP_*} = ${!APP_*}"
+echo "  Variables starting with 'USER_': \${!USER_*} = ${!USER_*}"
+echo "  Variables starting with 'NONEXISTENT_': \${!NONEXISTENT_*} = ${!NONEXISTENT_*}"
+echo ""
+
+echo "Using @ instead of * (same result):"
+echo "  Variables starting with 'APP_': \${!APP_@} = ${!APP_@}"
 echo ""
 
 # =============================================================================
@@ -246,6 +287,13 @@ FULL_PATH="/home/user/projects/rush-sh/src/main.rs"
 echo "  Original: '$FULL_PATH'"
 echo "  Directory only: \${FULL_PATH%/*} = ${FULL_PATH%/*}"
 echo "  Filename only: \${FULL_PATH##*/} = ${FULL_PATH##*/}"
+echo ""
+
+# Example 5: Using indirect expansion for dynamic variable access
+echo "Example 5 - Using indirect expansion for dynamic variable access:"
+CONFIG_PREFIX="APP_"
+echo "  Variables starting with '\$CONFIG_PREFIX': \${!APP_*} = ${!APP_*}"
+echo "  This can be used to dynamically access configuration variables"
 echo ""
 
 echo "=========================================="

@@ -350,6 +350,26 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                 }
             }
+            '\\' if in_double_quote => {
+                // Handle backslash escaping inside double quotes
+                chars.next(); // consume the backslash
+                if let Some(&next_ch) = chars.peek() {
+                    // In double quotes, backslash only escapes: $ ` " \ and newline
+                    if next_ch == '$' || next_ch == '`' || next_ch == '"' || next_ch == '\\' || next_ch == '\n' {
+                        // Escape the next character - just add it literally
+                        current.push(next_ch);
+                        chars.next(); // consume the escaped character
+                    } else {
+                        // Backslash doesn't escape this character, keep both
+                        current.push('\\');
+                        current.push(next_ch);
+                        chars.next();
+                    }
+                } else {
+                    // Backslash at end of input
+                    current.push('\\');
+                }
+            }
             '\'' => {
                 if in_single_quote {
                     // End of single quote - the content stays in current
@@ -397,21 +417,26 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                     match expand_parameter(&expansion, shell_state) {
                                         Ok(expanded) => {
                                             if expanded.is_empty() {
-                                                // If current is not empty, create a token first
-                                                if !current.is_empty() {
-                                                    if let Some(keyword) = is_keyword(&current) {
-                                                        tokens.push(keyword);
-                                                    } else {
-                                                        let word = expand_variables_in_command(
-                                                            &current,
-                                                            shell_state,
-                                                        );
-                                                        tokens.push(Token::Word(word));
+                                                // If we're inside quotes, just continue building the current token
+                                                // Don't create a separate empty token
+                                                if !in_double_quote && !in_single_quote {
+                                                    // Only create empty token if we're not in quotes
+                                                    if !current.is_empty() {
+                                                        if let Some(keyword) = is_keyword(&current) {
+                                                            tokens.push(keyword);
+                                                        } else {
+                                                            let word = expand_variables_in_command(
+                                                                &current,
+                                                                shell_state,
+                                                            );
+                                                            tokens.push(Token::Word(word));
+                                                        }
+                                                        current.clear();
                                                     }
-                                                    current.clear();
+                                                    // Create an empty token for the empty expansion
+                                                    tokens.push(Token::Word("".to_string()));
                                                 }
-                                                // Create an empty token for the empty expansion
-                                                tokens.push(Token::Word("".to_string()));
+                                                // If in quotes, the empty expansion just contributes nothing to current
                                             } else {
                                                 current.push_str(&expanded);
                                             }
