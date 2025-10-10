@@ -936,7 +936,7 @@ As of v0.5.0, Rush Shell supports real-time signal trap execution during interac
 
 **Implementation Details:**
 
-- Trap handlers are stored in thread-safe storage (Arc<Mutex<HashMap>>)
+- Trap handlers are stored in thread-safe storage (`Arc<Mutex<HashMap>>`)
 - Signal events are queued by a dedicated signal handler thread
 - Main thread processes signals at safe points (before prompt, after commands, during script execution)
 - EXIT traps execute at all shell exit points
@@ -1742,7 +1742,7 @@ The benchmark suite generates:
 
 #### Example Output
 
-```
+```bash
 🚀 Rush Shell Performance Benchmark Suite
 ==========================================
 
