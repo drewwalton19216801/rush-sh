@@ -321,6 +321,21 @@ echo "Basename: ${FULL_PATH##*/}"         # "ls"
 echo "Replaced: ${TEXT/old/new}"</code></pre>
                                 </div>
                             </div>
+
+                            <div class="example-group">
+                                <h4>Indirect Expansion (bash extension)</h4>
+                                <div class="code-block">
+                                    <pre><code># Basic indirect expansion
+VAR_NAME="MESSAGE"
+MESSAGE="Hello World"
+echo "Value: ${!VAR_NAME}"                # "Hello World"
+
+# List variables by prefix
+MY_VAR1="a"
+MY_VAR2="b"
+echo "All MY_ vars: ${!MY_*}"             # "MY_VAR1 MY_VAR2"</code></pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </section>

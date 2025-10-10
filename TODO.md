@@ -40,6 +40,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Positional parameters (`$1`, `$2`, ...)
 - ✅ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
 - ✅ Parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, etc.)
+- ✅ Indirect expansion (`${!name}`, `${!prefix*}`) - bash extension
 - ✅ Arithmetic expansion (`$((...))`)
 
 ### 1.6 Word Expansions
@@ -220,6 +221,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 3. **Parameter Expansion**
     - Positional parameters ($1, $2, ...) - **IMPLEMENTED**
     - Parameter modifiers (${VAR:-default}, etc.) - **IMPLEMENTED**
+    - Indirect expansion (${!name}, ${!prefix*}) - **IMPLEMENTED** (bash extension)
     - Special parameters ($*, $@, $#) - **IMPLEMENTED**
 
 ### Medium Priority
@@ -245,7 +247,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ **Built-in tests** (all 20 implemented commands with comprehensive coverage)
 - ✅ **Integration tests** (end-to-end scenarios, variable expansion, control structures)
 - ✅ **Arithmetic expansion tests** (operators, precedence, variables, error handling)
-- ✅ **Parameter expansion tests** (all modifiers, pattern matching, edge cases)
+- ✅ **Parameter expansion tests** (all modifiers, pattern matching, indirect expansion, edge cases)
 - ✅ **Brace expansion tests** (simple lists, ranges, nested braces, cartesian products)
 - ✅ **State management tests** (variables, environment, positional parameters)
 
@@ -272,7 +274,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - **Basic Execution**: 95% ✅
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions implemented)
 - **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
-- **Expansions**: 98% ✅ (Parameter expansion, arithmetic expansion, and brace expansion fully implemented)
+- **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 60% ⚠️ (Basic I/O redirection implemented, advanced features missing)
 - **Job Control**: 0% ❌ (optional POSIX feature)
 - **Advanced Features**: 40% ⚠️ (Configuration, colors, completion implemented)
