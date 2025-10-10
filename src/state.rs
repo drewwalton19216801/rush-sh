@@ -336,7 +336,32 @@ impl ShellState {
     /// Get the user@hostname string for the prompt
     pub fn get_user_hostname(&self) -> String {
         let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
-        let hostname = env::var("HOSTNAME").unwrap_or_else(|_| "hostname".to_string());
+
+        // First try to get hostname from HOSTNAME environment variable
+        if let Ok(hostname) = env::var("HOSTNAME") {
+            if !hostname.trim().is_empty() {
+                return format!("{}@{}", user, hostname);
+            }
+        }
+
+        // If HOSTNAME is not set or empty, try the hostname command
+        let hostname = match std::process::Command::new("hostname")
+            .output() {
+                Ok(output) if output.status.success() => {
+                    String::from_utf8_lossy(&output.stdout)
+                        .trim()
+                        .to_string()
+                }
+                _ => "hostname".to_string(), // Last resort fallback
+            };
+
+        // Set the HOSTNAME environment variable for future use
+        if hostname != "hostname" {
+            unsafe {
+                std::env::set_var("HOSTNAME", &hostname);
+            }
+        }
+
         format!("{}@{}", user, hostname)
     }
 
