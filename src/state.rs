@@ -338,11 +338,10 @@ impl ShellState {
         let user = env::var("USER").unwrap_or_else(|_| "user".to_string());
 
         // First try to get hostname from HOSTNAME environment variable
-        if let Ok(hostname) = env::var("HOSTNAME") {
-            if !hostname.trim().is_empty() {
+        if let Ok(hostname) = env::var("HOSTNAME")
+            && !hostname.trim().is_empty() {
                 return format!("{}@{}", user, hostname);
             }
-        }
 
         // If HOSTNAME is not set or empty, try the hostname command
         let hostname = match std::process::Command::new("hostname")
