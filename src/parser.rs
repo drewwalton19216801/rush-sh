@@ -59,6 +59,88 @@ pub struct ShellCommand {
     pub append: Option<String>,
 }
 
+impl Default for ShellCommand {
+    fn default() -> Self {
+        ShellCommand {
+            args: Vec::new(),
+            input: None,
+            output: None,
+            append: None,
+        }
+    }
+}
+
+/// Helper function to validate if a string is a valid variable name.
+/// Returns true if the name starts with a letter or underscore.
+fn is_valid_variable_name(name: &str) -> bool {
+    if let Some(first_char) = name.chars().next() {
+        first_char.is_alphabetic() || first_char == '_'
+    } else {
+        false
+    }
+}
+
+/// Helper function to create an empty body AST (a no-op that returns success).
+/// Used for empty then/else branches, empty loop bodies, and empty function bodies.
+fn create_empty_body_ast() -> Ast {
+    Ast::Pipeline(vec![ShellCommand {
+        args: vec!["true".to_string()],
+        input: None,
+        output: None,
+        append: None,
+    }])
+}
+
+/// Helper function to skip consecutive newline tokens.
+/// Updates the index to point to the first non-newline token.
+fn skip_newlines(tokens: &[Token], i: &mut usize) {
+    while *i < tokens.len() && tokens[*i] == Token::Newline {
+        *i += 1;
+    }
+}
+
+/// Helper function to skip to the matching 'fi' token for an 'if' statement.
+/// Handles nested if statements correctly.
+fn skip_to_matching_fi(tokens: &[Token], i: &mut usize) {
+    let mut if_depth = 1;
+    *i += 1; // Move past the 'if' token
+    while *i < tokens.len() && if_depth > 0 {
+        match tokens[*i] {
+            Token::If => if_depth += 1,
+            Token::Fi => if_depth -= 1,
+            _ => {}
+        }
+        *i += 1;
+    }
+}
+
+/// Helper function to skip to the matching 'done' token for a 'for' or 'while' loop.
+/// Handles nested loops correctly.
+fn skip_to_matching_done(tokens: &[Token], i: &mut usize) {
+    let mut loop_depth = 1;
+    *i += 1; // Move past the 'for' or 'while' token
+    while *i < tokens.len() && loop_depth > 0 {
+        match tokens[*i] {
+            Token::For | Token::While => loop_depth += 1,
+            Token::Done => loop_depth -= 1,
+            _ => {}
+        }
+        *i += 1;
+    }
+}
+
+/// Helper function to skip to the matching 'esac' token for a 'case' statement.
+fn skip_to_matching_esac(tokens: &[Token], i: &mut usize) {
+    *i += 1; // Move past the 'case' token
+    while *i < tokens.len() {
+        if tokens[*i] == Token::Esac {
+            *i += 1;
+            break;
+        }
+        *i += 1;
+    }
+}
+
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
     // First, try to detect and parse function definitions that span multiple lines
     if tokens.len() >= 4
@@ -176,7 +258,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
             let var = var_eq[..eq_pos].to_string();
             let full_value = format!("{}{}", &var_eq[eq_pos + 1..], value);
             // Basic validation: variable name should start with letter or underscore
-            if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+            if is_valid_variable_name(&var) {
                 return Ok(Ast::Assignment {
                     var,
                     value: full_value,
@@ -194,7 +276,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     {
         let var = var_eq[..eq_pos].to_string();
         // Basic validation: variable name should start with letter or underscore
-        if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+        if is_valid_variable_name(&var) {
             return Ok(Ast::Assignment {
                 var,
                 value: value.clone(),
@@ -214,7 +296,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
             var
         };
         // Basic validation: variable name should start with letter or underscore
-        if clean_var.chars().next().unwrap().is_alphabetic() || clean_var.starts_with('_') {
+        if is_valid_variable_name(clean_var) {
             return Ok(Ast::LocalAssignment {
                 var: clean_var.to_string(),
                 value: value.clone(),
@@ -248,7 +330,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         let var = var_eq[..eq_pos].to_string();
         let value = var_eq[eq_pos + 1..].to_string();
         // Basic validation: variable name should start with letter or underscore
-        if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+        if is_valid_variable_name(&var) {
             return Ok(Ast::LocalAssignment { var, value });
         }
     }
@@ -263,7 +345,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         let var = word[..eq_pos].to_string();
         let value = word[eq_pos + 1..].to_string();
         // Basic validation: variable name should start with letter or underscore
-        if var.chars().next().unwrap().is_alphabetic() || var.starts_with('_') {
+        if is_valid_variable_name(&var) {
             return Ok(Ast::Assignment { var, value });
         }
     }
@@ -293,7 +375,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     if tokens.len() >= 4
         && let (Token::Word(word), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
-        && (word.chars().next().unwrap().is_alphabetic() || word.starts_with('_'))
+        && is_valid_variable_name(word)
     {
         return parse_function_definition(tokens);
     }
@@ -306,9 +388,7 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         && paren_pos > 0
     {
         let func_name = &word[..paren_pos];
-        if (func_name.chars().next().unwrap().is_alphabetic() || func_name.starts_with('_'))
-            && tokens[1] == Token::LeftBrace
-        {
+        if is_valid_variable_name(func_name) && tokens[1] == Token::LeftBrace {
             return parse_function_definition(tokens);
         }
     }
@@ -536,12 +616,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
 fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
     let mut commands = Vec::new();
-    let mut current_cmd = ShellCommand {
-        args: Vec::new(),
-        input: None,
-        output: None,
-        append: None,
-    };
+    let mut current_cmd = ShellCommand::default();
 
     let mut i = 0;
     while i < tokens.len() {
@@ -553,12 +628,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             Token::Pipe => {
                 if !current_cmd.args.is_empty() {
                     commands.push(current_cmd.clone());
-                    current_cmd = ShellCommand {
-                        args: Vec::new(),
-                        input: None,
-                        output: None,
-                        append: None,
-                    };
+                    current_cmd = ShellCommand::default();
                 }
             }
             Token::RedirIn => {
@@ -655,9 +725,7 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
         }
 
         // Skip any additional newlines
-        while i < tokens.len() && tokens[i] == Token::Newline {
-            i += 1;
-        }
+        skip_newlines(tokens, &mut i);
 
         if i >= tokens.len() || tokens[i] != Token::Then {
             return Err("Expected then after if/elif condition".to_string());
@@ -716,18 +784,11 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
         }
 
         // Skip any trailing newlines
-        while i < tokens.len() && tokens[i] == Token::Newline {
-            i += 1;
-        }
+        skip_newlines(tokens, &mut i);
 
         let then_ast = if then_tokens.is_empty() {
             // Empty then branch - create a no-op
-            Ast::Pipeline(vec![ShellCommand {
-                args: vec!["true".to_string()],
-                input: None,
-                output: None,
-                append: None,
-            }])
+            create_empty_body_ast()
         } else {
             parse_commands_sequentially(&then_tokens)?
         };
@@ -789,12 +850,7 @@ fn parse_if(tokens: &[Token]) -> Result<Ast, String> {
 
         let else_ast = if else_tokens.is_empty() {
             // Empty else branch - create a no-op
-            Ast::Pipeline(vec![ShellCommand {
-                args: vec!["true".to_string()],
-                input: None,
-                output: None,
-                append: None,
-            }])
+            create_empty_body_ast()
         } else {
             parse_commands_sequentially(&else_tokens)?
         };
@@ -1016,12 +1072,7 @@ fn parse_for(tokens: &[Token]) -> Result<Ast, String> {
     // Parse the body
     let body_ast = if body_tokens.is_empty() {
         // Empty body - create a no-op
-        Ast::Pipeline(vec![ShellCommand {
-            args: vec!["true".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        }])
+        create_empty_body_ast()
     } else {
         parse_commands_sequentially(&body_tokens)?
     };
@@ -1122,12 +1173,7 @@ fn parse_while(tokens: &[Token]) -> Result<Ast, String> {
     // Parse the body
     let body_ast = if body_tokens.is_empty() {
         // Empty body - create a no-op
-        Ast::Pipeline(vec![ShellCommand {
-            args: vec!["true".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        }])
+        create_empty_body_ast()
     } else {
         parse_commands_sequentially(&body_tokens)?
     };
@@ -1223,40 +1269,15 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
             }
             Token::If => {
                 // Skip to matching fi
-                let mut if_depth = 1;
-                i += 1;
-                while i < tokens.len() && if_depth > 0 {
-                    match tokens[i] {
-                        Token::If => if_depth += 1,
-                        Token::Fi => if_depth -= 1,
-                        _ => {}
-                    }
-                    i += 1;
-                }
+                skip_to_matching_fi(tokens, &mut i);
             }
             Token::For | Token::While => {
                 // Skip to matching done
-                let mut for_depth = 1;
-                i += 1;
-                while i < tokens.len() && for_depth > 0 {
-                    match tokens[i] {
-                        Token::For | Token::While => for_depth += 1,
-                        Token::Done => for_depth -= 1,
-                        _ => {}
-                    }
-                    i += 1;
-                }
+                skip_to_matching_done(tokens, &mut i);
             }
             Token::Case => {
                 // Skip to matching esac
-                i += 1;
-                while i < tokens.len() {
-                    if tokens[i] == Token::Esac {
-                        i += 1;
-                        break;
-                    }
-                    i += 1;
-                }
+                skip_to_matching_esac(tokens, &mut i);
             }
             _ => {
                 i += 1;
@@ -1274,12 +1295,7 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
     // Parse the function body using the existing parser
     let body_ast = if body_tokens.is_empty() {
         // Empty function body
-        Ast::Pipeline(vec![ShellCommand {
-            args: vec!["true".to_string()],
-            input: None,
-            output: None,
-            append: None,
-        }])
+        create_empty_body_ast()
     } else {
         parse_commands_sequentially(body_tokens)?
     };
