@@ -180,22 +180,13 @@ pub fn parse_parameter_expansion(content: &str) -> Result<ParameterExpansion, St
     let (final_var_name, modifier) = if let Some(stripped) = var_name.strip_prefix('!') {
         if let Some(prefix_var) = stripped.strip_suffix('*') {
             // Strip both the '!' prefix and '*' suffix from the var_name for IndirectPrefix
-            (
-                prefix_var.to_string(),
-                ParameterModifier::IndirectPrefix,
-            )
+            (prefix_var.to_string(), ParameterModifier::IndirectPrefix)
         } else if let Some(prefix_var) = stripped.strip_suffix('@') {
             // Strip both the '!' prefix and '@' suffix from the var_name for IndirectPrefixAt
-            (
-                prefix_var.to_string(),
-                ParameterModifier::IndirectPrefixAt,
-            )
+            (prefix_var.to_string(), ParameterModifier::IndirectPrefixAt)
         } else {
             // ${!name} - basic indirect expansion
-            (
-                stripped.to_string(),
-                ParameterModifier::Indirect,
-            )
+            (stripped.to_string(), ParameterModifier::Indirect)
         }
     } else {
         (var_name, ParameterModifier::None)
@@ -505,7 +496,8 @@ pub fn expand_parameter(
         }
         ParameterModifier::IndirectPrefix | ParameterModifier::IndirectPrefixAt => {
             // ${!prefix*} - names of variables starting with prefix
-            let matching_vars = collect_variable_names_with_prefix(&expansion.var_name, shell_state);
+            let matching_vars =
+                collect_variable_names_with_prefix(&expansion.var_name, shell_state);
             Some(matching_vars.join(" "))
         }
     };
@@ -906,11 +898,11 @@ mod tests {
     #[test]
     fn test_expand_indirect_basic_with_local_scope() {
         let mut shell_state = ShellState::new();
-        
+
         // Set global variables
         shell_state.set_var("VAR_NAME", "GLOBAL_TARGET".to_string());
         shell_state.set_var("GLOBAL_TARGET", "global_value".to_string());
-        
+
         // Push local scope and override
         shell_state.push_local_scope();
         shell_state.set_local_var("VAR_NAME", "LOCAL_TARGET".to_string());

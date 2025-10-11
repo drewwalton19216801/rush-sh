@@ -339,20 +339,18 @@ impl ShellState {
 
         // First try to get hostname from HOSTNAME environment variable
         if let Ok(hostname) = env::var("HOSTNAME")
-            && !hostname.trim().is_empty() {
-                return format!("{}@{}", user, hostname);
-            }
+            && !hostname.trim().is_empty()
+        {
+            return format!("{}@{}", user, hostname);
+        }
 
         // If HOSTNAME is not set or empty, try the hostname command
-        let hostname = match std::process::Command::new("hostname")
-            .output() {
-                Ok(output) if output.status.success() => {
-                    String::from_utf8_lossy(&output.stdout)
-                        .trim()
-                        .to_string()
-                }
-                _ => "hostname".to_string(), // Last resort fallback
-            };
+        let hostname = match std::process::Command::new("hostname").output() {
+            Ok(output) if output.status.success() => {
+                String::from_utf8_lossy(&output.stdout).trim().to_string()
+            }
+            _ => "hostname".to_string(), // Last resort fallback
+        };
 
         // Set the HOSTNAME environment variable for future use
         if hostname != "hostname" {
@@ -572,11 +570,12 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
         while let Some(signal_event) = queue.pop_front() {
             // Check if a trap is set for this signal
             if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name)
-                && !trap_cmd.is_empty() {
-                    // Execute the trap handler
-                    // Note: This preserves the exit code as per POSIX requirements
-                    crate::executor::execute_trap_handler(&trap_cmd, shell_state);
-                }
+                && !trap_cmd.is_empty()
+            {
+                // Execute the trap handler
+                // Note: This preserves the exit code as per POSIX requirements
+                crate::executor::execute_trap_handler(&trap_cmd, shell_state);
+            }
         }
     }
 }
