@@ -52,6 +52,7 @@ pub enum Ast {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default)]
 pub struct ShellCommand {
     pub args: Vec<String>,
     pub input: Option<String>,
@@ -59,16 +60,6 @@ pub struct ShellCommand {
     pub append: Option<String>,
 }
 
-impl Default for ShellCommand {
-    fn default() -> Self {
-        ShellCommand {
-            args: Vec::new(),
-            input: None,
-            output: None,
-            append: None,
-        }
-    }
-}
 
 /// Helper function to validate if a string is a valid variable name.
 /// Returns true if the name starts with a letter or underscore.
