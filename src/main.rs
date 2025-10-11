@@ -229,13 +229,14 @@ fn execute_exit_trap(shell_state: &mut state::ShellState) {
 
     // Check if EXIT trap is set
     if let Some(trap_cmd) = shell_state.get_trap("EXIT")
-        && !trap_cmd.is_empty() {
-            // Mark as executed to prevent double execution
-            shell_state.exit_trap_executed = true;
+        && !trap_cmd.is_empty()
+    {
+        // Mark as executed to prevent double execution
+        shell_state.exit_trap_executed = true;
 
-            // Execute the trap handler
-            executor::execute_trap_handler(&trap_cmd, shell_state);
-        }
+        // Execute the trap handler
+        executor::execute_trap_handler(&trap_cmd, shell_state);
+    }
 }
 
 fn execute_line(line: &str, shell_state: &mut state::ShellState) {

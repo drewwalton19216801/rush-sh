@@ -83,7 +83,7 @@ fn flush_current_token(current: &mut String, tokens: &mut Vec<Token>) {
 /// Returns the collected content (without the closing brace)
 fn collect_until_closing_brace(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut content = String::new();
-    
+
     while let Some(&ch) = chars.peek() {
         if ch == '}' {
             chars.next(); // consume }
@@ -93,7 +93,7 @@ fn collect_until_closing_brace(chars: &mut std::iter::Peekable<std::str::Chars>)
             chars.next();
         }
     }
-    
+
     content
 }
 
@@ -104,7 +104,7 @@ fn collect_until_closing_brace(chars: &mut std::iter::Peekable<std::str::Chars>)
 fn collect_with_paren_depth(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut content = String::new();
     let mut paren_depth = 1; // We start after the opening paren
-    
+
     while let Some(&ch) = chars.peek() {
         if ch == '(' {
             paren_depth += 1;
@@ -124,7 +124,7 @@ fn collect_with_paren_depth(chars: &mut std::iter::Peekable<std::str::Chars>) ->
             chars.next();
         }
     }
-    
+
     content
 }
 
@@ -134,7 +134,7 @@ fn collect_with_paren_depth(chars: &mut std::iter::Peekable<std::str::Chars>) ->
 /// IMPORTANT: This function does NOT consume the terminating character
 fn parse_variable_name(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut var_name = String::new();
-    
+
     // Check for special single-character variables first
     if let Some(&ch) = chars.peek() {
         if ch == '?'
@@ -161,7 +161,7 @@ fn parse_variable_name(chars: &mut std::iter::Peekable<std::str::Chars>) -> Stri
             }
         }
     }
-    
+
     var_name
 }
 
@@ -382,7 +382,12 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 chars.next(); // consume the backslash
                 if let Some(&next_ch) = chars.peek() {
                     // In double quotes, backslash only escapes: $ ` " \ and newline
-                    if next_ch == '$' || next_ch == '`' || next_ch == '"' || next_ch == '\\' || next_ch == '\n' {
+                    if next_ch == '$'
+                        || next_ch == '`'
+                        || next_ch == '"'
+                        || next_ch == '\\'
+                        || next_ch == '\n'
+                    {
                         // Escape the next character - just add it literally
                         current.push(next_ch);
                         chars.next(); // consume the escaped character
@@ -438,7 +443,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                                 if !in_double_quote && !in_single_quote {
                                                     // Only create empty token if we're not in quotes
                                                     if !current.is_empty() {
-                                                        if let Some(keyword) = is_keyword(&current) {
+                                                        if let Some(keyword) = is_keyword(&current)
+                                                        {
                                                             tokens.push(keyword);
                                                         } else {
                                                             let word = expand_variables_in_command(
@@ -532,7 +538,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else {
                     // Variable expansion - collect var name without consuming the terminating character
                     let var_name = parse_variable_name(&mut chars);
-    
+
                     if !var_name.is_empty() {
                         // For now, keep all variables as literals - they will be expanded during execution
                         current.push('$');
