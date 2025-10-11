@@ -56,6 +56,115 @@ fn is_keyword(word: &str) -> Option<Token> {
     }
 }
 
+/// Skip whitespace characters (space and tab) in the character stream
+fn skip_whitespace(chars: &mut std::iter::Peekable<std::str::Chars>) {
+    while let Some(&ch) = chars.peek() {
+        if ch == ' ' || ch == '\t' {
+            chars.next();
+        } else {
+            break;
+        }
+    }
+}
+
+/// Flush the current word buffer into tokens, checking for keywords
+fn flush_current_token(current: &mut String, tokens: &mut Vec<Token>) {
+    if !current.is_empty() {
+        if let Some(keyword) = is_keyword(current) {
+            tokens.push(keyword);
+        } else {
+            tokens.push(Token::Word(current.clone()));
+        }
+        current.clear();
+    }
+}
+
+/// Collect characters until a closing brace '}' is found
+/// Returns the collected content (without the closing brace)
+fn collect_until_closing_brace(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
+    let mut content = String::new();
+    
+    while let Some(&ch) = chars.peek() {
+        if ch == '}' {
+            chars.next(); // consume }
+            break;
+        } else {
+            content.push(ch);
+            chars.next();
+        }
+    }
+    
+    content
+}
+
+/// Collect characters within parentheses, tracking depth
+/// Returns the collected content (without the closing parenthesis)
+/// The closing parenthesis is consumed from the stream
+/// This is used for command substitution $(...) and arithmetic expansion $((...))
+fn collect_with_paren_depth(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
+    let mut content = String::new();
+    let mut paren_depth = 1; // We start after the opening paren
+    
+    while let Some(&ch) = chars.peek() {
+        if ch == '(' {
+            paren_depth += 1;
+            content.push(ch);
+            chars.next();
+        } else if ch == ')' {
+            paren_depth -= 1;
+            if paren_depth == 0 {
+                chars.next(); // consume the closing )
+                break;
+            } else {
+                content.push(ch);
+                chars.next();
+            }
+        } else {
+            content.push(ch);
+            chars.next();
+        }
+    }
+    
+    content
+}
+
+/// Parse a variable name from the character stream
+/// Handles special single-character variables ($?, $$, $0, etc.)
+/// and regular multi-character variable names
+/// IMPORTANT: This function does NOT consume the terminating character
+fn parse_variable_name(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
+    let mut var_name = String::new();
+    
+    // Check for special single-character variables first
+    if let Some(&ch) = chars.peek() {
+        if ch == '?'
+            || ch == '$'
+            || ch == '0'
+            || ch == '#'
+            || ch == '@'
+            || ch == '*'
+            || ch == '!'
+            || ch.is_ascii_digit()
+        {
+            var_name.push(ch);
+            chars.next();
+        } else {
+            // Regular variable name - use manual loop to avoid consuming the terminating character
+            // Note: take_while() would consume the first non-matching character, which is wrong
+            while let Some(&ch) = chars.peek() {
+                if ch.is_alphanumeric() || ch == '_' {
+                    var_name.push(ch);
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    
+    var_name
+}
+
 fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> String {
     // If the command contains command substitution syntax, don't expand variables
     if command.contains("$(") || command.contains('`') {
@@ -71,18 +180,7 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
             if let Some(&'{') = chars.peek() {
                 // Parameter expansion ${VAR} or ${VAR:modifier}
                 chars.next(); // consume {
-                let mut param_content = String::new();
-
-                // Collect everything until the closing }
-                while let Some(&ch) = chars.peek() {
-                    if ch == '}' {
-                        chars.next(); // consume }
-                        break;
-                    } else {
-                        param_content.push(ch);
-                        chars.next();
-                    }
-                }
+                let param_content = collect_until_closing_brace(&mut chars);
 
                 if !param_content.is_empty() {
                     // Handle special case of ${#VAR} (length)
@@ -133,29 +231,7 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
                 chars.next();
             } else {
                 // Variable expansion
-                let mut var_name = String::new();
-
-                // Check for special single-character variables first
-                if let Some(&ch) = chars.peek() {
-                    if ch == '?'
-                        || ch == '$'
-                        || ch == '0'
-                        || ch == '#'
-                        || ch == '@'
-                        || ch == '*'
-                        || ch == '!'
-                        || ch.is_ascii_digit()
-                    {
-                        var_name.push(ch);
-                        chars.next();
-                    } else {
-                        // Regular variable name
-                        var_name = chars
-                            .by_ref()
-                            .take_while(|c| c.is_alphanumeric() || *c == '_')
-                            .collect();
-                    }
-                }
+                let var_name = parse_variable_name(&mut chars);
 
                 if !var_name.is_empty() {
                     if let Some(val) = shell_state.get_var(&var_name) {
@@ -190,18 +266,7 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
                 if let Some(&'{') = chars.peek() {
                     // Parameter expansion ${VAR} or ${VAR:modifier}
                     chars.next(); // consume {
-                    let mut param_content = String::new();
-
-                    // Collect everything until the closing }
-                    while let Some(&ch) = chars.peek() {
-                        if ch == '}' {
-                            chars.next(); // consume }
-                            break;
-                        } else {
-                            param_content.push(ch);
-                            chars.next();
-                        }
-                    }
+                    let param_content = collect_until_closing_brace(&mut chars);
 
                     if !param_content.is_empty() {
                         // Handle special case of ${#VAR} (length)
@@ -247,29 +312,7 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
                         final_result.push_str("${}");
                     }
                 } else {
-                    let mut var_name = String::new();
-
-                    // Check for special single-character variables first
-                    if let Some(&ch) = chars.peek() {
-                        if ch == '?'
-                            || ch == '$'
-                            || ch == '0'
-                            || ch == '#'
-                            || ch == '@'
-                            || ch == '*'
-                            || ch == '!'
-                            || ch.is_ascii_digit()
-                        {
-                            var_name.push(ch);
-                            chars.next();
-                        } else {
-                            // Regular variable name
-                            var_name = chars
-                                .by_ref()
-                                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                                .collect();
-                        }
-                    }
+                    let var_name = parse_variable_name(&mut chars);
 
                     if !var_name.is_empty() {
                         if let Some(val) = shell_state.get_var(&var_name) {
@@ -303,27 +346,11 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
     while let Some(&ch) = chars.peek() {
         match ch {
             ' ' | '\t' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 chars.next();
             }
             '\n' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 tokens.push(Token::Newline);
                 chars.next();
             }
@@ -388,18 +415,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 if let Some(&'{') = chars.peek() {
                     // Handle parameter expansion ${VAR} by consuming the entire pattern
                     chars.next(); // consume {
-                    let mut param_content = String::new();
-
-                    // Collect everything until the closing }
-                    while let Some(&ch) = chars.peek() {
-                        if ch == '}' {
-                            chars.next(); // consume }
-                            break;
-                        } else {
-                            param_content.push(ch);
-                            chars.next();
-                        }
-                    }
+                    let param_content = collect_until_closing_brace(&mut chars);
 
                     if !param_content.is_empty() {
                         // Handle special case of ${#VAR} (length)
@@ -490,33 +506,14 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     if let Some(&'(') = chars.peek() {
                         // Arithmetic expansion $((...)) - keep as literal for execution-time expansion
                         chars.next(); // consume second (
-                        let mut arithmetic_expr = String::new();
-                        let mut paren_depth = 1;
-                        let mut found_closing = false;
-                        while let Some(&ch) = chars.peek() {
-                            if ch == '(' {
-                                paren_depth += 1;
-                                arithmetic_expr.push(ch);
-                                chars.next();
-                            } else if ch == ')' {
-                                paren_depth -= 1;
-                                if paren_depth == 0 {
-                                    // Found the matching closing ))
-                                    chars.next(); // consume the first )
-                                    if let Some(&')') = chars.peek() {
-                                        chars.next(); // consume the second )
-                                        found_closing = true;
-                                    }
-                                    break;
-                                } else {
-                                    arithmetic_expr.push(ch);
-                                    chars.next();
-                                }
-                            } else {
-                                arithmetic_expr.push(ch);
-                                chars.next();
-                            }
-                        }
+                        let arithmetic_expr = collect_with_paren_depth(&mut chars);
+                        // Check if we have the second closing paren
+                        let found_closing = if let Some(&')') = chars.peek() {
+                            chars.next(); // consume the second )
+                            true
+                        } else {
+                            false
+                        };
                         // Keep as literal for execution-time expansion
                         current.push_str("$((");
                         current.push_str(&arithmetic_expr);
@@ -526,27 +523,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     } else {
                         // Command substitution $(...) - keep as literal for runtime expansion
                         // This will be expanded by the executor using execute_and_capture_output()
-                        let mut sub_command = String::new();
-                        let mut paren_depth = 1;
-                        while let Some(&ch) = chars.peek() {
-                            if ch == '(' {
-                                paren_depth += 1;
-                                sub_command.push(ch);
-                                chars.next();
-                            } else if ch == ')' {
-                                paren_depth -= 1;
-                                if paren_depth == 0 {
-                                    chars.next(); // consume )
-                                    break;
-                                } else {
-                                    sub_command.push(ch);
-                                    chars.next();
-                                }
-                            } else {
-                                sub_command.push(ch);
-                                chars.next();
-                            }
-                        }
+                        let sub_command = collect_with_paren_depth(&mut chars);
                         // Keep the command substitution as literal - it will be expanded at execution time
                         current.push_str("$(");
                         current.push_str(&sub_command);
@@ -554,31 +531,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                 } else {
                     // Variable expansion - collect var name without consuming the terminating character
-                    let mut var_name = String::new();
-
-                    // Check for special variables first
-                    if let Some(&ch) = chars.peek() {
-                        if ch == '?' || ch == '$' || ch.is_ascii_digit() {
-                            // Special variable
-                            var_name.push(ch);
-                            chars.next();
-                        } else if ch == '#' || ch == '@' || ch == '*' || ch == '!' {
-                            // Other special variables (not yet fully implemented)
-                            var_name.push(ch);
-                            chars.next();
-                        } else {
-                            // Regular variable name
-                            while let Some(&ch) = chars.peek() {
-                                if ch.is_alphanumeric() || ch == '_' {
-                                    var_name.push(ch);
-                                    chars.next();
-                                } else {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
+                    let var_name = parse_variable_name(&mut chars);
+    
                     if !var_name.is_empty() {
                         // For now, keep all variables as literals - they will be expanded during execution
                         current.push('$');
@@ -589,15 +543,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '|' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 chars.next(); // consume first |
                 // Check if this is || (OR operator)
                 if let Some(&'|') = chars.peek() {
@@ -607,36 +553,17 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     tokens.push(Token::Pipe);
                 }
                 // Skip any whitespace after the pipe/or
-                while let Some(&ch) = chars.peek() {
-                    if ch == ' ' || ch == '\t' {
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
+                skip_whitespace(&mut chars);
             }
             '&' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 chars.next(); // consume first &
                 // Check if this is && (AND operator)
                 if let Some(&'&') = chars.peek() {
                     chars.next(); // consume second &
                     tokens.push(Token::And);
                     // Skip any whitespace after &&
-                    while let Some(&ch) = chars.peek() {
-                        if ch == ' ' || ch == '\t' {
-                            chars.next();
-                        } else {
-                            break;
-                        }
-                    }
+                    skip_whitespace(&mut chars);
                 } else {
                     // Single & is not supported, treat as part of word
                     current.push('&');
@@ -677,14 +604,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             current.pop();
 
                             // Push any remaining content as a token
-                            if !current.is_empty() {
-                                if let Some(keyword) = is_keyword(&current) {
-                                    tokens.push(keyword);
-                                } else {
-                                    tokens.push(Token::Word(current.clone()));
-                                }
-                                current.clear();
-                            }
+                            flush_current_token(&mut current, &mut tokens);
 
                             // For now, we'll just skip the fd redirection (treat as no-op)
                             // since we don't fully support it, but we won't treat it as an error
@@ -697,14 +617,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     } else {
                         // Not a fd redirection, handle as normal redirect
                         // Put the > back into processing
-                        if !current.is_empty() {
-                            if let Some(keyword) = is_keyword(&current) {
-                                tokens.push(keyword);
-                            } else {
-                                tokens.push(Token::Word(current.clone()));
-                            }
-                            current.clear();
-                        }
+                        flush_current_token(&mut current, &mut tokens);
 
                         if let Some(&next_ch) = chars.peek() {
                             if next_ch == '>' {
@@ -719,15 +632,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                 } else {
                     // Normal redirection
-                    if !current.is_empty() {
-                        if let Some(keyword) = is_keyword(&current) {
-                            tokens.push(keyword);
-                        } else {
-                            // Don't expand variables here - keep them as literals
-                            tokens.push(Token::Word(current.clone()));
-                        }
-                        current.clear();
-                    }
+                    flush_current_token(&mut current, &mut tokens);
                     chars.next();
                     if let Some(&next_ch) = chars.peek() {
                         if next_ch == '>' {
@@ -742,54 +647,22 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '<' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 tokens.push(Token::RedirIn);
                 chars.next();
             }
             ')' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 tokens.push(Token::RightParen);
                 chars.next();
             }
             '}' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 tokens.push(Token::RightBrace);
                 chars.next();
             }
             '(' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 tokens.push(Token::LeftParen);
                 chars.next();
             }
@@ -838,41 +711,19 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                     } else {
                         // Not a brace expansion pattern, treat as separate tokens
-                        if !current.is_empty() {
-                            if let Some(keyword) = is_keyword(&current) {
-                                tokens.push(keyword);
-                            } else {
-                                tokens.push(Token::Word(current.clone()));
-                            }
-                            current.clear();
-                        }
+                        flush_current_token(&mut current, &mut tokens);
                         tokens.push(Token::LeftBrace);
                         chars.next();
                     }
                 } else {
                     // Not a valid brace pattern, treat as separate tokens
-                    if !current.is_empty() {
-                        if let Some(keyword) = is_keyword(&current) {
-                            tokens.push(keyword);
-                        } else {
-                            tokens.push(Token::Word(current.clone()));
-                        }
-                        current.clear();
-                    }
+                    flush_current_token(&mut current, &mut tokens);
                     tokens.push(Token::LeftBrace);
                     chars.next();
                 }
             }
             '`' => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 chars.next();
                 let mut sub_command = String::new();
                 while let Some(&ch) = chars.peek() {
@@ -890,15 +741,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 current.push('`');
             }
             ';' if !in_double_quote && !in_single_quote => {
-                if !current.is_empty() {
-                    if let Some(keyword) = is_keyword(&current) {
-                        tokens.push(keyword);
-                    } else {
-                        // Don't expand variables here - keep them as literals
-                        tokens.push(Token::Word(current.clone()));
-                    }
-                    current.clear();
-                }
+                flush_current_token(&mut current, &mut tokens);
                 chars.next();
                 if let Some(&next_ch) = chars.peek() {
                     if next_ch == ';' {
@@ -925,14 +768,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             }
         }
     }
-    if !current.is_empty() {
-        if let Some(keyword) = is_keyword(&current) {
-            tokens.push(keyword);
-        } else {
-            // Don't expand variables here - keep them as literals
-            tokens.push(Token::Word(current.clone()));
-        }
-    }
+    flush_current_token(&mut current, &mut tokens);
 
     Ok(tokens)
 }
