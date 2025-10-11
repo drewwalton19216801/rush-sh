@@ -10,7 +10,6 @@ rush-sh = { path = "../" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
-anyhow = { workspace = true }
 
 [[bin]]
 name = "rush-benchmark"
