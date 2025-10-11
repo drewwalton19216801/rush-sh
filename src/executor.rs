@@ -1252,7 +1252,7 @@ mod tests {
             output: None,
             append: None,
         };
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
@@ -1266,7 +1266,7 @@ mod tests {
             output: None,
             append: None,
         };
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
@@ -1279,7 +1279,7 @@ mod tests {
             output: None,
             append: None,
         };
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 1); // Command not found
     }
@@ -1300,7 +1300,7 @@ mod tests {
                 append: None,
             },
         ];
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute_pipeline(&commands, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
@@ -1308,7 +1308,7 @@ mod tests {
     #[test]
     fn test_execute_empty_pipeline() {
         let commands = vec![];
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute(Ast::Pipeline(commands), &mut shell_state);
         assert_eq!(exit_code, 0);
     }
@@ -1321,7 +1321,7 @@ mod tests {
             output: None,
             append: None,
         }]);
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
     }
@@ -1337,7 +1337,7 @@ mod tests {
                 append: None,
             }])),
         };
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
 
@@ -1348,7 +1348,7 @@ mod tests {
     #[test]
     fn test_execute_function_call() {
         // First define a function
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         shell_state.define_function(
             "test_func".to_string(),
             Ast::Pipeline(vec![ShellCommand {
@@ -1371,7 +1371,7 @@ mod tests {
     #[test]
     fn test_execute_function_call_with_args() {
         // First define a function that uses arguments
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         shell_state.define_function(
             "test_func".to_string(),
             Ast::Pipeline(vec![ShellCommand {
@@ -1393,7 +1393,7 @@ mod tests {
 
     #[test]
     fn test_execute_nonexistent_function() {
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let ast = Ast::FunctionCall {
             name: "nonexistent".to_string(),
             args: vec![],
@@ -1405,7 +1405,7 @@ mod tests {
     #[test]
     fn test_execute_function_integration() {
         // Test full integration: define function, then call it
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
 
         // First define a function
         let define_ast = Ast::FunctionDefinition {
@@ -1431,7 +1431,7 @@ mod tests {
 
     #[test]
     fn test_execute_function_with_local_variables() {
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
 
         // Set a global variable
         shell_state.set_var("global_var", "global_value".to_string());
@@ -1482,7 +1482,7 @@ mod tests {
 
     #[test]
     fn test_execute_nested_function_calls() {
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
 
         // Set global variable
         shell_state.set_var("global_var", "global".to_string());

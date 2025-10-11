@@ -124,10 +124,10 @@ impl ShellState {
         let shell_pid = std::process::id();
 
         // Check NO_COLOR environment variable (respects standard)
-        let no_color = std::env::var("NO_COLOR").is_ok();
+        let no_color = env::var("NO_COLOR").is_ok();
 
         // Check RUSH_COLORS environment variable for explicit control
-        let rush_colors = std::env::var("RUSH_COLORS")
+        let rush_colors = env::var("RUSH_COLORS")
             .map(|v| v.to_lowercase())
             .unwrap_or_else(|_| "auto".to_string());
 
@@ -139,7 +139,7 @@ impl ShellState {
         };
 
         // Check RUSH_CONDENSED environment variable for cwd display preference
-        let rush_condensed = std::env::var("RUSH_CONDENSED")
+        let rush_condensed = env::var("RUSH_CONDENSED")
             .map(|v| v.to_lowercase())
             .unwrap_or_else(|_| "true".to_string());
 
@@ -293,7 +293,7 @@ impl ShellState {
 
     /// Get the condensed current working directory for the prompt
     pub fn get_condensed_cwd(&self) -> String {
-        match std::env::current_dir() {
+        match env::current_dir() {
             Ok(path) => {
                 let path_str = path.to_string_lossy();
                 let components: Vec<&str> = path_str.split('/').collect();
@@ -327,7 +327,7 @@ impl ShellState {
 
     /// Get the full current working directory for the prompt
     pub fn get_full_cwd(&self) -> String {
-        match std::env::current_dir() {
+        match env::current_dir() {
             Ok(path) => path.to_string_lossy().to_string(),
             Err(_) => "/?".to_string(), // fallback if can't get cwd
         }
@@ -355,7 +355,7 @@ impl ShellState {
         // Set the HOSTNAME environment variable for future use
         if hostname != "hostname" {
             unsafe {
-                std::env::set_var("HOSTNAME", &hostname);
+                env::set_var("HOSTNAME", &hostname);
             }
         }
 
@@ -808,21 +808,21 @@ mod tests {
 
         // Test explicit true
         unsafe {
-            std::env::set_var("RUSH_CONDENSED", "true");
+            env::set_var("RUSH_CONDENSED", "true");
         }
         let state = ShellState::new();
         assert!(state.condensed_cwd);
 
         // Test explicit false
         unsafe {
-            std::env::set_var("RUSH_CONDENSED", "false");
+            env::set_var("RUSH_CONDENSED", "false");
         }
         let state = ShellState::new();
         assert!(!state.condensed_cwd);
 
         // Clean up
         unsafe {
-            std::env::remove_var("RUSH_CONDENSED");
+            env::remove_var("RUSH_CONDENSED");
         }
     }
 

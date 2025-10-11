@@ -206,13 +206,13 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
 
             let function_ast = parse_function_definition(function_tokens)?;
 
-            if remaining_tokens.is_empty() {
-                return Ok(function_ast);
+            return if remaining_tokens.is_empty() {
+                Ok(function_ast)
             } else {
                 // There are more commands after the function
                 let remaining_ast = parse_commands_sequentially(remaining_tokens)?;
-                return Ok(Ast::Sequence(vec![function_ast, remaining_ast]));
-            }
+                Ok(Ast::Sequence(vec![function_ast, remaining_ast]))
+            };
         }
     }
 

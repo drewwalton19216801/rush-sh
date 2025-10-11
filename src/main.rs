@@ -623,7 +623,7 @@ mod tests {
     #[test]
     fn test_integration_variable_expansion() {
         unsafe {
-            std::env::set_var("TEST_INTEGRATION_VAR", "expanded");
+            env::set_var("TEST_INTEGRATION_VAR", "expanded");
         }
         let line = "printf $TEST_INTEGRATION_VAR";
         let mut shell_state = state::ShellState::new();
@@ -632,7 +632,7 @@ mod tests {
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
         unsafe {
-            std::env::remove_var("TEST_INTEGRATION_VAR");
+            env::remove_var("TEST_INTEGRATION_VAR");
         }
     }
 
@@ -643,7 +643,7 @@ mod tests {
 
         // First, ensure we're in a safe directory that definitely exists
         // This prevents failures if the current directory was deleted by another test
-        std::env::set_current_dir("/tmp").unwrap();
+        env::set_current_dir("/tmp").unwrap();
 
         let line = "cd /tmp";
         let mut shell_state = state::ShellState::new();
@@ -651,7 +651,7 @@ mod tests {
         let ast = parser::parse(tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
-        assert_eq!(std::env::current_dir().unwrap(), Path::new("/tmp"));
+        assert_eq!(env::current_dir().unwrap(), Path::new("/tmp"));
 
         // No need to restore since we're already in /tmp and the lock ensures
         // other directory-changing tests won't run concurrently
@@ -673,18 +673,18 @@ mod tests {
         let rushrc_content = "TEST_RUSHRC_VAR=test_value\nexport TEST_RUSHRC_VAR";
 
         // Create temp directory and file
-        std::fs::create_dir_all(&temp_dir).unwrap();
-        std::fs::write(&rushrc_path, rushrc_content).unwrap();
+        fs::create_dir_all(&temp_dir).unwrap();
+        fs::write(&rushrc_path, rushrc_content).unwrap();
 
         // Small delay to ensure file is written
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        thread::sleep(std::time::Duration::from_millis(10));
 
         // Save original HOME value
-        let original_home = std::env::var("HOME").ok();
+        let original_home = env::var("HOME").ok();
 
         // Set HOME to temp directory
         unsafe {
-            std::env::set_var("HOME", &temp_dir);
+            env::set_var("HOME", &temp_dir);
         }
 
         // Test source_rushrc function
@@ -702,15 +702,15 @@ mod tests {
         );
 
         // Clean up
-        std::fs::remove_file(&rushrc_path).unwrap();
-        std::fs::remove_dir(&temp_dir).unwrap();
+        fs::remove_file(&rushrc_path).unwrap();
+        fs::remove_dir(&temp_dir).unwrap();
 
         // Restore original HOME value
         unsafe {
             if let Some(home) = original_home {
-                std::env::set_var("HOME", home);
+                env::set_var("HOME", home);
             } else {
-                std::env::remove_var("HOME");
+                env::remove_var("HOME");
             }
         }
     }
@@ -733,20 +733,20 @@ mod tests {
         let rushrc_path = format!("{}/.rushrc", temp_dir);
 
         // Save original environment variables
-        let original_home = std::env::var("HOME").ok();
-        let original_rush_condensed = std::env::var("RUSH_CONDENSED").ok();
+        let original_home = env::var("HOME").ok();
+        let original_rush_condensed = env::var("RUSH_CONDENSED").ok();
 
         // Create temp directory and file
-        std::fs::create_dir_all(&temp_dir).unwrap();
+        fs::create_dir_all(&temp_dir).unwrap();
 
         // Test 1: .rushrc sets RUSH_CONDENSED=false
-        std::fs::write(&rushrc_path, "export RUSH_CONDENSED=false").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        fs::write(&rushrc_path, "export RUSH_CONDENSED=false").unwrap();
+        thread::sleep(std::time::Duration::from_millis(10));
 
         // Set HOME to temp directory and clear RUSH_CONDENSED from environment
         unsafe {
-            std::env::set_var("HOME", &temp_dir);
-            std::env::remove_var("RUSH_CONDENSED");
+            env::set_var("HOME", &temp_dir);
+            env::remove_var("RUSH_CONDENSED");
         }
 
         // Create shell state and source .rushrc
@@ -760,12 +760,12 @@ mod tests {
         );
 
         // Test 2: .rushrc sets RUSH_CONDENSED=true
-        std::fs::write(&rushrc_path, "export RUSH_CONDENSED=true").unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        fs::write(&rushrc_path, "export RUSH_CONDENSED=true").unwrap();
+        thread::sleep(std::time::Duration::from_millis(10));
 
         // Clear RUSH_CONDENSED from environment again
         unsafe {
-            std::env::remove_var("RUSH_CONDENSED");
+            env::remove_var("RUSH_CONDENSED");
         }
 
         // Create new shell state with condensed_cwd initially false
@@ -780,21 +780,21 @@ mod tests {
         );
 
         // Clean up files
-        let _ = std::fs::remove_file(&rushrc_path);
-        let _ = std::fs::remove_dir(&temp_dir);
+        let _ = fs::remove_file(&rushrc_path);
+        let _ = fs::remove_dir(&temp_dir);
 
         // Restore original environment variables
         unsafe {
             if let Some(home) = original_home {
-                std::env::set_var("HOME", home);
+                env::set_var("HOME", home);
             } else {
-                std::env::remove_var("HOME");
+                env::remove_var("HOME");
             }
 
             if let Some(rush_condensed) = original_rush_condensed {
-                std::env::set_var("RUSH_CONDENSED", rush_condensed);
+                env::set_var("RUSH_CONDENSED", rush_condensed);
             } else {
-                std::env::remove_var("RUSH_CONDENSED");
+                env::remove_var("RUSH_CONDENSED");
             }
         }
     }
@@ -977,7 +977,7 @@ mod tests {
 
             // Fill the queue beyond capacity directly
             for _i in 0..110 {
-                // If queue is full, remove oldest event
+                // If queue is full, remove the oldest event
                 if queue.len() >= 100 {
                     queue.pop_front();
                 }

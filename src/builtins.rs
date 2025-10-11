@@ -101,7 +101,7 @@ pub fn get_builtin_commands() -> Vec<String> {
 pub fn execute_builtin(
     cmd: &ShellCommand,
     shell_state: &mut ShellState,
-    output_override: Option<Box<dyn std::io::Write>>,
+    output_override: Option<Box<dyn Write>>,
 ) -> i32 {
     // Helper function for colored error messages
     let print_error = |msg: &str| {
@@ -196,7 +196,7 @@ mod tests {
             output: None,
             append: None,
         };
-        let mut shell_state = crate::state::ShellState::new();
+        let mut shell_state = ShellState::new();
         let exit_code = execute_builtin(&cmd, &mut shell_state, None);
         assert_eq!(exit_code, 1);
     }
