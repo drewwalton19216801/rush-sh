@@ -51,15 +51,13 @@ pub enum Ast {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShellCommand {
     pub args: Vec<String>,
     pub input: Option<String>,
     pub output: Option<String>,
     pub append: Option<String>,
 }
-
 
 /// Helper function to validate if a string is a valid variable name.
 /// Returns true if the name starts with a letter or underscore.
