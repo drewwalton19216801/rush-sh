@@ -265,17 +265,17 @@ impl RushCompleter {
                 return (path.to_path_buf(), String::new());
             }
 
-            if let Some(parent) = path.parent() {
+            return if let Some(parent) = path.parent() {
                 let prefix = path
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_string();
-                return (parent.to_path_buf(), prefix);
+                (parent.to_path_buf(), prefix)
             } else {
                 // Root directory
-                return (Path::new("/").to_path_buf(), String::new());
-            }
+                (Path::new("/").to_path_buf(), String::new())
+            };
         }
 
         // Handle home directory expansion
@@ -294,17 +294,17 @@ impl RushCompleter {
                 return (home_path.join(relative_path), String::new());
             }
 
-            if let Some(parent) = relative_path.parent() {
+            return if let Some(parent) = relative_path.parent() {
                 let full_parent = home_path.join(parent);
                 let prefix = relative_path
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_string();
-                return (full_parent, prefix);
+                (full_parent, prefix)
             } else {
-                return (home_path.to_path_buf(), String::new());
-            }
+                (home_path.to_path_buf(), String::new())
+            };
         }
 
         // Handle relative paths

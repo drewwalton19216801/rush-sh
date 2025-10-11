@@ -1,7 +1,6 @@
 //! Brace expansion implementation for POSIX shell
 //! Supports patterns like {a,b,c}, {1..3}, file{a,b}.txt, and nested {{a,b},{c,d}}
 use super::lexer::Token;
-use regex::Regex;
 
 /// Main function to expand braces in a token stream
 pub fn expand_braces(tokens: Vec<Token>) -> Result<Vec<Token>, String> {
@@ -121,33 +120,6 @@ fn find_brace_patterns(word: &str) -> Result<Vec<(String, Vec<String>, String)>,
         let final_suffix: String = chars[last_end..].iter().collect();
         let last_idx = patterns.len() - 1;
         patterns[last_idx].2 = final_suffix;
-    }
-
-    Ok(patterns)
-}
-
-/// Old regex-based approach (kept for reference but not used)
-fn _find_brace_patterns_regex(word: &str) -> Result<Vec<(String, Vec<String>, String)>, String> {
-    // Use regex to find brace patterns
-    let brace_regex = Regex::new(r"\{([^}]+)\}").map_err(|e| format!("Regex error: {}", e))?;
-
-    // If no braces found, return as-is
-    if !brace_regex.is_match(word) {
-        return Ok(Vec::new());
-    }
-
-    // Find all brace patterns and their positions
-    let mut patterns = Vec::new();
-    for cap in brace_regex.captures_iter(word) {
-        let full_match = cap.get(0).unwrap();
-        let content = cap.get(1).unwrap().as_str();
-
-        let start_pos = full_match.start();
-        let prefix = word[..start_pos].to_string();
-        let suffix = word[full_match.end()..].to_string();
-
-        let pattern = parse_brace_content(content)?;
-        patterns.push((prefix, pattern, suffix));
     }
 
     Ok(patterns)
