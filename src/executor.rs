@@ -135,24 +135,24 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
             } else {
                 // Multi-command pipeline - execute the entire pipeline and capture output
                 drop(writer); // Close writer end before executing pipeline
-                
+
                 // Save previous capture state (for nested command substitutions)
                 let previous_capture = shell_state.capture_output.clone();
-                
+
                 // Enable output capture mode
                 let capture_buffer = Rc::new(RefCell::new(Vec::new()));
                 shell_state.capture_output = Some(capture_buffer.clone());
-                
+
                 // Execute the pipeline
                 let exit_code = execute_pipeline(commands, shell_state);
-                
+
                 // Retrieve captured output
                 let captured = capture_buffer.borrow().clone();
                 let output = String::from_utf8_lossy(&captured).trim_end().to_string();
-                
+
                 // Restore previous capture state
                 shell_state.capture_output = previous_capture;
-                
+
                 if exit_code == 0 {
                     Ok(output)
                 } else {
@@ -166,21 +166,21 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
 
             // Save previous capture state
             let previous_capture = shell_state.capture_output.clone();
-            
+
             // Enable output capture mode
             let capture_buffer = Rc::new(RefCell::new(Vec::new()));
             shell_state.capture_output = Some(capture_buffer.clone());
-            
+
             // Execute the AST
             let exit_code = execute(ast, shell_state);
-            
+
             // Retrieve captured output
             let captured = capture_buffer.borrow().clone();
             let output = String::from_utf8_lossy(&captured).trim_end().to_string();
-            
+
             // Restore previous capture state
             shell_state.capture_output = previous_capture;
-            
+
             if exit_code == 0 {
                 Ok(output)
             } else {
