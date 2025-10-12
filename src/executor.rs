@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::{pipe, BufRead, BufReader};
+use std::io::{BufRead, BufReader, pipe};
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
@@ -514,7 +514,7 @@ fn collect_here_document_content(delimiter: &str, shell_state: &mut ShellState) 
     if let Some(content) = shell_state.pending_heredoc_content.take() {
         return content;
     }
-    
+
     // Otherwise, read from stdin (interactive mode)
     let stdin = std::io::stdin();
     let mut reader = BufReader::new(stdin.lock());
@@ -1771,7 +1771,6 @@ mod tests {
             here_doc_delimiter: None,
             here_string_content: Some("hello world".to_string()),
         };
-        let mut shell_state = ShellState::new();
 
         // Note: This test would require mocking stdin to provide the here-string content
         // For now, we'll just verify the command structure is parsed correctly
@@ -1790,7 +1789,6 @@ mod tests {
             here_doc_delimiter: Some("EOF".to_string()),
             here_string_content: None,
         };
-        let mut shell_state = ShellState::new();
 
         // Note: This test would require mocking stdin to provide the here-document content
         // For now, we'll just verify the command structure is parsed correctly

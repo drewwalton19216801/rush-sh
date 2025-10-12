@@ -11,7 +11,7 @@ pub enum Token {
     RedirOut,
     RedirIn,
     RedirAppend,
-    RedirHereDoc(String),  // Here-document: <<DELIMITER
+    RedirHereDoc(String),    // Here-document: <<DELIMITER
     RedirHereString(String), // Here-string: <<<"content"
     If,
     Then,
@@ -664,11 +664,11 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         chars.next(); // consume third <
                         // Here-string: skip whitespace, then collect content
                         skip_whitespace(&mut chars);
-                        
+
                         let mut content = String::new();
                         let mut in_quote = false;
                         let mut quote_char = ' ';
-                        
+
                         while let Some(&ch) = chars.peek() {
                             if ch == '\n' && !in_quote {
                                 break;
@@ -687,20 +687,21 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 chars.next();
                             }
                         }
-                        
+
                         if !content.is_empty() {
                             tokens.push(Token::RedirHereString(content));
                         } else {
-                            return Err("Invalid here-string syntax: expected content after <<<".to_string());
+                            return Err("Invalid here-string syntax: expected content after <<<"
+                                .to_string());
                         }
                     } else {
                         // Here-document: skip whitespace, then collect delimiter
                         skip_whitespace(&mut chars);
-                        
+
                         let mut delimiter = String::new();
                         let mut in_quote = false;
                         let mut quote_char = ' ';
-                        
+
                         while let Some(&ch) = chars.peek() {
                             if ch == '\n' && !in_quote {
                                 break;
@@ -719,11 +720,14 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 chars.next();
                             }
                         }
-                        
+
                         if !delimiter.is_empty() {
                             tokens.push(Token::RedirHereDoc(delimiter));
                         } else {
-                            return Err("Invalid here-document syntax: expected delimiter after <<".to_string());
+                            return Err(
+                                "Invalid here-document syntax: expected delimiter after <<"
+                                    .to_string(),
+                            );
                         }
                     }
                 } else {
@@ -1961,7 +1965,11 @@ mod tests {
     #[test]
     fn test_redirections_mixed() {
         let shell_state = ShellState::new();
-        let result = lex("cat < input.txt <<< \"fallback\" > output.txt", &shell_state).unwrap();
+        let result = lex(
+            "cat < input.txt <<< \"fallback\" > output.txt",
+            &shell_state,
+        )
+        .unwrap();
         assert_eq!(
             result,
             vec![

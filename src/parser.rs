@@ -57,7 +57,7 @@ pub struct ShellCommand {
     pub input: Option<String>,
     pub output: Option<String>,
     pub append: Option<String>,
-    pub here_doc_delimiter: Option<String>,  // For here-document redirection
+    pub here_doc_delimiter: Option<String>, // For here-document redirection
     pub here_string_content: Option<String>, // For here-string redirection
 }
 

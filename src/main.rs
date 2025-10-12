@@ -311,17 +311,17 @@ fn extract_heredoc_delimiter(line: &str) -> Option<String> {
         if line.len() > pos + 2 && line.chars().nth(pos + 2) == Some('<') {
             return None;
         }
-        
+
         // Extract everything after <<
         let after_redir = &line[pos + 2..];
         let trimmed = after_redir.trim_start();
-        
+
         // Extract the delimiter (up to whitespace or newline)
         let delimiter: String = trimmed
             .chars()
             .take_while(|&c| c != ' ' && c != '\t' && c != '\n')
             .collect();
-        
+
         if !delimiter.is_empty() {
             // Strip quotes from delimiter if present
             let unquoted = if (delimiter.starts_with('\'') && delimiter.ends_with('\''))
@@ -337,7 +337,6 @@ fn extract_heredoc_delimiter(line: &str) -> Option<String> {
     None
 }
 
-
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut current_block = String::new();
     let mut in_if_block = false;
@@ -352,7 +351,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
 
     let lines: Vec<&str> = content.lines().collect();
     let mut i = 0;
-    
+
     while i < lines.len() {
         let line = lines[i];
         // Process pending signals at the start of each line
@@ -497,12 +496,12 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                         heredoc_content.push_str(content_line);
                         i += 1;
                     }
-                    
+
                     // Store the here-document content in shell state for the executor to use
                     shell_state.pending_heredoc_content = Some(heredoc_content);
                 }
             }
-            
+
             // Execute single-line commands immediately
             execute_line(&current_block, shell_state);
             current_block.clear();
@@ -512,7 +511,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 break;
             }
         }
-        
+
         i += 1;
     }
 
