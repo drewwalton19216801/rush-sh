@@ -978,21 +978,22 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         for (idx, arg) in expanded_args.iter().enumerate() {
             // Check if this looks like an environment variable assignment
             if let Some(eq_pos) = arg.find('=')
-                && eq_pos > 0 {
-                    let var_part = &arg[..eq_pos];
-                    // Check if var_part is a valid variable name
-                    if var_part
-                        .chars()
-                        .next()
-                        .map(|c| c.is_alphabetic() || c == '_')
-                        .unwrap_or(false)
-                        && var_part.chars().all(|c| c.is_alphanumeric() || c == '_')
-                    {
-                        env_assignments.push(arg.clone());
-                        command_start_idx = idx + 1;
-                        continue;
-                    }
+                && eq_pos > 0
+            {
+                let var_part = &arg[..eq_pos];
+                // Check if var_part is a valid variable name
+                if var_part
+                    .chars()
+                    .next()
+                    .map(|c| c.is_alphabetic() || c == '_')
+                    .unwrap_or(false)
+                    && var_part.chars().all(|c| c.is_alphanumeric() || c == '_')
+                {
+                    env_assignments.push(arg.clone());
+                    command_start_idx = idx + 1;
+                    continue;
                 }
+            }
             // If we reach here, this is not an env assignment, so we've found the command
             break;
         }
@@ -1098,7 +1099,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             } else {
                 expand_variables_in_string(&here_doc_content, shell_state)
             };
-            
+
             if let Some(ref mut command) = command {
                 let pipe_result = pipe();
                 match pipe_result {
@@ -1135,7 +1136,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         } else if let Some(ref content) = cmd.here_string_content {
             // Handle here-string redirection (process even if no command)
             let expanded_content = expand_variables_in_string(content, shell_state);
-            
+
             if let Some(ref mut command) = command {
                 let pipe_result = pipe();
                 match pipe_result {
