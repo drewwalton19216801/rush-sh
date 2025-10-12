@@ -57,6 +57,8 @@ pub struct ShellCommand {
     pub input: Option<String>,
     pub output: Option<String>,
     pub append: Option<String>,
+    pub here_doc_delimiter: Option<String>,  // For here-document redirection
+    pub here_string_content: Option<String>, // For here-string redirection
 }
 
 /// Helper function to validate if a string is a valid variable name.
@@ -77,6 +79,8 @@ fn create_empty_body_ast() -> Ast {
         input: None,
         output: None,
         append: None,
+        here_doc_delimiter: None,
+        here_string_content: None,
     }])
 }
 
@@ -643,6 +647,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 {
                     current_cmd.append = Some(file.clone());
                 }
+            }
+            Token::RedirHereDoc(delimiter) => {
+                current_cmd.here_doc_delimiter = Some(delimiter.clone());
+            }
+            Token::RedirHereString(content) => {
+                current_cmd.here_string_content = Some(content.clone());
             }
             Token::RightParen => {
                 // Check if this looks like a function call pattern: Word LeftParen ... RightParen
@@ -1311,6 +1321,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1329,6 +1341,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1350,12 +1364,16 @@ mod tests {
                     input: None,
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 },
                 ShellCommand {
                     args: vec!["grep".to_string(), "txt".to_string()],
                     input: None,
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 }
             ])
         );
@@ -1376,6 +1394,8 @@ mod tests {
                 input: Some("input.txt".to_string()),
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1396,6 +1416,8 @@ mod tests {
                 input: None,
                 output: Some("output.txt".to_string()),
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1416,6 +1438,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: Some("output.txt".to_string()),
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1443,18 +1467,24 @@ mod tests {
                     input: Some("input.txt".to_string()),
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 },
                 ShellCommand {
                     args: vec!["grep".to_string(), "pattern".to_string()],
                     input: None,
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 },
                 ShellCommand {
                     args: vec!["sort".to_string()],
                     input: None,
                     output: Some("output.txt".to_string()),
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 }
             ])
         );
@@ -1488,6 +1518,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1509,6 +1541,8 @@ mod tests {
                 input: Some("file1.txt".to_string()),
                 output: Some("file2.txt".to_string()),
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])
         );
     }
@@ -1740,5 +1774,69 @@ mod tests {
         let result = parse(tokens);
         // Should return an error since 123VAR is not a valid variable name
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_here_document_redirection() {
+        let tokens = vec![
+            Token::Word("cat".to_string()),
+            Token::RedirHereDoc("EOF".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["cat".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: Some("EOF".to_string()),
+                here_string_content: None,
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_here_string_redirection() {
+        let tokens = vec![
+            Token::Word("grep".to_string()),
+            Token::RedirHereString("pattern".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["grep".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_string_content: Some("pattern".to_string()),
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_mixed_redirections() {
+        let tokens = vec![
+            Token::Word("cat".to_string()),
+            Token::RedirIn,
+            Token::Word("file.txt".to_string()),
+            Token::RedirHereString("fallback".to_string()),
+            Token::RedirOut,
+            Token::Word("output.txt".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["cat".to_string()],
+                input: Some("file.txt".to_string()),
+                output: Some("output.txt".to_string()),
+                append: None,
+                here_doc_delimiter: None,
+                here_string_content: Some("fallback".to_string()),
+            }])
+        );
     }
 }

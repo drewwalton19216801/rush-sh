@@ -302,6 +302,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -326,6 +328,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -349,6 +353,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -373,6 +379,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -399,6 +407,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -425,6 +435,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -446,6 +458,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -467,6 +481,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;
@@ -490,6 +506,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         let builtin = TrapBuiltin;

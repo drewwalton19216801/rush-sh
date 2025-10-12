@@ -54,7 +54,7 @@
             <div class="sidebar-footer">
                 <div class="version-info">
                     <span class="version">v0.5.4</span>
-                    <span class="status">~88% POSIX Compliant</span>
+                    <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
                     <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
@@ -145,6 +145,23 @@ ls -la >> log.txt
 # Input redirection
 sort < unsorted.txt > sorted.txt
 grep "pattern" < file.txt</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">📄</div>
+                            <h3>Here-Documents & Here-Strings</h3>
+                            <p>Multi-line and single-line input redirection with full variable expansion support</p>
+                            <div class="code-block">
+                                <pre><code># Here-document (multi-line)
+cat << EOF
+Line 1: $USER
+Line 2: $HOME
+EOF
+
+# Here-string (single-line)
+grep "pattern" <<< "search this text"
+wc -w <<< "count these words"</code></pre>
                             </div>
                         </div>
                     </div>

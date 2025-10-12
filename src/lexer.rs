@@ -11,6 +11,8 @@ pub enum Token {
     RedirOut,
     RedirIn,
     RedirAppend,
+    RedirHereDoc(String),  // Here-document: <<DELIMITER
+    RedirHereString(String), // Here-string: <<<"content"
     If,
     Then,
     Else,
@@ -654,8 +656,80 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             }
             '<' if !in_double_quote && !in_single_quote => {
                 flush_current_token(&mut current, &mut tokens);
-                tokens.push(Token::RedirIn);
-                chars.next();
+                chars.next(); // consume <
+                if let Some(&'<') = chars.peek() {
+                    // Check for here-string <<<
+                    chars.next(); // consume second <
+                    if let Some(&'<') = chars.peek() {
+                        chars.next(); // consume third <
+                        // Here-string: skip whitespace, then collect content
+                        skip_whitespace(&mut chars);
+                        
+                        let mut content = String::new();
+                        let mut in_quote = false;
+                        let mut quote_char = ' ';
+                        
+                        while let Some(&ch) = chars.peek() {
+                            if ch == '\n' && !in_quote {
+                                break;
+                            }
+                            if (ch == '"' || ch == '\'') && !in_quote {
+                                in_quote = true;
+                                quote_char = ch;
+                                chars.next(); // consume quote but don't add to content
+                            } else if in_quote && ch == quote_char {
+                                in_quote = false;
+                                chars.next(); // consume quote but don't add to content
+                            } else if !in_quote && (ch == ' ' || ch == '\t') {
+                                break;
+                            } else {
+                                content.push(ch);
+                                chars.next();
+                            }
+                        }
+                        
+                        if !content.is_empty() {
+                            tokens.push(Token::RedirHereString(content));
+                        } else {
+                            return Err("Invalid here-string syntax: expected content after <<<".to_string());
+                        }
+                    } else {
+                        // Here-document: skip whitespace, then collect delimiter
+                        skip_whitespace(&mut chars);
+                        
+                        let mut delimiter = String::new();
+                        let mut in_quote = false;
+                        let mut quote_char = ' ';
+                        
+                        while let Some(&ch) = chars.peek() {
+                            if ch == '\n' && !in_quote {
+                                break;
+                            }
+                            if (ch == '"' || ch == '\'') && !in_quote {
+                                in_quote = true;
+                                quote_char = ch;
+                                chars.next(); // consume quote but don't add to delimiter
+                            } else if in_quote && ch == quote_char {
+                                in_quote = false;
+                                chars.next(); // consume quote but don't add to delimiter
+                            } else if !in_quote && (ch == ' ' || ch == '\t') {
+                                break;
+                            } else {
+                                delimiter.push(ch);
+                                chars.next();
+                            }
+                        }
+                        
+                        if !delimiter.is_empty() {
+                            tokens.push(Token::RedirHereDoc(delimiter));
+                        } else {
+                            return Err("Invalid here-document syntax: expected delimiter after <<".to_string());
+                        }
+                    }
+                } else {
+                    // Regular input redirection
+                    tokens.push(Token::RedirIn);
+                }
             }
             ')' if !in_double_quote && !in_single_quote => {
                 flush_current_token(&mut current, &mut tokens);
@@ -1828,6 +1902,75 @@ mod tests {
                 Token::Semicolon,
                 Token::Word("echo".to_string()),
                 Token::Word("world".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_here_document_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("cat << EOF", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("cat".to_string()),
+                Token::RedirHereDoc("EOF".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_here_string_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("cat <<< \"hello world\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("cat".to_string()),
+                Token::RedirHereString("hello world".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_here_document_with_quoted_delimiter() {
+        let shell_state = ShellState::new();
+        let result = lex("command << 'EOF'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirHereDoc("EOF".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_here_string_without_quotes() {
+        let shell_state = ShellState::new();
+        let result = lex("grep <<< pattern", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("grep".to_string()),
+                Token::RedirHereString("pattern".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_redirections_mixed() {
+        let shell_state = ShellState::new();
+        let result = lex("cat < input.txt <<< \"fallback\" > output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("cat".to_string()),
+                Token::RedirIn,
+                Token::Word("input.txt".to_string()),
+                Token::RedirHereString("fallback".to_string()),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string())
             ]
         );
     }

@@ -293,6 +293,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -305,6 +307,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }]),
         );
 
@@ -327,6 +331,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -339,6 +345,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }]),
         );
 
@@ -363,6 +371,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -382,6 +392,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;

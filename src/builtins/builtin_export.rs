@@ -61,6 +61,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_exported_var("TEST_VAR", "test_value".to_string());
@@ -79,6 +81,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = ExportBuiltin;
@@ -99,6 +103,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_var("EXISTING_VAR", "existing_value".to_string());

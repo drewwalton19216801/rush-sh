@@ -41,7 +41,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 
 - **Command Execution**: Execute external commands and built-in commands.
 - **Pipes**: Chain commands using the `|` operator.
-- **Redirections**: Input (`<`) and output (`>`, `>>`) redirections.
+- **Redirections**: Input (`<`) and output (`>`, `>>`) redirections, here-documents (`<<`), and here-strings (`<<<`).
 - **Brace Expansion**: Generate multiple strings from patterns with braces.
   - Comma-separated lists: `{a,b,c}` expands to `a b c`
   - Numeric ranges: `{1..5}` expands to `1 2 3 4 5`
@@ -992,6 +992,182 @@ The trap builtin provides robust signal handling for production shell scripts wh
 
 The test builtin is fully integrated with Rush's control structures, enabling complex conditional logic in scripts while maintaining POSIX compatibility.
 
+### Here-Documents and Here-Strings
+
+Rush provides full support for here-documents (`<<`) and here-strings (`<<<`), enabling flexible multi-line and single-line input redirection:
+
+- **Here-Documents**: Multi-line input terminated by a delimiter
+- **Here-Strings**: Single-line string input without needing echo or printf
+- **Variable Expansion**: Variables are expanded in both here-docs and here-strings
+- **Quoted Delimiters**: Support for quoted delimiters to prevent expansion
+- **Pipeline Integration**: Works seamlessly with pipes and other redirections
+
+**Here-Document Syntax:**
+
+```bash
+# Basic here-document
+cat << EOF
+This is line 1
+This is line 2
+This is line 3
+EOF
+
+# Here-document with variable expansion
+NAME="Alice"
+cat << EOF
+Hello, $NAME!
+Welcome to Rush shell.
+Your home directory is: $HOME
+EOF
+
+# Here-document with quoted delimiter (no expansion)
+cat << 'EOF'
+Variables like $HOME are not expanded
+They appear literally: $USER
+EOF
+
+# Here-document in a pipeline
+cat << EOF | grep "important"
+This line is important
+This line is not
+Another important line
+EOF
+
+# Here-document with command
+grep "pattern" << EOF
+line with pattern here
+another line
+pattern appears again
+EOF
+```
+
+**Here-String Syntax:**
+
+```bash
+# Basic here-string
+cat <<< "Hello, World!"
+
+# Here-string with variable expansion
+MESSAGE="Rush shell is awesome"
+cat <<< "$MESSAGE"
+
+# Here-string with grep
+grep "rush" <<< "I love rush shell"
+
+# Here-string in pipeline
+cat <<< "test data" | tr 'a-z' 'A-Z'
+
+# Here-string with multiple words
+wc -w <<< "count these five words here"
+
+# Here-string with special characters
+cat <<< "Special chars: $HOME, $(date), `pwd`"
+```
+
+**Advanced Usage:**
+
+```bash
+# Here-document for multi-line variable assignment
+read -r -d '' SCRIPT << 'EOF'
+#!/usr/bin/env rush-sh
+echo "This is a script"
+echo "With multiple lines"
+EOF
+
+# Here-document with indentation (content preserves spacing)
+cat << EOF
+    Indented line 1
+        More indented line 2
+    Back to first indent
+EOF
+
+# Here-string for quick testing
+while read -r line; do
+    echo "Processing: $line"
+done <<< "single line input"
+
+# Here-document with arithmetic expansion
+cat << EOF
+Result: $((2 + 3))
+Calculation: $((10 * 5))
+EOF
+
+# Here-string with command substitution
+cat <<< "Current directory: $(pwd)"
+
+# Multiple here-documents in sequence
+cat << EOF1
+First document
+EOF1
+
+cat << EOF2
+Second document
+EOF2
+```
+
+**Real-World Examples:**
+
+```bash
+# Generate configuration file
+cat << EOF > config.yml
+server:
+  host: localhost
+  port: 8080
+database:
+  name: mydb
+  user: $DB_USER
+EOF
+
+# Create SQL script
+mysql -u root << EOF
+CREATE DATABASE IF NOT EXISTS testdb;
+USE testdb;
+CREATE TABLE users (id INT, name VARCHAR(50));
+INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob');
+EOF
+
+# Send email with here-document
+mail -s "Subject" user@example.com << EOF
+Dear User,
+
+This is the email body.
+It can span multiple lines.
+
+Best regards,
+Rush Shell
+EOF
+
+# Quick data processing with here-string
+# Count words in a string
+wc -w <<< "The quick brown fox jumps"
+
+# Convert to uppercase
+tr 'a-z' 'A-Z' <<< "convert this text"
+
+# Search for pattern
+grep -o "word" <<< "find word in this string"
+
+# Process JSON with here-string
+jq '.name' <<< '{"name": "Rush", "type": "shell"}'
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Full compatibility with standard here-document and here-string syntax
+- **Variable Expansion**: Automatic expansion of variables, command substitutions, and arithmetic
+- **Quoted Delimiters**: Use quoted delimiters to prevent variable expansion in here-documents
+- **Pipeline Support**: Works seamlessly with pipes and other shell features
+- **Error Handling**: Graceful handling of missing delimiters and malformed input
+- **Performance**: Efficient implementation using Rust's pipe and I/O primitives
+
+**Implementation Details:**
+
+- Here-documents collect input until the delimiter is found on a line by itself
+- Here-strings provide the content directly as stdin without requiring a delimiter
+- Both support full variable expansion unless delimiters are quoted
+- Content is passed to commands via stdin using efficient pipe mechanisms
+- Works with both built-in and external commands
+
 ### Positional Parameters
 
 Rush now provides comprehensive support for positional parameters, enabling scripts to access and manipulate command-line arguments with full POSIX compliance:
@@ -1616,6 +1792,9 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Pattern substitution: `echo "Replaced: ${TEXT/old/new}"`
   - Length operations: `echo "Length: ${#VARIABLE}"`
   - Indirect expansion: `echo "Value: ${!VAR_NAME}"` and `echo "Vars: ${!PREFIX*}"`
+- Here-documents and here-strings:
+  - Here-document: `cat << EOF` (multi-line input)
+  - Here-string: `grep pattern <<< "search text"` (single-line input)
 - Brace expansion:
   - Simple lists: `echo {a,b,c}` → `a b c`
   - Numeric ranges: `echo {1..5}` → `1 2 3 4 5`

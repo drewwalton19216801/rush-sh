@@ -117,6 +117,8 @@ pub struct ShellState {
     /// Set by signal handler, checked by executor
     #[allow(dead_code)]
     pub pending_signals: bool,
+    /// Pending here-document content from script execution
+    pub pending_heredoc_content: Option<String>,
 }
 
 impl ShellState {
@@ -173,6 +175,7 @@ impl ShellState {
             exit_requested: false,
             exit_code: 0,
             pending_signals: false,
+            pending_heredoc_content: None,
         }
     }
 

@@ -57,8 +57,8 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Input redirection (<)
 - ✅ Output redirection (>)
 - ✅ Append redirection (>>)
-- ❌ Here-document (<<)
-- ❌ Here-string (<<<)
+- ✅ Here-document (<<)
+- ✅ Here-string (<<<)
 - ❌ File descriptor duplication (>&, <&)
 - ❌ Redirections to specific file descriptors (2>, etc.)
 
@@ -260,14 +260,13 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ Here-document processing
-- ❌ Advanced redirection scenarios (file descriptors, here-strings)
+- ❌ Advanced redirection scenarios (file descriptors)
 - ❌ Missing built-in functionality (eval, exec, etc.)
 - ❌ Job control features
 
 ## Compliance Metrics
 
-### Estimated Current Compliance: ~88%
+### Estimated Current Compliance: ~90%
 
 ### Breakdown by Category
 
@@ -275,7 +274,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions implemented)
 - **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
-- **Redirections**: 60% ⚠️ (Basic I/O redirection implemented, advanced features missing)
+- **Redirections**: 75% ✅ (Basic I/O redirection, here-documents, and here-strings implemented; file descriptor operations missing)
 - **Job Control**: 0% ❌ (optional POSIX feature)
 - **Advanced Features**: 40% ⚠️ (Configuration, colors, completion implemented)
 

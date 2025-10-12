@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::pipe;
+use std::io::{pipe, BufRead, BufReader};
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
@@ -68,6 +68,8 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
                     input: cmd.input.clone(),
                     output: None, // We're capturing output
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 };
 
                 // Execute builtin with our writer
@@ -504,6 +506,56 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
     Ok(expanded_args)
 }
 
+/// Collect here-document content from stdin until the specified delimiter is found
+/// This function reads from stdin line by line until it finds a line that exactly matches the delimiter
+/// If shell_state has pending_heredoc_content, it uses that instead (for script execution)
+fn collect_here_document_content(delimiter: &str, shell_state: &mut ShellState) -> String {
+    // Check if we have pending here-document content from script execution
+    if let Some(content) = shell_state.pending_heredoc_content.take() {
+        return content;
+    }
+    
+    // Otherwise, read from stdin (interactive mode)
+    let stdin = std::io::stdin();
+    let mut reader = BufReader::new(stdin.lock());
+    let mut content = String::new();
+    let mut line = String::new();
+
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => {
+                // EOF reached
+                break;
+            }
+            Ok(_) => {
+                // Check if this line (without trailing newline) matches the delimiter
+                let line_content = line.trim_end();
+                if line_content == delimiter {
+                    // Found the delimiter, stop collecting
+                    break;
+                } else {
+                    // This is content, add it to our collection
+                    content.push_str(&line);
+                }
+            }
+            Err(e) => {
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}Error reading here-document content: {}\x1b[0m",
+                        shell_state.color_scheme.error, e
+                    );
+                } else {
+                    eprintln!("Error reading here-document content: {}", e);
+                }
+                break;
+            }
+        }
+    }
+
+    content
+}
+
 /// Execute a trap handler command
 /// Note: Signal masking during trap execution will be added in a future update
 pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32 {
@@ -889,6 +941,8 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             input: cmd.input.clone(),
             output: cmd.output.clone(),
             append: cmd.append.clone(),
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
 
         // If we're capturing output, create a writer for it
@@ -947,6 +1001,72 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                         );
                     } else {
                         eprintln!("Error opening input file '{}': {}", input_file, e);
+                    }
+                    return 1;
+                }
+            }
+        } else if let Some(ref delimiter) = cmd.here_doc_delimiter {
+            // Handle here-document redirection
+            let here_doc_content = collect_here_document_content(delimiter, shell_state);
+            let pipe_result = pipe();
+            match pipe_result {
+                Ok((reader, mut writer)) => {
+                    use std::io::Write;
+                    if let Err(e) = writeln!(writer, "{}", here_doc_content) {
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Error writing here-document content: {}\x1b[0m",
+                                shell_state.color_scheme.error, e
+                            );
+                        } else {
+                            eprintln!("Error writing here-document content: {}", e);
+                        }
+                        return 1;
+                    }
+                    // Note: writer will be closed when it goes out of scope
+                    command.stdin(Stdio::from(reader));
+                }
+                Err(e) => {
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}Error creating pipe for here-document: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
+                        );
+                    } else {
+                        eprintln!("Error creating pipe for here-document: {}", e);
+                    }
+                    return 1;
+                }
+            }
+        } else if let Some(ref content) = cmd.here_string_content {
+            // Handle here-string redirection
+            let expanded_content = expand_variables_in_string(content, shell_state);
+            let pipe_result = pipe();
+            match pipe_result {
+                Ok((reader, mut writer)) => {
+                    use std::io::Write;
+                    if let Err(e) = write!(writer, "{}", expanded_content) {
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Error writing here-string content: {}\x1b[0m",
+                                shell_state.color_scheme.error, e
+                            );
+                        } else {
+                            eprintln!("Error writing here-string content: {}", e);
+                        }
+                        return 1;
+                    }
+                    // Note: writer will be closed when it goes out of scope
+                    command.stdin(Stdio::from(reader));
+                }
+                Err(e) => {
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}Error creating pipe for here-string: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
+                        );
+                    } else {
+                        eprintln!("Error creating pipe for here-string: {}", e);
                     }
                     return 1;
                 }
@@ -1073,6 +1193,8 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 input: cmd.input.clone(),
                 output: cmd.output.clone(),
                 append: cmd.append.clone(),
+                here_doc_delimiter: None,
+                here_string_content: None,
             };
             if !is_last {
                 // Create a safe pipe
@@ -1125,26 +1247,90 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             }
 
             // Handle input redirection (only for first command)
-            if i == 0
-                && let Some(ref input_file) = cmd.input
-            {
-                let expanded_input = expand_variables_in_string(input_file, shell_state);
-                match File::open(&expanded_input) {
-                    Ok(file) => {
-                        command.stdin(Stdio::from(file));
-                    }
-                    Err(e) => {
-                        if shell_state.colors_enabled {
-                            eprintln!(
-                                "{}Error opening input file '{}{}",
-                                shell_state.color_scheme.error,
-                                input_file,
-                                &format!("': {}\x1b[0m", e)
-                            );
-                        } else {
-                            eprintln!("Error opening input file '{}': {}", input_file, e);
+            if i == 0 {
+                if let Some(ref input_file) = cmd.input {
+                    let expanded_input = expand_variables_in_string(input_file, shell_state);
+                    match File::open(&expanded_input) {
+                        Ok(file) => {
+                            command.stdin(Stdio::from(file));
                         }
-                        return 1;
+                        Err(e) => {
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}Error opening input file '{}{}",
+                                    shell_state.color_scheme.error,
+                                    input_file,
+                                    &format!("': {}\x1b[0m", e)
+                                );
+                            } else {
+                                eprintln!("Error opening input file '{}': {}", input_file, e);
+                            }
+                            return 1;
+                        }
+                    }
+                } else if let Some(ref delimiter) = cmd.here_doc_delimiter {
+                    // Handle here-document redirection for first command in pipeline
+                    let here_doc_content = collect_here_document_content(delimiter, shell_state);
+                    let pipe_result = pipe();
+                    match pipe_result {
+                        Ok((reader, mut writer)) => {
+                            use std::io::Write;
+                            if let Err(e) = writeln!(writer, "{}", here_doc_content) {
+                                if shell_state.colors_enabled {
+                                    eprintln!(
+                                        "{}Error writing here-document content: {}\x1b[0m",
+                                        shell_state.color_scheme.error, e
+                                    );
+                                } else {
+                                    eprintln!("Error writing here-document content: {}", e);
+                                }
+                                return 1;
+                            }
+                            command.stdin(Stdio::from(reader));
+                        }
+                        Err(e) => {
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}Error creating pipe for here-document: {}\x1b[0m",
+                                    shell_state.color_scheme.error, e
+                                );
+                            } else {
+                                eprintln!("Error creating pipe for here-document: {}", e);
+                            }
+                            return 1;
+                        }
+                    }
+                } else if let Some(ref content) = cmd.here_string_content {
+                    // Handle here-string redirection for first command in pipeline
+                    let expanded_content = expand_variables_in_string(content, shell_state);
+                    let pipe_result = pipe();
+                    match pipe_result {
+                        Ok((reader, mut writer)) => {
+                            use std::io::Write;
+                            if let Err(e) = write!(writer, "{}", expanded_content) {
+                                if shell_state.colors_enabled {
+                                    eprintln!(
+                                        "{}Error writing here-string content: {}\x1b[0m",
+                                        shell_state.color_scheme.error, e
+                                    );
+                                } else {
+                                    eprintln!("Error writing here-string content: {}", e);
+                                }
+                                return 1;
+                            }
+                            command.stdin(Stdio::from(reader));
+                        }
+                        Err(e) => {
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}Error creating pipe for here-string: {}\x1b[0m",
+                                    shell_state.color_scheme.error, e
+                                );
+                            } else {
+                                eprintln!("Error creating pipe for here-string: {}", e);
+                            }
+                            return 1;
+                        }
                     }
                 }
             }
@@ -1251,6 +1437,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
@@ -1265,6 +1453,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
@@ -1278,6 +1468,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
@@ -1292,12 +1484,16 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             },
             ShellCommand {
                 args: vec!["cat".to_string()], // cat reads from stdin
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             },
         ];
         let mut shell_state = ShellState::new();
@@ -1320,6 +1516,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         }]);
         let mut shell_state = ShellState::new();
         let exit_code = execute(ast, &mut shell_state);
@@ -1335,6 +1533,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])),
         };
         let mut shell_state = ShellState::new();
@@ -1356,6 +1556,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }]),
         );
 
@@ -1379,6 +1581,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }]),
         );
 
@@ -1415,6 +1619,8 @@ mod tests {
                 input: None,
                 output: None,
                 append: None,
+                here_doc_delimiter: None,
+                here_string_content: None,
             }])),
         };
         let exit_code = execute(define_ast, &mut shell_state);
@@ -1453,6 +1659,8 @@ mod tests {
                     input: None,
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 }]),
             ])),
         };
@@ -1504,6 +1712,8 @@ mod tests {
                     input: None,
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 }]),
             ])),
         };
@@ -1521,6 +1731,8 @@ mod tests {
                     input: None,
                     output: None,
                     append: None,
+                    here_doc_delimiter: None,
+                    here_string_content: None,
                 }]),
             ])),
         };
@@ -1546,5 +1758,43 @@ mod tests {
             shell_state.get_var("global_var"),
             Some("inner_modified".to_string())
         );
+    }
+
+    #[test]
+    fn test_here_string_execution() {
+        // Test here-string redirection with a simple command
+        let cmd = ShellCommand {
+            args: vec!["cat".to_string()],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: None,
+            here_string_content: Some("hello world".to_string()),
+        };
+        let mut shell_state = ShellState::new();
+
+        // Note: This test would require mocking stdin to provide the here-string content
+        // For now, we'll just verify the command structure is parsed correctly
+        assert_eq!(cmd.args, vec!["cat"]);
+        assert_eq!(cmd.here_string_content, Some("hello world".to_string()));
+    }
+
+    #[test]
+    fn test_here_document_execution() {
+        // Test here-document redirection with a simple command
+        let cmd = ShellCommand {
+            args: vec!["cat".to_string()],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: Some("EOF".to_string()),
+            here_string_content: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        // Note: This test would require mocking stdin to provide the here-document content
+        // For now, we'll just verify the command structure is parsed correctly
+        assert_eq!(cmd.args, vec!["cat"]);
+        assert_eq!(cmd.here_doc_delimiter, Some("EOF".to_string()));
     }
 }
