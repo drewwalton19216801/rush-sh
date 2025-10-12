@@ -970,11 +970,58 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
         }
     } else {
-        let mut command = Command::new(&expanded_args[0]);
-        command.args(&expanded_args[1..]);
+        // Separate environment variable assignments from the actual command
+        // Environment vars must come before the command and have the form VAR=value
+        let mut env_assignments = Vec::new();
+        let mut command_start_idx = 0;
+        
+        for (idx, arg) in expanded_args.iter().enumerate() {
+            // Check if this looks like an environment variable assignment
+            if let Some(eq_pos) = arg.find('=') {
+                if eq_pos > 0 {
+                    let var_part = &arg[..eq_pos];
+                    // Check if var_part is a valid variable name
+                    if var_part.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false)
+                        && var_part.chars().all(|c| c.is_alphanumeric() || c == '_')
+                    {
+                        env_assignments.push(arg.clone());
+                        command_start_idx = idx + 1;
+                        continue;
+                    }
+                }
+            }
+            // If we reach here, this is not an env assignment, so we've found the command
+            break;
+        }
+        
+        // If all args were env assignments, nothing to execute
+        if command_start_idx >= expanded_args.len() {
+            // Just environment variable assignments with no command - set them in the shell
+            for assignment in env_assignments {
+                if let Some(eq_pos) = assignment.find('=') {
+                    let var_name = &assignment[..eq_pos];
+                    let var_value = &assignment[eq_pos + 1..];
+                    shell_state.set_var(var_name, var_value.to_string());
+                }
+            }
+            return 0;
+        }
+        
+        let mut command = Command::new(&expanded_args[command_start_idx]);
+        command.args(&expanded_args[command_start_idx + 1..]);
 
         // Set environment for child process
-        let child_env = shell_state.get_env_for_child();
+        let mut child_env = shell_state.get_env_for_child();
+        
+        // Add the per-command environment variable assignments
+        for assignment in env_assignments {
+            if let Some(eq_pos) = assignment.find('=') {
+                let var_name = assignment[..eq_pos].to_string();
+                let var_value = assignment[eq_pos + 1..].to_string();
+                child_env.insert(var_name, var_value);
+            }
+        }
+        
         command.env_clear();
         for (key, value) in child_env {
             command.env(key, value);
@@ -1013,7 +1060,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             // Expand variables and command substitutions ONLY if delimiter was not quoted
             // Quoted delimiters (<<'EOF' or <<"EOF") disable expansion per POSIX
             let expanded_content = if cmd.here_doc_quoted {
-                here_doc_content // No expansion for quoted delimiters
+                here_doc_content.clone() // No expansion for quoted delimiters
             } else {
                 expand_variables_in_string(&here_doc_content, shell_state)
             };
