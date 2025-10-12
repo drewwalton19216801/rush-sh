@@ -119,6 +119,8 @@ pub struct ShellState {
     pub pending_signals: bool,
     /// Pending here-document content from script execution
     pub pending_heredoc_content: Option<String>,
+    /// Interactive mode heredoc collection state
+    pub collecting_heredoc: Option<(String, String, String)>, // (command_line, delimiter, collected_content)
 }
 
 impl ShellState {
@@ -176,6 +178,7 @@ impl ShellState {
             exit_code: 0,
             pending_signals: false,
             pending_heredoc_content: None,
+            collecting_heredoc: None,
         }
     }
 

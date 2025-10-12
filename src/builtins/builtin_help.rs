@@ -85,6 +85,7 @@ mod tests {
             output: None,
             append: None,
             here_doc_delimiter: None,
+            here_doc_quoted: false,
             here_string_content: None,
         };
         let mut shell_state = ShellState::new();

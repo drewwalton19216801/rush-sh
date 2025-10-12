@@ -11,7 +11,7 @@ pub enum Token {
     RedirOut,
     RedirIn,
     RedirAppend,
-    RedirHereDoc(String),    // Here-document: <<DELIMITER
+    RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
     RedirHereString(String), // Here-string: <<<"content"
     If,
     Then,
@@ -701,6 +701,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         let mut delimiter = String::new();
                         let mut in_quote = false;
                         let mut quote_char = ' ';
+                        let mut was_quoted = false; // Track if any quotes were found
 
                         while let Some(&ch) = chars.peek() {
                             if ch == '\n' && !in_quote {
@@ -709,6 +710,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             if (ch == '"' || ch == '\'') && !in_quote {
                                 in_quote = true;
                                 quote_char = ch;
+                                was_quoted = true; // Mark that we found a quote
                                 chars.next(); // consume quote but don't add to delimiter
                             } else if in_quote && ch == quote_char {
                                 in_quote = false;
@@ -722,7 +724,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
 
                         if !delimiter.is_empty() {
-                            tokens.push(Token::RedirHereDoc(delimiter));
+                            // Pass both delimiter and whether it was quoted
+                            tokens.push(Token::RedirHereDoc(delimiter, was_quoted));
                         } else {
                             return Err(
                                 "Invalid here-document syntax: expected delimiter after <<"
@@ -1918,7 +1921,7 @@ mod tests {
             result,
             vec![
                 Token::Word("cat".to_string()),
-                Token::RedirHereDoc("EOF".to_string())
+                Token::RedirHereDoc("EOF".to_string(), false)
             ]
         );
     }
@@ -1944,7 +1947,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirHereDoc("EOF".to_string())
+                Token::RedirHereDoc("EOF".to_string(), true) // Quoted delimiter
             ]
         );
     }
