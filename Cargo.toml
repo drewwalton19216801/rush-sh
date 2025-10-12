@@ -11,7 +11,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 [package]
 name = "rush-sh"
-version = "0.5.4"
+version = "0.5.5"
 edition = "2024"
 description = "A POSIX sh-compatible shell written in Rust"
 license = "MIT"
