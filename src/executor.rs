@@ -1008,11 +1008,13 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         } else if let Some(ref delimiter) = cmd.here_doc_delimiter {
             // Handle here-document redirection
             let here_doc_content = collect_here_document_content(delimiter, shell_state);
+            // Expand variables and command substitutions in here-doc content
+            let expanded_content = expand_variables_in_string(&here_doc_content, shell_state);
             let pipe_result = pipe();
             match pipe_result {
                 Ok((reader, mut writer)) => {
                     use std::io::Write;
-                    if let Err(e) = writeln!(writer, "{}", here_doc_content) {
+                    if let Err(e) = writeln!(writer, "{}", expanded_content) {
                         if shell_state.colors_enabled {
                             eprintln!(
                                 "{}Error writing here-document content: {}\x1b[0m",
@@ -1271,11 +1273,13 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 } else if let Some(ref delimiter) = cmd.here_doc_delimiter {
                     // Handle here-document redirection for first command in pipeline
                     let here_doc_content = collect_here_document_content(delimiter, shell_state);
+                    // Expand variables and command substitutions in here-doc content
+                    let expanded_content = expand_variables_in_string(&here_doc_content, shell_state);
                     let pipe_result = pipe();
                     match pipe_result {
                         Ok((reader, mut writer)) => {
                             use std::io::Write;
-                            if let Err(e) = writeln!(writer, "{}", here_doc_content) {
+                            if let Err(e) = writeln!(writer, "{}", expanded_content) {
                                 if shell_state.colors_enabled {
                                     eprintln!(
                                         "{}Error writing here-document content: {}\x1b[0m",
@@ -1794,5 +1798,32 @@ mod tests {
         // For now, we'll just verify the command structure is parsed correctly
         assert_eq!(cmd.args, vec!["cat"]);
         assert_eq!(cmd.here_doc_delimiter, Some("EOF".to_string()));
+    }
+
+    #[test]
+    fn test_here_document_with_variable_expansion() {
+        // Test that variables are expanded in here-document content
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("PWD", "/test/path".to_string());
+        
+        // Simulate here-doc content with variable
+        let content = "Working dir: $PWD";
+        let expanded = expand_variables_in_string(content, &mut shell_state);
+        
+        assert_eq!(expanded, "Working dir: /test/path");
+    }
+
+    #[test]
+    fn test_here_document_with_command_substitution_builtin() {
+        // Test that builtin command substitutions work in here-document content
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("PWD", "/test/dir".to_string());
+        
+        // Simulate here-doc content with pwd builtin command substitution
+        let content = "Current directory: `pwd`";
+        let expanded = expand_variables_in_string(content, &mut shell_state);
+        
+        // The pwd builtin should be executed and expanded
+        assert!(expanded.contains("Current directory: "));
     }
 }
