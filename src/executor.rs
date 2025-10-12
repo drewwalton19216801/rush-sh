@@ -970,124 +970,217 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
         }
     } else {
-        let mut command = Command::new(&expanded_args[0]);
-        command.args(&expanded_args[1..]);
+        // Separate environment variable assignments from the actual command
+        // Environment vars must come before the command and have the form VAR=value
+        let mut env_assignments = Vec::new();
+        let mut command_start_idx = 0;
 
-        // Set environment for child process
-        let child_env = shell_state.get_env_for_child();
-        command.env_clear();
-        for (key, value) in child_env {
-            command.env(key, value);
+        for (idx, arg) in expanded_args.iter().enumerate() {
+            // Check if this looks like an environment variable assignment
+            if let Some(eq_pos) = arg.find('=')
+                && eq_pos > 0
+            {
+                let var_part = &arg[..eq_pos];
+                // Check if var_part is a valid variable name
+                if var_part
+                    .chars()
+                    .next()
+                    .map(|c| c.is_alphabetic() || c == '_')
+                    .unwrap_or(false)
+                    && var_part.chars().all(|c| c.is_alphanumeric() || c == '_')
+                {
+                    env_assignments.push(arg.clone());
+                    command_start_idx = idx + 1;
+                    continue;
+                }
+            }
+            // If we reach here, this is not an env assignment, so we've found the command
+            break;
         }
 
-        // If we're capturing output, redirect stdout to capture buffer
-        let capturing = shell_state.capture_output.is_some();
-        if capturing {
-            command.stdout(Stdio::piped());
+        // Check if we have a command to execute (vs just env assignments)
+        let has_command = command_start_idx < expanded_args.len();
+
+        // If all args were env assignments, set them in the shell
+        // but continue to process redirections per POSIX
+        if !has_command {
+            for assignment in &env_assignments {
+                if let Some(eq_pos) = assignment.find('=') {
+                    let var_name = &assignment[..eq_pos];
+                    let var_value = &assignment[eq_pos + 1..];
+                    shell_state.set_var(var_name, var_value.to_string());
+                }
+            }
         }
 
-        // Handle input redirection
+        // Prepare command if we have one
+        let mut command = if has_command {
+            let mut cmd = Command::new(&expanded_args[command_start_idx]);
+            cmd.args(&expanded_args[command_start_idx + 1..]);
+
+            // Set environment for child process
+            let mut child_env = shell_state.get_env_for_child();
+
+            // Add the per-command environment variable assignments
+            for assignment in env_assignments {
+                if let Some(eq_pos) = assignment.find('=') {
+                    let var_name = assignment[..eq_pos].to_string();
+                    let var_value = assignment[eq_pos + 1..].to_string();
+                    child_env.insert(var_name, var_value);
+                }
+            }
+
+            cmd.env_clear();
+            for (key, value) in child_env {
+                cmd.env(key, value);
+            }
+
+            // If we're capturing output, redirect stdout to capture buffer
+            let capturing = shell_state.capture_output.is_some();
+            if capturing {
+                cmd.stdout(Stdio::piped());
+            }
+
+            Some(cmd)
+        } else {
+            None
+        };
+
+        // Handle input redirection (process even if no command)
         if let Some(ref input_file) = cmd.input {
             let expanded_input = expand_variables_in_string(input_file, shell_state);
-            match File::open(&expanded_input) {
-                Ok(file) => {
-                    command.stdin(Stdio::from(file));
-                }
-                Err(e) => {
-                    if shell_state.colors_enabled {
-                        eprintln!(
-                            "{}Error opening input file '{}{}",
-                            shell_state.color_scheme.error,
-                            input_file,
-                            &format!("': {}\x1b[0m", e)
-                        );
-                    } else {
-                        eprintln!("Error opening input file '{}': {}", input_file, e);
+            if let Some(ref mut command) = command {
+                match File::open(&expanded_input) {
+                    Ok(file) => {
+                        command.stdin(Stdio::from(file));
                     }
-                    return 1;
+                    Err(e) => {
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Error opening input file '{}{}",
+                                shell_state.color_scheme.error,
+                                input_file,
+                                &format!("': {}\x1b[0m", e)
+                            );
+                        } else {
+                            eprintln!("Error opening input file '{}': {}", input_file, e);
+                        }
+                        return 1;
+                    }
+                }
+            } else {
+                // No command but redirection - just verify file exists for side effects
+                match File::open(&expanded_input) {
+                    Ok(_) => {
+                        // File opened successfully, side effect complete
+                    }
+                    Err(e) => {
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Error opening input file '{}{}",
+                                shell_state.color_scheme.error,
+                                input_file,
+                                &format!("': {}\x1b[0m", e)
+                            );
+                        } else {
+                            eprintln!("Error opening input file '{}': {}", input_file, e);
+                        }
+                        return 1;
+                    }
                 }
             }
         } else if let Some(ref delimiter) = cmd.here_doc_delimiter {
-            // Handle here-document redirection
+            // Handle here-document redirection (process even if no command)
             let here_doc_content = collect_here_document_content(delimiter, shell_state);
             // Expand variables and command substitutions ONLY if delimiter was not quoted
             // Quoted delimiters (<<'EOF' or <<"EOF") disable expansion per POSIX
             let expanded_content = if cmd.here_doc_quoted {
-                here_doc_content // No expansion for quoted delimiters
+                here_doc_content.clone() // No expansion for quoted delimiters
             } else {
                 expand_variables_in_string(&here_doc_content, shell_state)
             };
-            let pipe_result = pipe();
-            match pipe_result {
-                Ok((reader, mut writer)) => {
-                    use std::io::Write;
-                    if let Err(e) = writeln!(writer, "{}", expanded_content) {
+
+            if let Some(ref mut command) = command {
+                let pipe_result = pipe();
+                match pipe_result {
+                    Ok((reader, mut writer)) => {
+                        use std::io::Write;
+                        if let Err(e) = writeln!(writer, "{}", expanded_content) {
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}Error writing here-document content: {}\x1b[0m",
+                                    shell_state.color_scheme.error, e
+                                );
+                            } else {
+                                eprintln!("Error writing here-document content: {}", e);
+                            }
+                            return 1;
+                        }
+                        // Note: writer will be closed when it goes out of scope
+                        command.stdin(Stdio::from(reader));
+                    }
+                    Err(e) => {
                         if shell_state.colors_enabled {
                             eprintln!(
-                                "{}Error writing here-document content: {}\x1b[0m",
+                                "{}Error creating pipe for here-document: {}\x1b[0m",
                                 shell_state.color_scheme.error, e
                             );
                         } else {
-                            eprintln!("Error writing here-document content: {}", e);
+                            eprintln!("Error creating pipe for here-document: {}", e);
                         }
                         return 1;
                     }
-                    // Note: writer will be closed when it goes out of scope
-                    command.stdin(Stdio::from(reader));
-                }
-                Err(e) => {
-                    if shell_state.colors_enabled {
-                        eprintln!(
-                            "{}Error creating pipe for here-document: {}\x1b[0m",
-                            shell_state.color_scheme.error, e
-                        );
-                    } else {
-                        eprintln!("Error creating pipe for here-document: {}", e);
-                    }
-                    return 1;
                 }
             }
+            // If no command, here-doc content was consumed for side effects (POSIX requirement)
         } else if let Some(ref content) = cmd.here_string_content {
-            // Handle here-string redirection
+            // Handle here-string redirection (process even if no command)
             let expanded_content = expand_variables_in_string(content, shell_state);
-            let pipe_result = pipe();
-            match pipe_result {
-                Ok((reader, mut writer)) => {
-                    use std::io::Write;
-                    if let Err(e) = write!(writer, "{}", expanded_content) {
+
+            if let Some(ref mut command) = command {
+                let pipe_result = pipe();
+                match pipe_result {
+                    Ok((reader, mut writer)) => {
+                        use std::io::Write;
+                        if let Err(e) = write!(writer, "{}", expanded_content) {
+                            if shell_state.colors_enabled {
+                                eprintln!(
+                                    "{}Error writing here-string content: {}\x1b[0m",
+                                    shell_state.color_scheme.error, e
+                                );
+                            } else {
+                                eprintln!("Error writing here-string content: {}", e);
+                            }
+                            return 1;
+                        }
+                        // Note: writer will be closed when it goes out of scope
+                        command.stdin(Stdio::from(reader));
+                    }
+                    Err(e) => {
                         if shell_state.colors_enabled {
                             eprintln!(
-                                "{}Error writing here-string content: {}\x1b[0m",
+                                "{}Error creating pipe for here-string: {}\x1b[0m",
                                 shell_state.color_scheme.error, e
                             );
                         } else {
-                            eprintln!("Error writing here-string content: {}", e);
+                            eprintln!("Error creating pipe for here-string: {}", e);
                         }
                         return 1;
                     }
-                    // Note: writer will be closed when it goes out of scope
-                    command.stdin(Stdio::from(reader));
-                }
-                Err(e) => {
-                    if shell_state.colors_enabled {
-                        eprintln!(
-                            "{}Error creating pipe for here-string: {}\x1b[0m",
-                            shell_state.color_scheme.error, e
-                        );
-                    } else {
-                        eprintln!("Error creating pipe for here-string: {}", e);
-                    }
-                    return 1;
                 }
             }
+            // If no command, here-string was processed for side effects
         }
 
-        // Handle output redirection
+        // Handle output redirection (process even if no command)
         if let Some(ref output_file) = cmd.output {
             let expanded_output = expand_variables_in_string(output_file, shell_state);
             match File::create(&expanded_output) {
                 Ok(file) => {
-                    command.stdout(Stdio::from(file));
+                    if let Some(ref mut command) = command {
+                        command.stdout(Stdio::from(file));
+                    }
+                    // If no command, file was created for side effects (POSIX requirement)
                 }
                 Err(e) => {
                     if shell_state.colors_enabled {
@@ -1111,7 +1204,10 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 .open(&expanded_append)
             {
                 Ok(file) => {
-                    command.stdout(Stdio::from(file));
+                    if let Some(ref mut command) = command {
+                        command.stdout(Stdio::from(file));
+                    }
+                    // If no command, file was opened/created for side effects (POSIX requirement)
                 }
                 Err(e) => {
                     if shell_state.colors_enabled {
@@ -1128,6 +1224,14 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 }
             }
         }
+
+        // If no command to execute, return success after processing redirections
+        let Some(mut command) = command else {
+            return 0;
+        };
+
+        // Check if we're capturing output for this command
+        let capturing = shell_state.capture_output.is_some();
 
         match command.spawn() {
             Ok(mut child) => {
