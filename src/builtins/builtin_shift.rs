@@ -53,6 +53,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec![
@@ -84,6 +86,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec![
@@ -118,6 +122,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = ShiftBuiltin;
@@ -135,6 +141,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec!["arg1".to_string()]);

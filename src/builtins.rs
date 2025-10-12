@@ -195,6 +195,8 @@ mod tests {
             input: None,
             output: None,
             append: None,
+            here_doc_delimiter: None,
+            here_string_content: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_builtin(&cmd, &mut shell_state, None);

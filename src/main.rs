@@ -302,6 +302,41 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
         }
     }
 }
+/// Extract the here-document delimiter from a command line
+/// Returns the delimiter without quotes if found
+fn extract_heredoc_delimiter(line: &str) -> Option<String> {
+    // Find << but not <<<
+    if let Some(pos) = line.find("<<") {
+        // Make sure it's not <<<
+        if line.len() > pos + 2 && line.chars().nth(pos + 2) == Some('<') {
+            return None;
+        }
+        
+        // Extract everything after <<
+        let after_redir = &line[pos + 2..];
+        let trimmed = after_redir.trim_start();
+        
+        // Extract the delimiter (up to whitespace or newline)
+        let delimiter: String = trimmed
+            .chars()
+            .take_while(|&c| c != ' ' && c != '\t' && c != '\n')
+            .collect();
+        
+        if !delimiter.is_empty() {
+            // Strip quotes from delimiter if present
+            let unquoted = if (delimiter.starts_with('\'') && delimiter.ends_with('\''))
+                || (delimiter.starts_with('"') && delimiter.ends_with('"'))
+            {
+                delimiter[1..delimiter.len() - 1].to_string()
+            } else {
+                delimiter
+            };
+            return Some(unquoted);
+        }
+    }
+    None
+}
+
 
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut current_block = String::new();
@@ -315,7 +350,11 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut in_while_block = false;
     let mut while_depth = 0;
 
-    for line in content.lines() {
+    let lines: Vec<&str> = content.lines().collect();
+    let mut i = 0;
+    
+    while i < lines.len() {
+        let line = lines[i];
         // Process pending signals at the start of each line
         state::process_pending_signals(shell_state);
 
@@ -332,12 +371,14 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
 
         // Skip shebang lines
         if line.starts_with("#!") {
+            i += 1;
             continue;
         }
 
         // Skip pure comment lines
         let trimmed = line.trim();
         if trimmed.is_empty() || trimmed.starts_with("#") {
+            i += 1;
             continue;
         }
 
@@ -437,6 +478,31 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             && !in_for_block
             && !in_while_block
         {
+            // Check if this line contains a here-document
+            if current_block.contains("<<") && !current_block.contains("<<<") {
+                // Try to extract the delimiter
+                if let Some(delimiter) = extract_heredoc_delimiter(&current_block) {
+                    // Collect here-document content from subsequent lines
+                    i += 1;
+                    let mut heredoc_content = String::new();
+                    while i < lines.len() {
+                        let content_line = lines[i];
+                        if content_line.trim() == delimiter.trim() {
+                            // Found the delimiter, stop collecting
+                            break;
+                        }
+                        if !heredoc_content.is_empty() {
+                            heredoc_content.push('\n');
+                        }
+                        heredoc_content.push_str(content_line);
+                        i += 1;
+                    }
+                    
+                    // Store the here-document content in shell state for the executor to use
+                    shell_state.pending_heredoc_content = Some(heredoc_content);
+                }
+            }
+            
             // Execute single-line commands immediately
             execute_line(&current_block, shell_state);
             current_block.clear();
@@ -446,6 +512,8 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 break;
             }
         }
+        
+        i += 1;
     }
 
     // Execute any remaining block
