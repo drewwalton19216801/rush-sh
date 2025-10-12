@@ -238,9 +238,8 @@ fn main() {
                                 while i < lines.len() {
                                     let current_line = lines[i];
                                     
-                                    // Check if this line starts a heredoc
-                                    if current_line.contains("<<") && !current_line.contains("<<<") {
-                                        if let Some(delimiter) = extract_heredoc_delimiter(current_line) {
+                                    // Check if this line starts a heredoc using proper lexer detection
+                                    if let Some(delimiter) = line_contains_heredoc(current_line, &shell_state) {
                                             // Collect heredoc content from remaining lines
                                             let mut heredoc_content = String::new();
                                             i += 1;
@@ -276,7 +275,6 @@ fn main() {
                                             }
                                             continue;
                                         }
-                                    }
                                     
                                     // Execute normal line
                                     if !current_line.trim().is_empty() {
@@ -297,13 +295,11 @@ fn main() {
                                     break;
                                 }
                                 
-                                // Check if this line starts a here-document
-                                if line.contains("<<") && !line.contains("<<<") {
-                                    if let Some(delimiter) = extract_heredoc_delimiter(&line) {
-                                        // Start collecting heredoc content
-                                        shell_state.collecting_heredoc = Some((line.clone(), delimiter, String::new()));
-                                        continue;
-                                    }
+                                // Check if this line starts a here-document using proper lexer detection
+                                if let Some(delimiter) = line_contains_heredoc(&line, &shell_state) {
+                                    // Start collecting heredoc content
+                                    shell_state.collecting_heredoc = Some((line.clone(), delimiter, String::new()));
+                                    continue;
                                 }
                                 
                                 // Execute normal command
@@ -463,39 +459,22 @@ fn execute_line(line: &str, shell_state: &mut state::ShellState) {
         }
     }
 }
-/// Extract the here-document delimiter from a command line
-/// Returns the delimiter without quotes if found
-fn extract_heredoc_delimiter(line: &str) -> Option<String> {
-    // Find << but not <<<
-    if let Some(pos) = line.find("<<") {
-        // Make sure it's not <<<
-        if line.len() > pos + 2 && line.chars().nth(pos + 2) == Some('<') {
-            return None;
+/// Check if a line contains a heredoc redirection using proper lexer-based detection
+/// Returns the delimiter if found, None otherwise
+fn line_contains_heredoc(line: &str, shell_state: &state::ShellState) -> Option<String> {
+    // Use the lexer to properly parse the line
+    match lexer::lex(line, shell_state) {
+        Ok(tokens) => {
+            // Look for a RedirHereDoc token
+            for token in tokens {
+                if let lexer::Token::RedirHereDoc(delimiter, _quoted) = token {
+                    return Some(delimiter);
+                }
+            }
+            None
         }
-
-        // Extract everything after <<
-        let after_redir = &line[pos + 2..];
-        let trimmed = after_redir.trim_start();
-
-        // Extract the delimiter (up to whitespace or newline)
-        let delimiter: String = trimmed
-            .chars()
-            .take_while(|&c| c != ' ' && c != '\t' && c != '\n')
-            .collect();
-
-        if !delimiter.is_empty() {
-            // Strip quotes from delimiter if present
-            let unquoted = if (delimiter.starts_with('\'') && delimiter.ends_with('\''))
-                || (delimiter.starts_with('"') && delimiter.ends_with('"'))
-            {
-                delimiter[1..delimiter.len() - 1].to_string()
-            } else {
-                delimiter
-            };
-            return Some(unquoted);
-        }
+        Err(_) => None,
     }
-    None
 }
 
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
@@ -638,29 +617,26 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             && !in_for_block
             && !in_while_block
         {
-            // Check if this line contains a here-document
-            if current_block.contains("<<") && !current_block.contains("<<<") {
-                // Try to extract the delimiter
-                if let Some(delimiter) = extract_heredoc_delimiter(&current_block) {
-                    // Collect here-document content from subsequent lines
-                    i += 1;
-                    let mut heredoc_content = String::new();
-                    while i < lines.len() {
-                        let content_line = lines[i];
-                        if content_line.trim() == delimiter.trim() {
-                            // Found the delimiter, stop collecting
-                            break;
-                        }
-                        if !heredoc_content.is_empty() {
-                            heredoc_content.push('\n');
-                        }
-                        heredoc_content.push_str(content_line);
-                        i += 1;
+            // Check if this line contains a here-document using proper lexer detection
+            if let Some(delimiter) = line_contains_heredoc(&current_block, shell_state) {
+                // Collect here-document content from subsequent lines
+                i += 1;
+                let mut heredoc_content = String::new();
+                while i < lines.len() {
+                    let content_line = lines[i];
+                    if content_line.trim() == delimiter.trim() {
+                        // Found the delimiter, stop collecting
+                        break;
                     }
-
-                    // Store the here-document content in shell state for the executor to use
-                    shell_state.pending_heredoc_content = Some(heredoc_content);
+                    if !heredoc_content.is_empty() {
+                        heredoc_content.push('\n');
+                    }
+                    heredoc_content.push_str(content_line);
+                    i += 1;
                 }
+
+                // Store the here-document content in shell state for the executor to use
+                shell_state.pending_heredoc_content = Some(heredoc_content);
             }
 
             // Execute single-line commands immediately
