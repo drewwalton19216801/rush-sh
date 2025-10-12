@@ -69,7 +69,7 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
                     output: None, // We're capturing output
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 };
 
@@ -1203,7 +1203,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 output: cmd.output.clone(),
                 append: cmd.append.clone(),
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             };
             if !is_last {
@@ -1505,7 +1505,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             },
             ShellCommand {
@@ -1514,7 +1514,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             },
         ];
@@ -1557,7 +1557,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])),
         };
@@ -1581,7 +1581,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }]),
         );
@@ -1607,7 +1607,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }]),
         );
@@ -1646,7 +1646,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])),
         };
@@ -1687,7 +1687,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 }]),
             ])),
@@ -1741,7 +1741,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 }]),
             ])),
@@ -1761,7 +1761,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 }]),
             ])),
@@ -1833,11 +1833,11 @@ mod tests {
         // Test that variables are expanded in here-document content
         let mut shell_state = ShellState::new();
         shell_state.set_var("PWD", "/test/path".to_string());
-        
+
         // Simulate here-doc content with variable
         let content = "Working dir: $PWD";
         let expanded = expand_variables_in_string(content, &mut shell_state);
-        
+
         assert_eq!(expanded, "Working dir: /test/path");
     }
 
@@ -1846,11 +1846,11 @@ mod tests {
         // Test that builtin command substitutions work in here-document content
         let mut shell_state = ShellState::new();
         shell_state.set_var("PWD", "/test/dir".to_string());
-        
+
         // Simulate here-doc content with pwd builtin command substitution
         let content = "Current directory: `pwd`";
         let expanded = expand_variables_in_string(content, &mut shell_state);
-        
+
         // The pwd builtin should be executed and expanded
         assert!(expanded.contains("Current directory: "));
     }

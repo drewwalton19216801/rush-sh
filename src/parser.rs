@@ -58,7 +58,7 @@ pub struct ShellCommand {
     pub output: Option<String>,
     pub append: Option<String>,
     pub here_doc_delimiter: Option<String>, // For here-document redirection
-    pub here_doc_quoted: bool,              // True if heredoc delimiter was quoted (disables expansion)
+    pub here_doc_quoted: bool, // True if heredoc delimiter was quoted (disables expansion)
     pub here_string_content: Option<String>, // For here-string redirection
 }
 
@@ -81,7 +81,7 @@ fn create_empty_body_ast() -> Ast {
         output: None,
         append: None,
         here_doc_delimiter: None,
-            here_doc_quoted: false,
+        here_doc_quoted: false,
         here_string_content: None,
     }])
 }
@@ -1325,7 +1325,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1346,7 +1346,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1370,7 +1370,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 },
                 ShellCommand {
@@ -1379,7 +1379,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 }
             ])
@@ -1402,7 +1402,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1425,7 +1425,7 @@ mod tests {
                 output: Some("output.txt".to_string()),
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1448,7 +1448,7 @@ mod tests {
                 output: None,
                 append: Some("output.txt".to_string()),
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1478,7 +1478,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 },
                 ShellCommand {
@@ -1487,7 +1487,7 @@ mod tests {
                     output: None,
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 },
                 ShellCommand {
@@ -1496,7 +1496,7 @@ mod tests {
                     output: Some("output.txt".to_string()),
                     append: None,
                     here_doc_delimiter: None,
-            here_doc_quoted: false,
+                    here_doc_quoted: false,
                     here_string_content: None,
                 }
             ])
@@ -1532,7 +1532,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1556,7 +1556,7 @@ mod tests {
                 output: Some("file2.txt".to_string()),
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1806,7 +1806,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: Some("EOF".to_string()),
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: None,
             }])
         );
@@ -1827,7 +1827,7 @@ mod tests {
                 output: None,
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: Some("pattern".to_string()),
             }])
         );
@@ -1852,7 +1852,7 @@ mod tests {
                 output: Some("output.txt".to_string()),
                 append: None,
                 here_doc_delimiter: None,
-            here_doc_quoted: false,
+                here_doc_quoted: false,
                 here_string_content: Some("fallback".to_string()),
             }])
         );

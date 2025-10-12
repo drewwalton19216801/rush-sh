@@ -12,7 +12,7 @@ pub enum Token {
     RedirIn,
     RedirAppend,
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
-    RedirHereString(String), // Here-string: <<<"content"
+    RedirHereString(String),    // Here-string: <<<"content"
     If,
     Then,
     Else,
