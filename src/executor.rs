@@ -974,14 +974,18 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         // Environment vars must come before the command and have the form VAR=value
         let mut env_assignments = Vec::new();
         let mut command_start_idx = 0;
-        
+
         for (idx, arg) in expanded_args.iter().enumerate() {
             // Check if this looks like an environment variable assignment
-            if let Some(eq_pos) = arg.find('=') {
-                if eq_pos > 0 {
+            if let Some(eq_pos) = arg.find('=')
+                && eq_pos > 0 {
                     let var_part = &arg[..eq_pos];
                     // Check if var_part is a valid variable name
-                    if var_part.chars().next().map(|c| c.is_alphabetic() || c == '_').unwrap_or(false)
+                    if var_part
+                        .chars()
+                        .next()
+                        .map(|c| c.is_alphabetic() || c == '_')
+                        .unwrap_or(false)
                         && var_part.chars().all(|c| c.is_alphanumeric() || c == '_')
                     {
                         env_assignments.push(arg.clone());
@@ -989,11 +993,10 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                         continue;
                     }
                 }
-            }
             // If we reach here, this is not an env assignment, so we've found the command
             break;
         }
-        
+
         // If all args were env assignments, nothing to execute
         if command_start_idx >= expanded_args.len() {
             // Just environment variable assignments with no command - set them in the shell
@@ -1006,13 +1009,13 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             }
             return 0;
         }
-        
+
         let mut command = Command::new(&expanded_args[command_start_idx]);
         command.args(&expanded_args[command_start_idx + 1..]);
 
         // Set environment for child process
         let mut child_env = shell_state.get_env_for_child();
-        
+
         // Add the per-command environment variable assignments
         for assignment in env_assignments {
             if let Some(eq_pos) = assignment.find('=') {
@@ -1021,7 +1024,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 child_env.insert(var_name, var_value);
             }
         }
-        
+
         command.env_clear();
         for (key, value) in child_env {
             command.env(key, value);
