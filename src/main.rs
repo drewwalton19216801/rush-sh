@@ -133,7 +133,10 @@ fn main() {
             // Source .rushrc file if it exists
             source_rushrc(&mut shell_state);
 
-            let mut rl = Editor::<completion::RushCompleter, FileHistory>::new().unwrap();
+            let config = rustyline::Config::builder()
+                .bracketed_paste(true)  // Enable bracketed paste to handle multi-line pastes
+                .build();
+            let mut rl = Editor::<completion::RushCompleter, FileHistory>::with_config(config).unwrap();
             rl.set_helper(Some(completion::RushCompleter::new()));
 
             // Configure rustyline to handle signals gracefully
@@ -152,24 +155,161 @@ fn main() {
                     execute_exit_trap(&mut shell_state);
                     break;
                 }
-                let base_prompt = shell_state.get_prompt();
-                let prompt = if shell_state.colors_enabled {
-                    format!(
-                        "{}{}{}",
-                        shell_state.color_scheme.prompt, base_prompt, "\x1b[0m"
-                    )
+                
+                // Determine the prompt based on whether we're collecting a heredoc
+                let prompt_str = if shell_state.collecting_heredoc.is_some() {
+                    "> ".to_string()
                 } else {
-                    base_prompt
+                    let base_prompt = shell_state.get_prompt();
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}{}{}",
+                            shell_state.color_scheme.prompt, base_prompt, "\x1b[0m"
+                        )
+                    } else {
+                        base_prompt
+                    }
                 };
-                let readline = rl.readline(&prompt);
+                
+                let readline = rl.readline(&prompt_str);
                 match readline {
                     Ok(line) => {
-                        let _ = rl.add_history_entry(line.as_str());
-                        if line == "exit" {
-                            execute_exit_trap(&mut shell_state);
-                            break;
+                        // Check if we're currently collecting heredoc content
+                        if let Some((command_line, delimiter, mut content)) = shell_state.collecting_heredoc.take() {
+                            // We're collecting heredoc content
+                            // Check if this line (which might contain newlines from pasted input) contains the delimiter
+                            if line.contains('\n') {
+                                // Multi-line paste - split and process each line
+                                let lines: Vec<&str> = line.split('\n').collect();
+                                let mut found_delimiter = false;
+                                for (i, line_part) in lines.iter().enumerate() {
+                                    // Strip continuation prompt prefix if present ("> " from rustyline)
+                                    let cleaned_line = line_part.trim_start_matches("> ");
+                                    
+                                    if cleaned_line.trim() == delimiter.trim() {
+                                        // Found delimiter
+                                        found_delimiter = true;
+                                        // Execute with collected content
+                                        shell_state.pending_heredoc_content = Some(content.clone());
+                                        execute_line(&command_line, &mut shell_state);
+                                        
+                                        // Process any remaining lines after the delimiter as new commands
+                                        for remaining_line in lines.iter().skip(i + 1) {
+                                            if !remaining_line.trim().is_empty() {
+                                                execute_line(remaining_line, &mut shell_state);
+                                            }
+                                        }
+                                        break;
+                                    } else {
+                                        // Add to content (use cleaned line without prompt prefix)
+                                        if !content.is_empty() {
+                                            content.push('\n');
+                                        }
+                                        content.push_str(cleaned_line);
+                                    }
+                                }
+                                
+                                if !found_delimiter {
+                                    // No delimiter found, continue collecting
+                                    shell_state.collecting_heredoc = Some((command_line, delimiter, content));
+                                }
+                            } else {
+                                // Single line input
+                                if line.trim() == delimiter.trim() {
+                                    // Found the delimiter - execute the command
+                                    shell_state.pending_heredoc_content = Some(content);
+                                    execute_line(&command_line, &mut shell_state);
+                                } else {
+                                    // Add this line to heredoc content and continue collecting
+                                    if !content.is_empty() {
+                                        content.push('\n');
+                                    }
+                                    content.push_str(&line);
+                                    shell_state.collecting_heredoc = Some((command_line, delimiter, content));
+                                }
+                            }
+                        } else {
+                            // Normal line processing
+                            // Check if this is a multi-line paste with heredoc
+                            if line.contains('\n') && line.contains("<<") && !line.contains("<<<") {
+                                // Split the pasted content into lines
+                                let lines: Vec<&str> = line.split('\n').collect();
+                                let mut i = 0;
+                                while i < lines.len() {
+                                    let current_line = lines[i];
+                                    
+                                    // Check if this line starts a heredoc
+                                    if current_line.contains("<<") && !current_line.contains("<<<") {
+                                        if let Some(delimiter) = extract_heredoc_delimiter(current_line) {
+                                            // Collect heredoc content from remaining lines
+                                            let mut heredoc_content = String::new();
+                                            i += 1;
+                                            let mut found_delimiter = false;
+                                            
+                                            while i < lines.len() {
+                                                let line_to_check = lines[i].trim_start_matches("> ");
+                                                if line_to_check.trim() == delimiter.trim() {
+                                                    // Found delimiter
+                                                    found_delimiter = true;
+                                                    i += 1;
+                                                    break;
+                                                }
+                                                if !heredoc_content.is_empty() {
+                                                    heredoc_content.push('\n');
+                                                }
+                                                // Use cleaned line without prompt prefix
+                                                heredoc_content.push_str(line_to_check);
+                                                i += 1;
+                                            }
+                                            
+                                            if found_delimiter {
+                                                // Execute with collected content
+                                                shell_state.pending_heredoc_content = Some(heredoc_content);
+                                                execute_line(current_line, &mut shell_state);
+                                            } else {
+                                                // Delimiter not found in paste, start collecting interactively
+                                                shell_state.collecting_heredoc = Some((
+                                                    current_line.to_string(),
+                                                    delimiter,
+                                                    heredoc_content,
+                                                ));
+                                            }
+                                            continue;
+                                        }
+                                    }
+                                    
+                                    // Execute normal line
+                                    if !current_line.trim().is_empty() {
+                                        let _ = rl.add_history_entry(current_line);
+                                        if current_line == "exit" {
+                                            execute_exit_trap(&mut shell_state);
+                                            break;
+                                        }
+                                        execute_line(current_line, &mut shell_state);
+                                    }
+                                    i += 1;
+                                }
+                            } else {
+                                // Single line input
+                                let _ = rl.add_history_entry(line.as_str());
+                                if line == "exit" {
+                                    execute_exit_trap(&mut shell_state);
+                                    break;
+                                }
+                                
+                                // Check if this line starts a here-document
+                                if line.contains("<<") && !line.contains("<<<") {
+                                    if let Some(delimiter) = extract_heredoc_delimiter(&line) {
+                                        // Start collecting heredoc content
+                                        shell_state.collecting_heredoc = Some((line.clone(), delimiter, String::new()));
+                                        continue;
+                                    }
+                                }
+                                
+                                // Execute normal command
+                                execute_line(&line, &mut shell_state);
+                            }
                         }
-                        execute_line(&line, &mut shell_state);
 
                         // Process any signals that arrived during command execution
                         state::process_pending_signals(&mut shell_state);
@@ -183,26 +323,47 @@ fn main() {
                             println!("\nReceived SIGTERM, exiting gracefully.");
                             execute_exit_trap(&mut shell_state);
                             break;
-                        } else {
-                            // Check if this is a signal interruption (SIGINT)
-                            let err_str = format!("{}", err);
-                            if err_str.contains("Interrupted") {
-                                // SIGINT should just interrupt the current input line
-                                // Continue the loop to show a new prompt
-                                continue;
+                        }
+                        
+                        let err_str = format!("{}", err);
+                        
+                        // Check if this is an EOF while collecting heredoc
+                        if err_str.contains("EOF") && shell_state.collecting_heredoc.is_some() {
+                            // User pressed Ctrl-D while collecting heredoc
+                            // Execute the command with whatever content we have
+                            if let Some((command_line, _delimiter, content)) = shell_state.collecting_heredoc.take() {
+                                shell_state.pending_heredoc_content = Some(content);
+                                execute_line(&command_line, &mut shell_state);
                             }
-                            // For other errors, print and continue (don't break)
-                            if shell_state.colors_enabled {
-                                eprintln!(
-                                    "{}Readline error: {}\x1b[0m",
-                                    shell_state.color_scheme.error, err
-                                );
-                            } else {
-                                eprintln!("Readline error: {}", err);
-                            }
-                            // Continue instead of breaking to keep shell running
                             continue;
                         }
+                        
+                        // Check if this is a signal interruption (SIGINT)
+                        if err_str.contains("Interrupted") {
+                            // SIGINT should just interrupt the current input line
+                            // If we were collecting a heredoc, cancel it
+                            shell_state.collecting_heredoc = None;
+                            continue;
+                        }
+                        
+                        // Check if this is EOF in normal mode (exit the shell)
+                        if err_str.contains("EOF") {
+                            println!();
+                            execute_exit_trap(&mut shell_state);
+                            break;
+                        }
+                        
+                        // For other errors, print and continue (don't break)
+                        if shell_state.colors_enabled {
+                            eprintln!(
+                                "{}Readline error: {}\x1b[0m",
+                                shell_state.color_scheme.error, err
+                            );
+                        } else {
+                            eprintln!("Readline error: {}", err);
+                        }
+                        // Continue instead of breaking to keep shell running
+                        continue;
                     }
                 }
             }
