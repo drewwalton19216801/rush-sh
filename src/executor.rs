@@ -18,123 +18,174 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
     // For external commands, we need to handle them specially
 
     match &ast {
-        Ast::Pipeline(commands) if commands.len() == 1 => {
-            let cmd = &commands[0];
-            if cmd.args.is_empty() {
+        Ast::Pipeline(commands) => {
+            // Handle both single commands and multi-command pipelines
+            if commands.is_empty() {
                 return Ok(String::new());
             }
 
-            // Expand variables and wildcards
-            let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-            let expanded_args = expand_wildcards(&var_expanded_args)
-                .map_err(|e| format!("Wildcard expansion failed: {}", e))?;
+            if commands.len() == 1 {
+                // Single command - use the existing optimized path
+                let cmd = &commands[0];
+                if cmd.args.is_empty() {
+                    return Ok(String::new());
+                }
 
-            if expanded_args.is_empty() {
-                return Ok(String::new());
-            }
+                // Expand variables and wildcards
+                let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
+                let expanded_args = expand_wildcards(&var_expanded_args)
+                    .map_err(|e| format!("Wildcard expansion failed: {}", e))?;
 
-            // Check if it's a function call
-            if shell_state.get_function(&expanded_args[0]).is_some() {
+                if expanded_args.is_empty() {
+                    return Ok(String::new());
+                }
+
+                // Check if it's a function call
+                if shell_state.get_function(&expanded_args[0]).is_some() {
+                    // Save previous capture state (for nested command substitutions)
+                    let previous_capture = shell_state.capture_output.clone();
+
+                    // Enable output capture mode
+                    let capture_buffer = Rc::new(RefCell::new(Vec::new()));
+                    shell_state.capture_output = Some(capture_buffer.clone());
+
+                    // Create a FunctionCall AST and execute it
+                    let function_call_ast = Ast::FunctionCall {
+                        name: expanded_args[0].clone(),
+                        args: expanded_args[1..].to_vec(),
+                    };
+
+                    let exit_code = execute(function_call_ast, shell_state);
+
+                    // Retrieve captured output
+                    let captured = capture_buffer.borrow().clone();
+                    let output = String::from_utf8_lossy(&captured).trim_end().to_string();
+
+                    // Restore previous capture state
+                    shell_state.capture_output = previous_capture;
+
+                    if exit_code == 0 {
+                        Ok(output)
+                    } else {
+                        Err(format!("Function failed with exit code {}", exit_code))
+                    }
+                } else if crate::builtins::is_builtin(&expanded_args[0]) {
+                    let temp_cmd = ShellCommand {
+                        args: expanded_args,
+                        input: cmd.input.clone(),
+                        output: None, // We're capturing output
+                        append: None,
+                        here_doc_delimiter: None,
+                        here_doc_quoted: false,
+                        here_string_content: None,
+                    };
+
+                    // Execute builtin with our writer
+                    let exit_code = crate::builtins::execute_builtin(
+                        &temp_cmd,
+                        shell_state,
+                        Some(Box::new(writer)),
+                    );
+
+                    // Read the captured output
+                    drop(temp_cmd); // Ensure writer is dropped
+                    let mut output = String::new();
+                    use std::io::Read;
+                    let mut reader = reader;
+                    reader
+                        .read_to_string(&mut output)
+                        .map_err(|e| format!("Failed to read output: {}", e))?;
+
+                    if exit_code == 0 {
+                        Ok(output.trim_end().to_string())
+                    } else {
+                        Err(format!("Command failed with exit code {}", exit_code))
+                    }
+                } else {
+                    // External command - execute with output capture
+                    drop(writer); // Close writer end before spawning
+
+                    let mut command = Command::new(&expanded_args[0]);
+                    command.args(&expanded_args[1..]);
+                    command.stdout(Stdio::piped());
+                    command.stderr(Stdio::null()); // Suppress stderr for command substitution
+
+                    // Set environment
+                    let child_env = shell_state.get_env_for_child();
+                    command.env_clear();
+                    for (key, value) in child_env {
+                        command.env(key, value);
+                    }
+
+                    let output = command
+                        .output()
+                        .map_err(|e| format!("Failed to execute command: {}", e))?;
+
+                    if output.status.success() {
+                        Ok(String::from_utf8_lossy(&output.stdout)
+                            .trim_end()
+                            .to_string())
+                    } else {
+                        Err(format!(
+                            "Command failed with exit code {}",
+                            output.status.code().unwrap_or(1)
+                        ))
+                    }
+                }
+            } else {
+                // Multi-command pipeline - execute the entire pipeline and capture output
+                drop(writer); // Close writer end before executing pipeline
+                
                 // Save previous capture state (for nested command substitutions)
                 let previous_capture = shell_state.capture_output.clone();
-
+                
                 // Enable output capture mode
                 let capture_buffer = Rc::new(RefCell::new(Vec::new()));
                 shell_state.capture_output = Some(capture_buffer.clone());
-
-                // Create a FunctionCall AST and execute it
-                let function_call_ast = Ast::FunctionCall {
-                    name: expanded_args[0].clone(),
-                    args: expanded_args[1..].to_vec(),
-                };
-
-                let exit_code = execute(function_call_ast, shell_state);
-
+                
+                // Execute the pipeline
+                let exit_code = execute_pipeline(commands, shell_state);
+                
                 // Retrieve captured output
                 let captured = capture_buffer.borrow().clone();
                 let output = String::from_utf8_lossy(&captured).trim_end().to_string();
-
+                
                 // Restore previous capture state
                 shell_state.capture_output = previous_capture;
-
+                
                 if exit_code == 0 {
                     Ok(output)
                 } else {
-                    Err(format!("Function failed with exit code {}", exit_code))
-                }
-            } else if crate::builtins::is_builtin(&expanded_args[0]) {
-                let temp_cmd = ShellCommand {
-                    args: expanded_args,
-                    input: cmd.input.clone(),
-                    output: None, // We're capturing output
-                    append: None,
-                    here_doc_delimiter: None,
-                    here_doc_quoted: false,
-                    here_string_content: None,
-                };
-
-                // Execute builtin with our writer
-                let exit_code = crate::builtins::execute_builtin(
-                    &temp_cmd,
-                    shell_state,
-                    Some(Box::new(writer)),
-                );
-
-                // Read the captured output
-                drop(temp_cmd); // Ensure writer is dropped
-                let mut output = String::new();
-                use std::io::Read;
-                let mut reader = reader;
-                reader
-                    .read_to_string(&mut output)
-                    .map_err(|e| format!("Failed to read output: {}", e))?;
-
-                if exit_code == 0 {
-                    Ok(output.trim_end().to_string())
-                } else {
-                    Err(format!("Command failed with exit code {}", exit_code))
-                }
-            } else {
-                // External command - execute with output capture
-                drop(writer); // Close writer end before spawning
-
-                let mut command = Command::new(&expanded_args[0]);
-                command.args(&expanded_args[1..]);
-                command.stdout(Stdio::piped());
-                command.stderr(Stdio::null()); // Suppress stderr for command substitution
-
-                // Set environment
-                let child_env = shell_state.get_env_for_child();
-                command.env_clear();
-                for (key, value) in child_env {
-                    command.env(key, value);
-                }
-
-                let output = command
-                    .output()
-                    .map_err(|e| format!("Failed to execute command: {}", e))?;
-
-                if output.status.success() {
-                    Ok(String::from_utf8_lossy(&output.stdout)
-                        .trim_end()
-                        .to_string())
-                } else {
-                    Err(format!(
-                        "Command failed with exit code {}",
-                        output.status.code().unwrap_or(1)
-                    ))
+                    Err(format!("Pipeline failed with exit code {}", exit_code))
                 }
             }
         }
         _ => {
-            // For complex AST nodes (sequences, pipelines, etc.), we need to execute them
-            // and capture output differently. For now, fall back to executing and capturing
-            // via a temporary approach
+            // For other AST nodes (sequences, etc.), we need special handling
             drop(writer);
 
-            // Execute the AST normally but we can't easily capture output for complex cases
-            // This is a limitation we'll need to address for full support
-            Err("Complex command substitutions not yet fully supported".to_string())
+            // Save previous capture state
+            let previous_capture = shell_state.capture_output.clone();
+            
+            // Enable output capture mode
+            let capture_buffer = Rc::new(RefCell::new(Vec::new()));
+            shell_state.capture_output = Some(capture_buffer.clone());
+            
+            // Execute the AST
+            let exit_code = execute(ast, shell_state);
+            
+            // Retrieve captured output
+            let captured = capture_buffer.borrow().clone();
+            let output = String::from_utf8_lossy(&captured).trim_end().to_string();
+            
+            // Restore previous capture state
+            shell_state.capture_output = previous_capture;
+            
+            if exit_code == 0 {
+                Ok(output)
+            } else {
+                Err(format!("Command failed with exit code {}", exit_code))
+            }
         }
     }
 }
@@ -310,48 +361,51 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                         }
                     };
 
-                    if let Ok(ast) = crate::parser::parse(expanded_tokens) {
-                        // Execute within current shell context and capture output
-                        match execute_and_capture_output(ast, shell_state) {
-                            Ok(output) => {
-                                result.push_str(&output);
-                            }
-                            Err(_) => {
-                                // On failure, keep the literal
-                                result.push_str("$(");
-                                result.push_str(&sub_command);
-                                result.push(')');
-                            }
-                        }
-                    } else {
-                        // Parse error - try to handle as function call if it looks like one
-                        let tokens_str = sub_command.trim();
-                        if tokens_str.contains(' ') {
-                            // Split by spaces and check if first token looks like a function call
-                            let parts: Vec<&str> = tokens_str.split_whitespace().collect();
-                            if let Some(first_token) = parts.first()
-                                && shell_state.get_function(first_token).is_some()
-                            {
-                                // This is a function call, create AST manually
-                                let function_call = Ast::FunctionCall {
-                                    name: first_token.to_string(),
-                                    args: parts[1..].iter().map(|s| s.to_string()).collect(),
-                                };
-                                match execute_and_capture_output(function_call, shell_state) {
-                                    Ok(output) => {
-                                        result.push_str(&output);
-                                        continue;
-                                    }
-                                    Err(_) => {
-                                        // Fall back to literal
-                                    }
+                    match crate::parser::parse(expanded_tokens) {
+                        Ok(ast) => {
+                            // Execute within current shell context and capture output
+                            match execute_and_capture_output(ast, shell_state) {
+                                Ok(output) => {
+                                    result.push_str(&output);
+                                }
+                                Err(_) => {
+                                    // On failure, keep the literal
+                                    result.push_str("$(");
+                                    result.push_str(&sub_command);
+                                    result.push(')');
                                 }
                             }
                         }
-                        // Keep the literal
-                        result.push_str("$(");
-                        result.push_str(&sub_command);
-                        result.push(')');
+                        Err(_parse_err) => {
+                            // Parse error - try to handle as function call if it looks like one
+                            let tokens_str = sub_command.trim();
+                            if tokens_str.contains(' ') {
+                                // Split by spaces and check if first token looks like a function call
+                                let parts: Vec<&str> = tokens_str.split_whitespace().collect();
+                                if let Some(first_token) = parts.first()
+                                    && shell_state.get_function(first_token).is_some()
+                                {
+                                    // This is a function call, create AST manually
+                                    let function_call = Ast::FunctionCall {
+                                        name: first_token.to_string(),
+                                        args: parts[1..].iter().map(|s| s.to_string()).collect(),
+                                    };
+                                    match execute_and_capture_output(function_call, shell_state) {
+                                        Ok(output) => {
+                                            result.push_str(&output);
+                                            continue;
+                                        }
+                                        Err(_) => {
+                                            // Fall back to literal
+                                        }
+                                    }
+                                }
+                            }
+                            // Keep the literal
+                            result.push_str("$(");
+                            result.push_str(&sub_command);
+                            result.push(')');
+                        }
                     }
                 } else {
                     // Lex error, keep literal
@@ -1355,8 +1409,11 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 command.stdin(prev);
             }
 
-            // Set stdout for next command, unless this is the last
+            // Set stdout for next command, or for capturing if this is the last
             if !is_last {
+                command.stdout(Stdio::piped());
+            } else if shell_state.capture_output.is_some() {
+                // Last command in pipeline but we're capturing output
                 command.stdout(Stdio::piped());
             }
 
@@ -1509,6 +1566,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 Ok(mut child) => {
                     if !is_last {
                         previous_stdout = child.stdout.take().map(Stdio::from);
+                    } else if shell_state.capture_output.is_some() {
+                        // Last command and we're capturing - read its output
+                        if let Some(mut stdout) = child.stdout.take() {
+                            use std::io::Read;
+                            let mut output = Vec::new();
+                            if stdout.read_to_end(&mut output).is_ok()
+                                && let Some(ref capture_buffer) = shell_state.capture_output
+                            {
+                                capture_buffer.borrow_mut().extend_from_slice(&output);
+                            }
+                        }
                     }
                     match child.wait() {
                         Ok(status) => {

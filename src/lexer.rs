@@ -106,13 +106,25 @@ fn collect_until_closing_brace(chars: &mut std::iter::Peekable<std::str::Chars>)
 fn collect_with_paren_depth(chars: &mut std::iter::Peekable<std::str::Chars>) -> String {
     let mut content = String::new();
     let mut paren_depth = 1; // We start after the opening paren
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
 
     while let Some(&ch) = chars.peek() {
-        if ch == '(' {
+        if ch == '\'' && !in_double_quote {
+            // Toggle single quote state (unless we're in double quotes)
+            in_single_quote = !in_single_quote;
+            content.push(ch);
+            chars.next();
+        } else if ch == '"' && !in_single_quote {
+            // Toggle double quote state (unless we're in single quotes)
+            in_double_quote = !in_double_quote;
+            content.push(ch);
+            chars.next();
+        } else if ch == '(' && !in_single_quote && !in_double_quote {
             paren_depth += 1;
             content.push(ch);
             chars.next();
-        } else if ch == ')' {
+        } else if ch == ')' && !in_single_quote && !in_double_quote {
             paren_depth -= 1;
             if paren_depth == 0 {
                 chars.next(); // consume the closing ")"

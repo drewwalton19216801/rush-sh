@@ -674,13 +674,9 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
 }
 
 fn execute_command_string(command_string: &str, shell_state: &mut state::ShellState) {
-    // Split on semicolons and execute each command separately
-    for cmd in command_string.split(';') {
-        let cmd = cmd.trim();
-        if !cmd.is_empty() {
-            execute_line(cmd, shell_state);
-        }
-    }
+    // Execute the entire command string as-is
+    // The lexer and parser will properly handle semicolons, quotes, and command substitutions
+    execute_line(command_string, shell_state);
 }
 
 fn source_rushrc(shell_state: &mut state::ShellState) {
