@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.4.4. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
+**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.5.7. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
 
 ### Project Goals
 
@@ -14,9 +14,9 @@
 
 ### Current Status
 
-- **Compliance Level**: ~87% POSIX compliant
-- **Test Coverage**: 269+ individual test cases across all components
-- **Built-in Commands**: 18 implemented commands
+- **Compliance Level**: ~90% POSIX compliant
+- **Test Coverage**: 325+ individual test cases across all components
+- **Built-in Commands**: 20 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
@@ -83,7 +83,7 @@ src/
 
 ### Testing Philosophy
 
-The project maintains **comprehensive test coverage** with 276+ individual test cases:
+The project maintains **comprehensive test coverage** with 325+ individual test cases:
 
 ```rust
 // Example test structure
@@ -418,19 +418,21 @@ impl ShellState {
 ### High Priority (Core POSIX Features)
 
 1. **Redirections**: Here-documents (`<<`), file descriptor operations (`2>&1`)
-2. **Missing Built-ins**: `set`, `eval`, `exec`, `trap`, `readonly`, `return`
+2. **Missing Built-ins**: `set`, `eval`, `exec`, `readonly`
 3. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
 
 ### Medium Priority
 
 1. **Advanced Expansions**: Extended globbing patterns
 2. **History Features**: History expansion (`!!`), improved line editing
+3. **Performance Optimization**: Further optimize hot paths and memory usage
 
 ### Testing Priorities
 
 - **Edge Case Coverage**: Ensure all error conditions are tested
 - **Integration Testing**: End-to-end workflow validation
 - **Performance Testing**: Verify no regressions in execution speed
+- **Regression Testing**: Maintain comprehensive test coverage for all implemented features
 
 ## Performance Considerations
 
@@ -465,6 +467,9 @@ cargo test lexer
 cargo test parser
 cargo test executor
 cargo test builtins
+cargo test state
+cargo test completion
+cargo test integration
 
 # Run with output capture
 cargo test -- --nocapture
@@ -503,9 +508,10 @@ cargo run -- script.sh arg1 arg2
 
 ### **External Dependencies**
 
-- `rustyline`: Interactive line editing and history
-- `nix`: Unix system interactions
-- `glob`: Pattern matching for case statements
-- `clap`: Command-line argument parsing
+- `rustyline`: Interactive line editing and history with signal handling support
+- `signal-hook`: Robust signal handling (SIGINT, SIGTERM)
+- `glob`: Pattern matching for case statements and wildcard expansion
+- `clap`: Command-line argument parsing with derive macros
+- `lazy_static`: Global state management in tab completion
 
 This guide serves as a comprehensive reference for AI agents working on the Rush shell project. The modular architecture and extensive test coverage make it an excellent platform for learning systems programming in Rust while contributing to a real-world POSIX shell implementation.
