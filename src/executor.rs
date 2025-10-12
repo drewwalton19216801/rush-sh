@@ -1389,8 +1389,33 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                 // Use reader for next command's stdin
                 previous_stdout = Some(Stdio::from(reader));
             } else {
-                // Last command: no need to pipe output
-                exit_code = crate::builtins::execute_builtin(&temp_cmd, shell_state, None);
+                // Last command: check if we're capturing output
+                if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
+                    // Create a writer that writes to our capture buffer
+                    struct CaptureWriter {
+                        buffer: Rc<RefCell<Vec<u8>>>,
+                    }
+                    impl std::io::Write for CaptureWriter {
+                        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                            self.buffer.borrow_mut().extend_from_slice(buf);
+                            Ok(buf.len())
+                        }
+                        fn flush(&mut self) -> std::io::Result<()> {
+                            Ok(())
+                        }
+                    }
+                    let writer = CaptureWriter {
+                        buffer: capture_buffer.clone(),
+                    };
+                    exit_code = crate::builtins::execute_builtin(
+                        &temp_cmd,
+                        shell_state,
+                        Some(Box::new(writer)),
+                    );
+                } else {
+                    // Not capturing, execute normally
+                    exit_code = crate::builtins::execute_builtin(&temp_cmd, shell_state, None);
+                }
                 previous_stdout = None;
             }
         } else {
