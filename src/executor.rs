@@ -2176,7 +2176,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
-            fd_redirections: vec![FdRedirection::Duplicate {
+            fd_redirections: vec![FdRedirection::DuplicateOutput {
                 source_fd: 2,
                 target_fd: 1,
             }],
@@ -2286,7 +2286,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
-            fd_redirections: vec![FdRedirection::Duplicate {
+            fd_redirections: vec![FdRedirection::DuplicateOutput {
                 source_fd: 2,
                 target_fd: 1,
             }],
@@ -2368,7 +2368,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
-            fd_redirections: vec![FdRedirection::Duplicate {
+            fd_redirections: vec![FdRedirection::DuplicateOutput {
                 source_fd: 2,
                 target_fd: 1,
             }],

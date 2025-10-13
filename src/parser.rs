@@ -60,8 +60,10 @@ pub enum FdRedirection {
     AppendToFile { fd: u32, filename: String },
     /// Redirect FD from file (N<file)
     FromFile { fd: u32, filename: String },
-    /// Duplicate FD (N>&M or N<&M)
-    Duplicate { source_fd: u32, target_fd: u32 },
+    /// Duplicate output FD (N>&M) - make FD N point to where FD M points for writing
+    DuplicateOutput { source_fd: u32, target_fd: u32 },
+    /// Duplicate input FD (N<&M) - make FD N point to where FD M points for reading
+    DuplicateInput { source_fd: u32, target_fd: u32 },
     /// Close FD (N>&- or N<&-)
     Close { fd: u32 },
 }
@@ -694,9 +696,19 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     filename: filename.clone(),
                 });
             }
-            Token::RedirFdDup(source_fd, target) => {
+            Token::RedirFdDupOutput(source_fd, target) => {
                 if let Ok(target_fd) = target.parse::<u32>() {
-                    current_cmd.fd_redirections.push(FdRedirection::Duplicate {
+                    current_cmd.fd_redirections.push(FdRedirection::DuplicateOutput {
+                        source_fd: *source_fd,
+                        target_fd,
+                    });
+                } else {
+                    return Err(format!("Invalid target file descriptor: {}", target));
+                }
+            }
+            Token::RedirFdDupInput(source_fd, target) => {
+                if let Ok(target_fd) = target.parse::<u32>() {
+                    current_cmd.fd_redirections.push(FdRedirection::DuplicateInput {
                         source_fd: *source_fd,
                         target_fd,
                     });
@@ -1951,10 +1963,10 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_fd_duplication() {
+    fn test_parse_fd_duplication_output() {
         let tokens = vec![
             Token::Word("command".to_string()),
-            Token::RedirFdDup(2, "1".to_string()),
+            Token::RedirFdDupOutput(2, "1".to_string()),
         ];
         let result = parse(tokens).unwrap();
         assert_eq!(
@@ -1967,9 +1979,34 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
-                fd_redirections: vec![FdRedirection::Duplicate {
+                fd_redirections: vec![FdRedirection::DuplicateOutput {
                     source_fd: 2,
                     target_fd: 1
+                }],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_duplication_input() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirFdDupInput(0, "3".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![FdRedirection::DuplicateInput {
+                    source_fd: 0,
+                    target_fd: 3
                 }],
             }])
         );
@@ -2003,7 +2040,7 @@ mod tests {
             Token::Word("command".to_string()),
             Token::RedirOut,
             Token::Word("output.txt".to_string()),
-            Token::RedirFdDup(2, "1".to_string()),
+            Token::RedirFdDupOutput(2, "1".to_string()),
         ];
         let result = parse(tokens).unwrap();
         assert_eq!(
@@ -2016,7 +2053,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
-                fd_redirections: vec![FdRedirection::Duplicate {
+                fd_redirections: vec![FdRedirection::DuplicateOutput {
                     source_fd: 2,
                     target_fd: 1
                 }],

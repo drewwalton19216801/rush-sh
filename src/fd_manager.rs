@@ -154,8 +154,8 @@ impl FdManager {
                         
                         std::mem::forget(file);
                     }
-                    FdRedirection::Duplicate { source_fd, target_fd } => {
-                        // Shell syntax N>&M means "make FD N point to where FD M points"
+                    FdRedirection::DuplicateOutput { source_fd, target_fd } => {
+                        // Shell syntax N>&M means "make FD N point to where FD M points for writing"
                         // In dup2 terms: dup2(M, N) - duplicate target_fd to source_fd
                         unsafe {
                             let source = OwnedFd::from_raw_fd(*target_fd as RawFd);
@@ -167,7 +167,24 @@ impl FdManager {
                         }
                             .map_err(|e| io::Error::new(
                                 io::ErrorKind::Other,
-                                format!("Failed to duplicate FD {} to {}: {}", target_fd, source_fd, e)
+                                format!("Failed to duplicate output FD {} to {}: {}", target_fd, source_fd, e)
+                            ))?;
+                    }
+                    FdRedirection::DuplicateInput { source_fd, target_fd } => {
+                        // Shell syntax N<&M means "make FD N point to where FD M points for reading"
+                        // In dup2 terms: dup2(M, N) - duplicate target_fd to source_fd
+                        // The semantics are the same as output duplication at the syscall level
+                        unsafe {
+                            let source = OwnedFd::from_raw_fd(*target_fd as RawFd);
+                            let mut target = OwnedFd::from_raw_fd(*source_fd as RawFd);
+                            let result = dup2(&source, &mut target);
+                            std::mem::forget(source); // Don't close the source FD
+                            std::mem::forget(target); // Don't close the target FD
+                            result
+                        }
+                            .map_err(|e| io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("Failed to duplicate input FD {} to {}: {}", target_fd, source_fd, e)
                             ))?;
                     }
                     FdRedirection::Close { fd } => {
@@ -255,10 +272,10 @@ impl FdManager {
                     
                     self.opened_fds.insert(*fd as RawFd, file);
                 }
-                FdRedirection::Duplicate { source_fd, target_fd } => {
+                FdRedirection::DuplicateOutput { source_fd, target_fd } => {
                     self.save_fd(*source_fd as RawFd)?;
                     
-                    // Shell syntax N>&M means "make FD N point to where FD M points"
+                    // Shell syntax N>&M means "make FD N point to where FD M points for writing"
                     // In dup2 terms: dup2(M, N) - duplicate target_fd to source_fd
                     unsafe {
                         let source = OwnedFd::from_raw_fd(*target_fd as RawFd);
@@ -268,7 +285,23 @@ impl FdManager {
                         std::mem::forget(target); // Don't close the target FD
                         result
                     }
-                        .map_err(|e| format!("Failed to duplicate FD {} to {}: {}", target_fd, source_fd, e))?;
+                        .map_err(|e| format!("Failed to duplicate output FD {} to {}: {}", target_fd, source_fd, e))?;
+                }
+                FdRedirection::DuplicateInput { source_fd, target_fd } => {
+                    self.save_fd(*source_fd as RawFd)?;
+                    
+                    // Shell syntax N<&M means "make FD N point to where FD M points for reading"
+                    // In dup2 terms: dup2(M, N) - duplicate target_fd to source_fd
+                    // The semantics are the same as output duplication at the syscall level
+                    unsafe {
+                        let source = OwnedFd::from_raw_fd(*target_fd as RawFd);
+                        let mut target = OwnedFd::from_raw_fd(*source_fd as RawFd);
+                        let result = dup2(&source, &mut target);
+                        std::mem::forget(source); // Don't close the source FD
+                        std::mem::forget(target); // Don't close the target FD
+                        result
+                    }
+                        .map_err(|e| format!("Failed to duplicate input FD {} to {}: {}", target_fd, source_fd, e))?;
                 }
                 FdRedirection::Close { fd } => {
                     self.save_fd(*fd as RawFd)?;
@@ -425,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fd_duplication() {
+    fn test_fd_duplication_output() {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -439,8 +472,8 @@ mod tests {
                 fd: 3,
                 filename: temp_file.clone(),
             },
-            // Shell syntax 4>&3 means "make FD 4 point to where FD 3 points"
-            FdRedirection::Duplicate {
+            // Shell syntax 4>&3 means "make FD 4 point to where FD 3 points for writing"
+            FdRedirection::DuplicateOutput {
                 source_fd: 4,
                 target_fd: 3,
             },

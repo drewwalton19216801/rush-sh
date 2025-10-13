@@ -16,7 +16,8 @@ pub enum Token {
     RedirFdOut(u32, String),    // File descriptor output: N>file or N>>file (fd, filename)
     RedirFdAppend(u32, String), // File descriptor append: N>>file (fd, filename)
     RedirFdIn(u32, String),     // File descriptor input: N<file (fd, filename)
-    RedirFdDup(u32, String),    // Duplicate file descriptor: N>&M or N<&M (source_fd, target)
+    RedirFdDupOutput(u32, String), // Duplicate output file descriptor: N>&M (source_fd, target)
+    RedirFdDupInput(u32, String),  // Duplicate input file descriptor: N<&M (source_fd, target)
     RedirFdClose(u32),          // Close file descriptor: N>&- or N<&- (fd)
     If,
     Then,
@@ -656,11 +657,11 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
 
                         if !target.is_empty() {
-                            // This is fd duplication (N>&M) or close (N>&-)
+                            // This is output fd duplication (N>&M) or close (N>&-)
                             if target == "-" {
                                 tokens.push(Token::RedirFdClose(fd));
                             } else {
-                                tokens.push(Token::RedirFdDup(fd, target));
+                                tokens.push(Token::RedirFdDupOutput(fd, target));
                             }
                         } else {
                             // Invalid syntax, treat as error
@@ -782,11 +783,11 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
 
                         if !target.is_empty() {
-                            // This is fd duplication (N<&M) or close (N<&-)
+                            // This is input fd duplication (N<&M) or close (N<&-)
                             if target == "-" {
                                 tokens.push(Token::RedirFdClose(fd));
                             } else {
-                                tokens.push(Token::RedirFdDup(fd, target));
+                                tokens.push(Token::RedirFdDupInput(fd, target));
                             }
                         } else {
                             // Invalid syntax
@@ -2168,7 +2169,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirFdDup(2, "1".to_string())
+                Token::RedirFdDupOutput(2, "1".to_string())
             ]
         );
     }
@@ -2207,7 +2208,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirFdDup(0, "3".to_string())
+                Token::RedirFdDupInput(0, "3".to_string())
             ]
         );
     }
@@ -2236,7 +2237,7 @@ mod tests {
                 Token::Word("command".to_string()),
                 Token::RedirOut,
                 Token::Word("output.txt".to_string()),
-                Token::RedirFdDup(2, "1".to_string())
+                Token::RedirFdDupOutput(2, "1".to_string())
             ]
         );
     }
@@ -2287,7 +2288,7 @@ mod tests {
                 Token::Word("command".to_string()),
                 Token::RedirOut,
                 Token::Word("/tmp/file".to_string()),
-                Token::RedirFdDup(2, "1".to_string())
+                Token::RedirFdDupOutput(2, "1".to_string())
             ]
         );
     }

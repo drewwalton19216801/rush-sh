@@ -59,8 +59,11 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Append redirection (>>)
 - ✅ Here-document (<<)
 - ✅ Here-string (<<<)
-- ❌ File descriptor duplication (>&, <&)
-- ❌ Redirections to specific file descriptors (2>, etc.)
+- ✅ File descriptor duplication (>&, <&) - **IMPROVED: Now distinguishes input vs output duplication**
+- ✅ Redirections to specific file descriptors (2>, 3>, etc.)
+- ✅ FD closing (N>&-, N<&-)
+- ⚠️ Pipeline FD inheritance (needs implementation)
+- ⚠️ Redirection order semantics (needs verification)
 
 ### 1.8 Exit Status and Errors
 
@@ -274,7 +277,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions implemented)
 - **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
-- **Redirections**: 75% ✅ (Basic I/O redirection, here-documents, and here-strings implemented; file descriptor operations missing)
+- **Redirections**: 85% ✅ (Basic I/O redirection, here-documents, here-strings, and FD operations implemented; pipeline FD inheritance and order semantics need work)
 - **Job Control**: 0% ❌ (optional POSIX feature)
 - **Advanced Features**: 40% ⚠️ (Configuration, colors, completion implemented)
 
