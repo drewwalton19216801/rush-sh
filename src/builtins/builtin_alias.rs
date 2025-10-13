@@ -75,6 +75,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
+            fd_redirections: vec![],
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = AliasBuiltin;
@@ -94,6 +95,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
+            fd_redirections: vec![],
         };
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("ll", "ls -l".to_string());
@@ -113,6 +115,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
+            fd_redirections: vec![],
         };
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("ll", "ls -l".to_string());
@@ -132,6 +135,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
+            fd_redirections: vec![],
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = AliasBuiltin;

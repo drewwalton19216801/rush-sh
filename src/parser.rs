@@ -51,6 +51,21 @@ pub enum Ast {
     },
 }
 
+/// Represents a file descriptor redirection operation
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FdRedirection {
+    /// Redirect FD to file (N>file)
+    ToFile { fd: u32, filename: String },
+    /// Append FD to file (N>>file)
+    AppendToFile { fd: u32, filename: String },
+    /// Redirect FD from file (N<file)
+    FromFile { fd: u32, filename: String },
+    /// Duplicate FD (N>&M or N<&M)
+    Duplicate { source_fd: u32, target_fd: u32 },
+    /// Close FD (N>&- or N<&-)
+    Close { fd: u32 },
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShellCommand {
     pub args: Vec<String>,
@@ -60,6 +75,7 @@ pub struct ShellCommand {
     pub here_doc_delimiter: Option<String>, // For here-document redirection
     pub here_doc_quoted: bool, // True if heredoc delimiter was quoted (disables expansion)
     pub here_string_content: Option<String>, // For here-string redirection
+    pub fd_redirections: Vec<FdRedirection>, // File descriptor redirections
 }
 
 /// Helper function to validate if a string is a valid variable name.
@@ -83,6 +99,7 @@ fn create_empty_body_ast() -> Ast {
         here_doc_delimiter: None,
         here_doc_quoted: false,
         here_string_content: None,
+        fd_redirections: vec![],
     }])
 }
 
@@ -656,6 +673,41 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             }
             Token::RedirHereString(content) => {
                 current_cmd.here_string_content = Some(content.clone());
+            }
+            Token::RedirFdOut(fd, filename) => {
+                current_cmd.fd_redirections.push(FdRedirection::ToFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+            }
+            Token::RedirFdAppend(fd, filename) => {
+                current_cmd
+                    .fd_redirections
+                    .push(FdRedirection::AppendToFile {
+                        fd: *fd,
+                        filename: filename.clone(),
+                    });
+            }
+            Token::RedirFdIn(fd, filename) => {
+                current_cmd.fd_redirections.push(FdRedirection::FromFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+            }
+            Token::RedirFdDup(source_fd, target) => {
+                if let Ok(target_fd) = target.parse::<u32>() {
+                    current_cmd.fd_redirections.push(FdRedirection::Duplicate {
+                        source_fd: *source_fd,
+                        target_fd,
+                    });
+                } else {
+                    return Err(format!("Invalid target file descriptor: {}", target));
+                }
+            }
+            Token::RedirFdClose(fd) => {
+                current_cmd
+                    .fd_redirections
+                    .push(FdRedirection::Close { fd: *fd });
             }
             Token::RightParen => {
                 // Check if this looks like a function call pattern: Word LeftParen ... RightParen
@@ -1327,6 +1379,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1348,6 +1401,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1372,6 +1426,7 @@ mod tests {
                     here_doc_delimiter: None,
                     here_doc_quoted: false,
                     here_string_content: None,
+                    fd_redirections: vec![],
                 },
                 ShellCommand {
                     args: vec!["grep".to_string(), "txt".to_string()],
@@ -1381,6 +1436,7 @@ mod tests {
                     here_doc_delimiter: None,
                     here_doc_quoted: false,
                     here_string_content: None,
+                    fd_redirections: vec![],
                 }
             ])
         );
@@ -1404,6 +1460,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1427,6 +1484,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1450,6 +1508,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1480,6 +1539,7 @@ mod tests {
                     here_doc_delimiter: None,
                     here_doc_quoted: false,
                     here_string_content: None,
+                    fd_redirections: vec![],
                 },
                 ShellCommand {
                     args: vec!["grep".to_string(), "pattern".to_string()],
@@ -1489,6 +1549,7 @@ mod tests {
                     here_doc_delimiter: None,
                     here_doc_quoted: false,
                     here_string_content: None,
+                    fd_redirections: vec![],
                 },
                 ShellCommand {
                     args: vec!["sort".to_string()],
@@ -1498,6 +1559,7 @@ mod tests {
                     here_doc_delimiter: None,
                     here_doc_quoted: false,
                     here_string_content: None,
+                    fd_redirections: vec![],
                 }
             ])
         );
@@ -1534,6 +1596,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1558,6 +1621,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1808,6 +1872,7 @@ mod tests {
                 here_doc_delimiter: Some("EOF".to_string()),
                 here_doc_quoted: false,
                 here_string_content: None,
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1829,6 +1894,7 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: Some("pattern".to_string()),
+                fd_redirections: vec![],
             }])
         );
     }
@@ -1854,6 +1920,106 @@ mod tests {
                 here_doc_delimiter: None,
                 here_doc_quoted: false,
                 here_string_content: Some("fallback".to_string()),
+                fd_redirections: vec![],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_output_redirection() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirFdOut(2, "error.log".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![FdRedirection::ToFile {
+                    fd: 2,
+                    filename: "error.log".to_string()
+                }],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_duplication() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirFdDup(2, "1".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![FdRedirection::Duplicate {
+                    source_fd: 2,
+                    target_fd: 1
+                }],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_close() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirFdClose(2),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![FdRedirection::Close { fd: 2 }],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_fd_redirections() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirOut,
+            Token::Word("output.txt".to_string()),
+            Token::RedirFdDup(2, "1".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                input: None,
+                output: Some("output.txt".to_string()),
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![FdRedirection::Duplicate {
+                    source_fd: 2,
+                    target_fd: 1
+                }],
             }])
         );
     }

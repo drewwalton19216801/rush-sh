@@ -13,6 +13,11 @@ pub enum Token {
     RedirAppend,
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
     RedirHereString(String),    // Here-string: <<<"content"
+    RedirFdOut(u32, String),    // File descriptor output: N>file or N>>file (fd, filename)
+    RedirFdAppend(u32, String), // File descriptor append: N>>file (fd, filename)
+    RedirFdIn(u32, String),     // File descriptor input: N<file (fd, filename)
+    RedirFdDup(u32, String),    // Duplicate file descriptor: N>&M or N<&M (source_fd, target)
+    RedirFdClose(u32),          // Close file descriptor: N>&- or N<&- (fd)
     If,
     Then,
     Else,
@@ -590,24 +595,44 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '>' if !in_double_quote && !in_single_quote => {
-                // Check if this is a file descriptor redirection like 2>&1
+                // Check if this is a file descriptor redirection like 2>&1 or 2>file
                 // Look back to see if current ends with a digit
-                let is_fd_redirect = if !current.is_empty() {
-                    current
-                        .chars()
-                        .last()
-                        .map(|c| c.is_ascii_digit())
-                        .unwrap_or(false)
+                let fd_num = if !current.is_empty() {
+                    let last_char = current.chars().last().unwrap();
+                    if last_char.is_ascii_digit() {
+                        // Extract the file descriptor number
+                        let mut fd_str = String::new();
+                        let mut temp_current = current.clone();
+                        while let Some(ch) = temp_current.pop() {
+                            if ch.is_ascii_digit() {
+                                fd_str.insert(0, ch);
+                            } else {
+                                temp_current.push(ch);
+                                break;
+                            }
+                        }
+                        if !fd_str.is_empty() {
+                            current = temp_current;
+                            Some(fd_str.parse::<u32>().unwrap())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
                 } else {
-                    false
+                    None
                 };
 
-                if is_fd_redirect {
-                    // This might be a file descriptor redirection like 2>&1
-                    chars.next(); // consume >
+                chars.next(); // consume >
+
+                if let Some(fd) = fd_num {
+                    // This is a file descriptor redirection
+                    flush_current_token(&mut current, &mut tokens);
+
                     if let Some(&'&') = chars.peek() {
                         chars.next(); // consume &
-                        // Now collect the target fd or '-'
+                        // Collect the target fd or '-'
                         let mut target = String::new();
                         while let Some(&ch) = chars.peek() {
                             if ch.is_ascii_digit() || ch == '-' {
@@ -619,41 +644,71 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
 
                         if !target.is_empty() {
-                            // This is a valid fd redirection like 2>&1 or 2>&-
-                            // Remove the trailing digit from current (the fd number)
-                            current.pop();
-
-                            // Push any remaining content as a token
-                            flush_current_token(&mut current, &mut tokens);
-
-                            // For now, we'll just skip the fd redirection (treat as no-op)
-                            // since we don't fully support it, but we won't treat it as an error
-                            continue;
-                        } else {
-                            // Invalid syntax, put back what we consumed
-                            current.push('>');
-                            current.push('&');
-                        }
-                    } else {
-                        // Not a fd redirection, handle as normal redirect
-                        // Put the > back into processing
-                        flush_current_token(&mut current, &mut tokens);
-
-                        if let Some(&next_ch) = chars.peek() {
-                            if next_ch == '>' {
-                                chars.next();
-                                tokens.push(Token::RedirAppend);
+                            // This is fd duplication (N>&M) or close (N>&-)
+                            if target == "-" {
+                                tokens.push(Token::RedirFdClose(fd));
                             } else {
-                                tokens.push(Token::RedirOut);
+                                tokens.push(Token::RedirFdDup(fd, target));
                             }
                         } else {
-                            tokens.push(Token::RedirOut);
+                            // Invalid syntax, treat as error
+                            return Err(format!("Invalid file descriptor redirection: {}>&", fd));
+                        }
+                    } else if let Some(&'>') = chars.peek() {
+                        // This is append redirection (N>>file)
+                        chars.next(); // consume second >
+                        skip_whitespace(&mut chars);
+
+                        // Collect filename
+                        let mut filename = String::new();
+                        while let Some(&ch) = chars.peek() {
+                            if ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                            {
+                                break;
+                            }
+                            filename.push(ch);
+                            chars.next();
+                        }
+
+                        if !filename.is_empty() {
+                            tokens.push(Token::RedirFdAppend(fd, filename));
+                        } else {
+                            return Err(format!("Missing filename after {}>>", fd));
+                        }
+                    } else {
+                        // This is output redirection (N>file)
+                        skip_whitespace(&mut chars);
+
+                        // Collect filename
+                        let mut filename = String::new();
+                        while let Some(&ch) = chars.peek() {
+                            if ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                            {
+                                break;
+                            }
+                            filename.push(ch);
+                            chars.next();
+                        }
+
+                        if !filename.is_empty() {
+                            tokens.push(Token::RedirFdOut(fd, filename));
+                        } else {
+                            return Err(format!("Missing filename after {}>", fd));
                         }
                     }
                 } else {
-                    // Normal redirection
+                    // Normal redirection (no fd specified)
                     flush_current_token(&mut current, &mut tokens);
-                    chars.next();
                     if let Some(&next_ch) = chars.peek() {
                         if next_ch == '>' {
                             chars.next();
@@ -667,87 +722,177 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '<' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
-                chars.next(); // consume <
-                if let Some(&'<') = chars.peek() {
-                    // Check for here-string <<<
-                    chars.next(); // consume second <
-                    if let Some(&'<') = chars.peek() {
-                        chars.next(); // consume third <
-                        // Here-string: skip whitespace, then collect content
-                        skip_whitespace(&mut chars);
-
-                        let mut content = String::new();
-                        let mut in_quote = false;
-                        let mut quote_char = ' ';
-
-                        while let Some(&ch) = chars.peek() {
-                            if ch == '\n' && !in_quote {
-                                break;
-                            }
-                            if (ch == '"' || ch == '\'') && !in_quote {
-                                in_quote = true;
-                                quote_char = ch;
-                                chars.next(); // consume quote but don't add to content
-                            } else if in_quote && ch == quote_char {
-                                in_quote = false;
-                                chars.next(); // consume quote but don't add to content
-                            } else if !in_quote && (ch == ' ' || ch == '\t') {
-                                break;
+                // Check if this is a file descriptor input redirection like 0<file or 0<&1
+                let fd_num = if !current.is_empty() {
+                    let last_char = current.chars().last().unwrap();
+                    if last_char.is_ascii_digit() {
+                        // Extract the file descriptor number
+                        let mut fd_str = String::new();
+                        let mut temp_current = current.clone();
+                        while let Some(ch) = temp_current.pop() {
+                            if ch.is_ascii_digit() {
+                                fd_str.insert(0, ch);
                             } else {
-                                content.push(ch);
-                                chars.next();
+                                temp_current.push(ch);
+                                break;
                             }
                         }
-
-                        if !content.is_empty() {
-                            tokens.push(Token::RedirHereString(content));
+                        if !fd_str.is_empty() {
+                            current = temp_current;
+                            Some(fd_str.parse::<u32>().unwrap())
                         } else {
-                            return Err("Invalid here-string syntax: expected content after <<<"
-                                .to_string());
+                            None
                         }
                     } else {
-                        // Here-document: skip whitespace, then collect delimiter
-                        skip_whitespace(&mut chars);
+                        None
+                    }
+                } else {
+                    None
+                };
 
-                        let mut delimiter = String::new();
-                        let mut in_quote = false;
-                        let mut quote_char = ' ';
-                        let mut was_quoted = false; // Track if any quotes were found
+                chars.next(); // consume <
 
+                if let Some(fd) = fd_num {
+                    // This is a file descriptor input redirection
+                    flush_current_token(&mut current, &mut tokens);
+
+                    if let Some(&'&') = chars.peek() {
+                        chars.next(); // consume &
+                        // Collect the target fd or '-'
+                        let mut target = String::new();
                         while let Some(&ch) = chars.peek() {
-                            if ch == '\n' && !in_quote {
-                                break;
-                            }
-                            if (ch == '"' || ch == '\'') && !in_quote {
-                                in_quote = true;
-                                quote_char = ch;
-                                was_quoted = true; // Mark that we found a quote
-                                chars.next(); // consume quote but don't add to delimiter
-                            } else if in_quote && ch == quote_char {
-                                in_quote = false;
-                                chars.next(); // consume quote but don't add to delimiter
-                            } else if !in_quote && (ch == ' ' || ch == '\t') {
-                                break;
-                            } else {
-                                delimiter.push(ch);
+                            if ch.is_ascii_digit() || ch == '-' {
+                                target.push(ch);
                                 chars.next();
+                            } else {
+                                break;
                             }
                         }
 
-                        if !delimiter.is_empty() {
-                            // Pass both delimiter and whether it was quoted
-                            tokens.push(Token::RedirHereDoc(delimiter, was_quoted));
+                        if !target.is_empty() {
+                            // This is fd duplication (N<&M) or close (N<&-)
+                            if target == "-" {
+                                tokens.push(Token::RedirFdClose(fd));
+                            } else {
+                                tokens.push(Token::RedirFdDup(fd, target));
+                            }
                         } else {
-                            return Err(
-                                "Invalid here-document syntax: expected delimiter after <<"
-                                    .to_string(),
-                            );
+                            // Invalid syntax
+                            return Err(format!("Invalid file descriptor redirection: {}<&", fd));
+                        }
+                    } else {
+                        // This is input redirection (N<file)
+                        skip_whitespace(&mut chars);
+
+                        // Collect filename
+                        let mut filename = String::new();
+                        while let Some(&ch) = chars.peek() {
+                            if ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                                || ch == '<'
+                                || ch == '>'
+                            {
+                                break;
+                            }
+                            filename.push(ch);
+                            chars.next();
+                        }
+
+                        if !filename.is_empty() {
+                            tokens.push(Token::RedirFdIn(fd, filename));
+                        } else {
+                            return Err(format!("Missing filename after {}<", fd));
                         }
                     }
                 } else {
-                    // Regular input redirection
-                    tokens.push(Token::RedirIn);
+                    // Normal input redirection or here-doc/here-string
+                    flush_current_token(&mut current, &mut tokens);
+                    if let Some(&'<') = chars.peek() {
+                        // Check for here-string <<<
+                        chars.next(); // consume second <
+                        if let Some(&'<') = chars.peek() {
+                            chars.next(); // consume third <
+                            // Here-string: skip whitespace, then collect content
+                            skip_whitespace(&mut chars);
+
+                            let mut content = String::new();
+                            let mut in_quote = false;
+                            let mut quote_char = ' ';
+
+                            while let Some(&ch) = chars.peek() {
+                                if ch == '\n' && !in_quote {
+                                    break;
+                                }
+                                if (ch == '"' || ch == '\'') && !in_quote {
+                                    in_quote = true;
+                                    quote_char = ch;
+                                    chars.next(); // consume quote but don't add to content
+                                } else if in_quote && ch == quote_char {
+                                    in_quote = false;
+                                    chars.next(); // consume quote but don't add to content
+                                } else if !in_quote && (ch == ' ' || ch == '\t') {
+                                    break;
+                                } else {
+                                    content.push(ch);
+                                    chars.next();
+                                }
+                            }
+
+                            if !content.is_empty() {
+                                tokens.push(Token::RedirHereString(content));
+                            } else {
+                                return Err(
+                                    "Invalid here-string syntax: expected content after <<<"
+                                        .to_string(),
+                                );
+                            }
+                        } else {
+                            // Here-document: skip whitespace, then collect delimiter
+                            skip_whitespace(&mut chars);
+
+                            let mut delimiter = String::new();
+                            let mut in_quote = false;
+                            let mut quote_char = ' ';
+                            let mut was_quoted = false; // Track if any quotes were found
+
+                            while let Some(&ch) = chars.peek() {
+                                if ch == '\n' && !in_quote {
+                                    break;
+                                }
+                                if (ch == '"' || ch == '\'') && !in_quote {
+                                    in_quote = true;
+                                    quote_char = ch;
+                                    was_quoted = true; // Mark that we found a quote
+                                    chars.next(); // consume quote but don't add to delimiter
+                                } else if in_quote && ch == quote_char {
+                                    in_quote = false;
+                                    chars.next(); // consume quote but don't add to delimiter
+                                } else if !in_quote && (ch == ' ' || ch == '\t') {
+                                    break;
+                                } else {
+                                    delimiter.push(ch);
+                                    chars.next();
+                                }
+                            }
+
+                            if !delimiter.is_empty() {
+                                // Pass both delimiter and whether it was quoted
+                                tokens.push(Token::RedirHereDoc(delimiter, was_quoted));
+                            } else {
+                                return Err(
+                                    "Invalid here-document syntax: expected delimiter after <<"
+                                        .to_string(),
+                                );
+                            }
+                        }
+                    } else {
+                        // Regular input redirection
+                        tokens.push(Token::RedirIn);
+                    }
                 }
             }
             ')' if !in_double_quote && !in_single_quote => {
@@ -1973,6 +2118,113 @@ mod tests {
             vec![
                 Token::Word("grep".to_string()),
                 Token::RedirHereString("pattern".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_output_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>error.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(2, "error.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_append_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>>error.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdAppend(2, "error.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_output() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdDup(2, "1".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_close() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdClose(2)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_input_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command 0<input.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdIn(0, "input.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_input() {
+        let shell_state = ShellState::new();
+        let result = lex("command 0<&3", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdDup(0, "3".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multiple_fd_redirections() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>error.log 1>output.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(2, "error.log".to_string()),
+                Token::RedirFdOut(1, "output.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_redirection_with_normal_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command >output.txt 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string()),
+                Token::RedirFdDup(2, "1".to_string())
             ]
         );
     }

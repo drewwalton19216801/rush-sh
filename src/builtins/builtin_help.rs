@@ -87,6 +87,7 @@ mod tests {
             here_doc_delimiter: None,
             here_doc_quoted: false,
             here_string_content: None,
+            fd_redirections: vec![],
         };
         let mut shell_state = ShellState::new();
         let builtin = HelpBuiltin;
