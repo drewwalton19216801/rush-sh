@@ -298,6 +298,45 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             }
             result
         }
+        Ast::CommandGroup { body, redirections } => {
+            let mut result = format!("{{ {}; }}", format_ast_body(body, 0).trim());
+            // Format redirections if present
+            for redir in redirections {
+                match redir {
+                    crate::parser::FdRedirection::ToFile { fd, filename } => {
+                        if *fd == 1 {
+                            result.push_str(&format!(" >{}", filename));
+                        } else {
+                            result.push_str(&format!(" {}>{}", fd, filename));
+                        }
+                    }
+                    crate::parser::FdRedirection::AppendToFile { fd, filename } => {
+                        if *fd == 1 {
+                            result.push_str(&format!(" >>{}", filename));
+                        } else {
+                            result.push_str(&format!(" {}>>{}", fd, filename));
+                        }
+                    }
+                    crate::parser::FdRedirection::FromFile { fd, filename } => {
+                        if *fd == 0 {
+                            result.push_str(&format!(" <{}", filename));
+                        } else {
+                            result.push_str(&format!(" {}<{}", fd, filename));
+                        }
+                    }
+                    crate::parser::FdRedirection::DuplicateOutput { source_fd, target_fd } => {
+                        result.push_str(&format!(" {}>&{}", source_fd, target_fd));
+                    }
+                    crate::parser::FdRedirection::DuplicateInput { source_fd, target_fd } => {
+                        result.push_str(&format!(" {}<&{}", source_fd, target_fd));
+                    }
+                    crate::parser::FdRedirection::Close { fd } => {
+                        result.push_str(&format!(" {}>&-", fd));
+                    }
+                }
+            }
+            result
+        }
     }
 }
 

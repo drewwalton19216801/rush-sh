@@ -1145,7 +1145,83 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             shell_state.set_last_exit_code(exit_code);
             exit_code
         }
+        Ast::CommandGroup { body, redirections } => {
+            let exit_code = execute_command_group(*body, redirections, shell_state);
+            shell_state.set_last_exit_code(exit_code);
+            exit_code
+        }
     }
+}
+
+/// Execute a command group in the current shell
+/// This provides no process isolation - variable changes affect the parent shell
+/// Redirections apply to the entire group
+fn execute_command_group(
+    body: Ast,
+    redirections: Vec<FdRedirection>,
+    shell_state: &mut ShellState,
+) -> i32 {
+    // Command groups execute in current shell (no fork)
+    // But redirections apply to the entire group
+    
+    if redirections.is_empty() {
+        // No redirections - simple case
+        return execute(body, shell_state);
+    }
+    
+    // Expand variables in redirection filenames
+    let expanded_redirections: Vec<FdRedirection> = redirections
+        .iter()
+        .map(|redir| match redir {
+            FdRedirection::ToFile { fd, filename } => FdRedirection::ToFile {
+                fd: *fd,
+                filename: expand_variables_in_string(filename, shell_state),
+            },
+            FdRedirection::AppendToFile { fd, filename } => FdRedirection::AppendToFile {
+                fd: *fd,
+                filename: expand_variables_in_string(filename, shell_state),
+            },
+            FdRedirection::FromFile { fd, filename } => FdRedirection::FromFile {
+                fd: *fd,
+                filename: expand_variables_in_string(filename, shell_state),
+            },
+            other => other.clone(),
+        })
+        .collect();
+    
+    // Apply redirections with FdManager
+    let mut fd_manager = FdManager::new();
+    fd_manager.prepare_redirections(&expanded_redirections);
+    
+    if let Err(e) = fd_manager.apply_for_builtin() {
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}Command group redirection error: {}\x1b[0m",
+                shell_state.color_scheme.error, e
+            );
+        } else {
+            eprintln!("Command group redirection error: {}", e);
+        }
+        return 1;
+    }
+    
+    // Execute body in current shell
+    let exit_code = execute(body, shell_state);
+    
+    // Restore FDs
+    if let Err(e) = fd_manager.restore() {
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}FD restore error: {}\x1b[0m",
+                shell_state.color_scheme.error, e
+            );
+        } else {
+            eprintln!("FD restore error: {}", e);
+        }
+        return 1;
+    }
+    
+    exit_code
 }
 
 fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
@@ -1868,6 +1944,11 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+    
+    // Mutex to serialize tests that perform file I/O with redirections
+    // This prevents stdout/stderr from other tests leaking into test files
+    static FILE_IO_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_execute_single_command_builtin() {
@@ -3185,5 +3266,293 @@ mod tests {
         // Cleanup
         let _ = std::fs::remove_file(&input_file1);
         let _ = std::fs::remove_file(&input_file2);
+    }
+
+    // ============================================================================
+    // Phase 3: Command Group Executor Tests
+    // ============================================================================
+
+    #[test]
+    fn test_execute_command_group_variable_persistence() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("x", "1".to_string());
+
+        // Execute: { x=2; }
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::Assignment {
+                var: "x".to_string(),
+                value: "2".to_string(),
+            }),
+            redirections: vec![],
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Parent's x should be modified to 2
+        assert_eq!(shell_state.get_var("x"), Some("2".to_string()));
+    }
+
+    #[test]
+    fn test_execute_command_group_no_isolation() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("y", "original".to_string());
+
+        // Execute: { y=modified; echo $y; }
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "y".to_string(),
+                    value: "modified".to_string(),
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["echo".to_string(), "$y".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                    here_doc_delimiter: None,
+                    here_doc_quoted: false,
+                    here_string_content: None,
+                    fd_redirections: vec![],
+                }]),
+            ])),
+            redirections: vec![],
+        };
+
+        execute(ast, &mut shell_state);
+
+        // Variable should persist in parent shell
+        assert_eq!(shell_state.get_var("y"), Some("modified".to_string()));
+    }
+
+    #[test]
+    fn test_execute_command_group_with_redirection() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_cmdgrp_{}.txt", timestamp);
+
+        let mut shell_state = ShellState::new();
+
+        // Execute: { echo line1; echo line2; } >file
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["echo".to_string(), "line1".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                    here_doc_delimiter: None,
+                    here_doc_quoted: false,
+                    here_string_content: None,
+                    fd_redirections: vec![],
+                }]),
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["echo".to_string(), "line2".to_string()],
+                    input: None,
+                    output: None,
+                    append: None,
+                    here_doc_delimiter: None,
+                    here_doc_quoted: false,
+                    here_string_content: None,
+                    fd_redirections: vec![],
+                }]),
+            ])),
+            redirections: vec![FdRedirection::ToFile {
+                fd: 1,
+                filename: temp_file.clone(),
+            }],
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Verify file was created (basic smoke test)
+        // Note: We don't check contents due to potential test interference in parallel execution
+        assert!(std::path::Path::new(&temp_file).exists(), "File should be created");
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_execute_command_group_exit_code() {
+        let mut shell_state = ShellState::new();
+
+        // Execute: { false; }
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["false".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![],
+            }])),
+            redirections: vec![],
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_execute_nested_command_groups() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("z", "0".to_string());
+
+        // Execute: { { z=nested; }; }
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::CommandGroup {
+                body: Box::new(Ast::Assignment {
+                    var: "z".to_string(),
+                    value: "nested".to_string(),
+                }),
+                redirections: vec![],
+            }),
+            redirections: vec![],
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Variable should be modified through nested groups
+        assert_eq!(shell_state.get_var("z"), Some("nested".to_string()));
+    }
+
+    #[test]
+    fn test_execute_command_group_with_fd_redirection() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_cmdgrp_fd_{}.txt", timestamp);
+
+        let mut shell_state = ShellState::new();
+
+        // Execute: { echo test; } 2>&1 >file
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "test".to_string()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![],
+            }])),
+            redirections: vec![
+                FdRedirection::DuplicateOutput {
+                    source_fd: 2,
+                    target_fd: 1,
+                },
+                FdRedirection::ToFile {
+                    fd: 1,
+                    filename: temp_file.clone(),
+                },
+            ],
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Verify file was created
+        assert!(std::path::Path::new(&temp_file).exists());
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_execute_mixed_subshell_command_group() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_mixed_{}.txt", timestamp);
+
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("outer", "unchanged".to_string());
+
+        // Execute: ({ outer=changed; })
+        // Subshell contains command group, so outer var change is isolated
+        let ast = Ast::Subshell {
+            body: Box::new(Ast::CommandGroup {
+                body: Box::new(Ast::Assignment {
+                    var: "outer".to_string(),
+                    value: "changed".to_string(),
+                }),
+                redirections: vec![],
+            }),
+            redirections: vec![FdRedirection::ToFile {
+                fd: 1,
+                filename: temp_file.clone(),
+            }],
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Variable should NOT be changed (subshell isolation)
+        assert_eq!(shell_state.get_var("outer"), Some("unchanged".to_string()));
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_execute_command_group_current_directory() {
+        use std::env;
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_dir = format!("/tmp/rush_test_dir_{}", timestamp);
+
+        // Create temp directory
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let original_dir = env::current_dir().unwrap();
+        let mut shell_state = ShellState::new();
+
+        // Execute: { cd /tmp/rush_test_dir_*; }
+        // cd in command group should affect parent
+        let ast = Ast::CommandGroup {
+            body: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["cd".to_string(), temp_dir.clone()],
+                input: None,
+                output: None,
+                append: None,
+                here_doc_delimiter: None,
+                here_doc_quoted: false,
+                here_string_content: None,
+                fd_redirections: vec![],
+            }])),
+            redirections: vec![],
+        };
+
+        execute(ast, &mut shell_state);
+
+        // Current directory should be changed
+        let current_dir = env::current_dir().unwrap();
+        assert_eq!(current_dir.to_string_lossy(), temp_dir);
+
+        // Restore original directory
+        env::set_current_dir(original_dir).unwrap();
+
+        // Cleanup
+        let _ = std::fs::remove_dir(&temp_dir);
     }
 }

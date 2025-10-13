@@ -55,6 +55,12 @@ pub enum Ast {
         body: Box<Ast>,
         redirections: Vec<FdRedirection>,
     },
+    /// Command grouping {...}
+    /// Executes commands in current shell with shared state
+    CommandGroup {
+        body: Box<Ast>,
+        redirections: Vec<FdRedirection>,
+    },
 }
 
 /// Represents a file descriptor redirection operation
@@ -272,6 +278,11 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         return parse_subshell(tokens);
     }
 
+    // Check if it's a command group: LeftBrace at start
+    if tokens[0] == Token::LeftBrace {
+        return parse_command_group(tokens);
+    }
+
     // Check if it's an assignment
     if tokens.len() == 2 {
         // Check for pattern: VAR= VALUE
@@ -471,6 +482,42 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 i += 1;
             }
             // Continue to collect any redirections after )
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::RedirOut | Token::RedirIn | Token::RedirAppend |
+                    Token::RedirFdOut(..) | Token::RedirFdAppend(..) |
+                    Token::RedirFdIn(..) | Token::RedirFdDupOutput(..) |
+                    Token::RedirFdDupInput(..) | Token::RedirFdClose(..) => {
+                        i += 1;
+                        // Also consume the filename if present for simple redirections
+                        if i < tokens.len() && matches!(tokens[i], Token::Word(_)) {
+                            // Check if previous token needs a filename
+                            match tokens[i - 1] {
+                                Token::RedirOut | Token::RedirIn | Token::RedirAppend => {
+                                    i += 1;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => break,
+                }
+            }
+        }
+        // Check for command group
+        else if tokens[i] == Token::LeftBrace {
+            // Find matching RightBrace
+            let mut depth = 1;
+            i += 1;
+            while i < tokens.len() && depth > 0 {
+                match tokens[i] {
+                    Token::LeftBrace => depth += 1,
+                    Token::RightBrace => depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
+            // Continue to collect any redirections after }
             while i < tokens.len() {
                 match tokens[i] {
                     Token::RedirOut | Token::RedirIn | Token::RedirAppend |
@@ -1558,6 +1605,166 @@ fn parse_subshell(tokens: &[Token]) -> Result<Ast, String> {
     })
 }
 
+/// Parse a command group construct: { commands; }
+/// Handles nested groups and collects redirections after the closing }
+/// POSIX requires semicolon or newline before closing }
+fn parse_command_group(tokens: &[Token]) -> Result<Ast, String> {
+    if tokens.is_empty() || tokens[0] != Token::LeftBrace {
+        return Err("Expected { for command group".to_string());
+    }
+
+    let mut i = 1; // Skip opening {
+    let mut depth = 1;
+    let mut body_tokens = Vec::new();
+
+    // Collect tokens until matching }
+    while i < tokens.len() && depth > 0 {
+        match &tokens[i] {
+            Token::LeftBrace => {
+                depth += 1;
+                body_tokens.push(tokens[i].clone());
+            }
+            Token::RightBrace => {
+                depth -= 1;
+                if depth > 0 {
+                    body_tokens.push(tokens[i].clone());
+                }
+            }
+            _ => {
+                body_tokens.push(tokens[i].clone());
+            }
+        }
+        i += 1;
+    }
+
+    if depth != 0 {
+        return Err("Unmatched { in command group".to_string());
+    }
+
+    // POSIX requires semicolon or newline before closing }
+    // Check the last significant token in body_tokens
+    if !body_tokens.is_empty() {
+        // Find the last non-whitespace token by iterating backwards
+        for token in body_tokens.iter().rev() {
+            match token {
+                Token::Newline | Token::Semicolon => {
+                    // Found a valid terminator, we're good
+                    break;
+                }
+                _ => {
+                    // Found a non-terminator token as the last significant token
+                    // This violates POSIX requirement for semicolon/newline before }
+                    return Err("Command group requires ; or newline before }".to_string());
+                }
+            }
+        }
+    }
+
+    // Parse redirections after the closing }
+    let mut redirections = Vec::new();
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::RedirOut => {
+                i += 1;
+                if i < tokens.len() {
+                    if let Token::Word(filename) = &tokens[i] {
+                        redirections.push(FdRedirection::ToFile {
+                            fd: 1,
+                            filename: filename.clone(),
+                        });
+                        i += 1;
+                    }
+                }
+            }
+            Token::RedirIn => {
+                i += 1;
+                if i < tokens.len() {
+                    if let Token::Word(filename) = &tokens[i] {
+                        redirections.push(FdRedirection::FromFile {
+                            fd: 0,
+                            filename: filename.clone(),
+                        });
+                        i += 1;
+                    }
+                }
+            }
+            Token::RedirAppend => {
+                i += 1;
+                if i < tokens.len() {
+                    if let Token::Word(filename) = &tokens[i] {
+                        redirections.push(FdRedirection::AppendToFile {
+                            fd: 1,
+                            filename: filename.clone(),
+                        });
+                        i += 1;
+                    }
+                }
+            }
+            Token::RedirFdOut(fd, filename) => {
+                redirections.push(FdRedirection::ToFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+                i += 1;
+            }
+            Token::RedirFdAppend(fd, filename) => {
+                redirections.push(FdRedirection::AppendToFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+                i += 1;
+            }
+            Token::RedirFdIn(fd, filename) => {
+                redirections.push(FdRedirection::FromFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+                i += 1;
+            }
+            Token::RedirFdDupOutput(source_fd, target) => {
+                if let Ok(target_fd) = target.parse::<u32>() {
+                    redirections.push(FdRedirection::DuplicateOutput {
+                        source_fd: *source_fd,
+                        target_fd,
+                    });
+                }
+                i += 1;
+            }
+            Token::RedirFdDupInput(source_fd, target) => {
+                if let Ok(target_fd) = target.parse::<u32>() {
+                    redirections.push(FdRedirection::DuplicateInput {
+                        source_fd: *source_fd,
+                        target_fd,
+                    });
+                }
+                i += 1;
+            }
+            Token::RedirFdClose(fd) => {
+                redirections.push(FdRedirection::Close { fd: *fd });
+                i += 1;
+            }
+            Token::Pipe | Token::Semicolon | Token::Newline | Token::And | Token::Or => {
+                break; // End of command group construct
+            }
+            _ => {
+                return Err(format!("Unexpected token after command group: {:?}", tokens[i]));
+            }
+        }
+    }
+
+    // Parse body
+    let body_ast = if body_tokens.is_empty() {
+        create_empty_body_ast()
+    } else {
+        parse_commands_sequentially(&body_tokens)?
+    };
+
+    Ok(Ast::CommandGroup {
+        body: Box::new(body_ast),
+        redirections,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::lexer::Token;
@@ -2440,6 +2647,301 @@ mod tests {
                 assert!(matches!(asts[1], Ast::Pipeline(_)));
             }
             _ => panic!("Expected Sequence AST"),
+        }
+    }
+
+    // ============================================================================
+    // Phase 3: Command Group Parser Tests
+    // ============================================================================
+
+    #[test]
+    fn test_parse_simple_command_group() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert!(redirections.is_empty());
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in command group body");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_group_missing_semicolon() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::RightBrace,
+        ];
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("requires ; or newline before }"));
+    }
+
+    #[test]
+    fn test_parse_command_group_with_newline() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::Newline,
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert!(redirections.is_empty());
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in command group body");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_group_with_output_redirection() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::RedirOut,
+            Token::Word("file.txt".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert_eq!(redirections.len(), 1);
+                match &redirections[0] {
+                    FdRedirection::ToFile { fd, filename } => {
+                        assert_eq!(*fd, 1);
+                        assert_eq!(filename, "file.txt");
+                    }
+                    _ => panic!("Expected ToFile redirection"),
+                }
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in command group body");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_group_with_fd_redirection() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::RedirFdDupOutput(2, "1".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert_eq!(redirections.len(), 1);
+                match &redirections[0] {
+                    FdRedirection::DuplicateOutput {
+                        source_fd,
+                        target_fd,
+                    } => {
+                        assert_eq!(*source_fd, 2);
+                        assert_eq!(*target_fd, 1);
+                    }
+                    _ => panic!("Expected DuplicateOutput redirection"),
+                }
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in command group body");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_group_multiple_commands() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("a".to_string()),
+            Token::Semicolon,
+            Token::Word("echo".to_string()),
+            Token::Word("b".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert!(redirections.is_empty());
+                if let Ast::Sequence(asts) = *body {
+                    assert_eq!(asts.len(), 2);
+                } else {
+                    panic!("Expected Sequence in command group body");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_nested_command_groups() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("nested".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::Semicolon,
+            Token::RightBrace,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, .. } => {
+                // Outer command group
+                if let Ast::CommandGroup { body: inner_body, .. } = *body {
+                    // Inner command group
+                    if let Ast::Pipeline(cmds) = *inner_body {
+                        assert_eq!(cmds[0].args, vec!["echo", "nested"]);
+                    } else {
+                        panic!("Expected Pipeline in inner command group");
+                    }
+                } else {
+                    panic!("Expected nested CommandGroup");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unmatched_command_group_brace() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::Semicolon,
+        ];
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Unmatched { in command group");
+    }
+
+    #[test]
+    fn test_parse_empty_command_group() {
+        let tokens = vec![Token::LeftBrace, Token::RightBrace];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert!(redirections.is_empty());
+                // Empty body should be a true command
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["true"]);
+                } else {
+                    panic!("Expected Pipeline for empty command group");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_group_with_multiple_redirections() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::RedirOut,
+            Token::Word("out.txt".to_string()),
+            Token::RedirFdDupOutput(2, "1".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::CommandGroup { body, redirections } => {
+                assert_eq!(redirections.len(), 2);
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in command group body");
+                }
+            }
+            _ => panic!("Expected CommandGroup AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_group_in_sequence() {
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("a".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::Semicolon,
+            Token::Word("echo".to_string()),
+            Token::Word("b".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Sequence(asts) => {
+                assert_eq!(asts.len(), 2);
+                assert!(matches!(asts[0], Ast::CommandGroup { .. }));
+                assert!(matches!(asts[1], Ast::Pipeline(_)));
+            }
+            _ => panic!("Expected Sequence AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_mixed_subshell_and_command_group() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::LeftBrace,
+            Token::Word("echo".to_string()),
+            Token::Word("mixed".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::RightParen,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, .. } => {
+                // Subshell containing command group
+                if let Ast::CommandGroup { body: inner_body, .. } = *body {
+                    if let Ast::Pipeline(cmds) = *inner_body {
+                        assert_eq!(cmds[0].args, vec!["echo", "mixed"]);
+                    } else {
+                        panic!("Expected Pipeline in command group");
+                    }
+                } else {
+                    panic!("Expected CommandGroup in subshell");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
         }
     }
 }
