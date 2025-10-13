@@ -723,7 +723,7 @@ fn test_nested_subshells() {
 }
 ```
 
-### Phase 2: Subshell Redirections (2-3 hours)
+### Phase 2: Subshell Redirections (2-3 hours) ✅ COMPLETE
 
 **Goal**: Full redirection support for subshells
 
@@ -735,10 +735,14 @@ fn test_nested_subshells() {
 4. ✅ Test input redirection: `(cmd1; cmd2) <file`
 5. ✅ Test FD operations: `(cmd) 2>&1`
 
-**Deliverables**:
+**Deliverables**: ✅ ALL COMPLETE
 
-- All redirection types work with subshells
-- Redirections apply to entire subshell output
+- ✅ All redirection types work with subshells
+- ✅ Redirections apply to entire subshell output
+- ✅ Variable expansion in filenames
+- ✅ Proper redirection order semantics
+- ✅ 11 comprehensive tests added
+- ✅ 373/373 tests passing (no regressions)
 
 **Test Cases**:
 
