@@ -117,6 +117,16 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
     let indent = "    ".repeat(indent_level);
 
     match ast {
+        Ast::CompoundPipeline(elements) => {
+            let mut result = String::new();
+            for (i, element) in elements.iter().enumerate() {
+                if i > 0 {
+                    result.push_str(" | ");
+                }
+                result.push_str(&format_ast_body(element, 0).trim());
+            }
+            result
+        }
         Ast::Pipeline(commands) => {
             if commands.len() == 1 {
                 format!("{} {}", indent, format_command(&commands[0]))

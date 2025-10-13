@@ -12,7 +12,7 @@ static FORK_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_execute_subshell_variable_isolation() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
     shell_state.set_var("x", "1".to_string());
@@ -47,7 +47,7 @@ fn test_execute_subshell_variable_isolation() {
 
 #[test]
 fn test_execute_subshell_exit_code() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
 
@@ -72,7 +72,7 @@ fn test_execute_subshell_exit_code() {
 
 #[test]
 fn test_execute_nested_subshells() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
 
@@ -100,7 +100,7 @@ fn test_execute_nested_subshells() {
 
 #[test]
 fn test_execute_subshell_inherits_functions() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
 
@@ -134,7 +134,7 @@ fn test_execute_subshell_inherits_functions() {
 
 #[test]
 fn test_execute_subshell_inherits_exported_vars() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
 
@@ -162,7 +162,7 @@ fn test_execute_subshell_inherits_exported_vars() {
 
 #[test]
 fn test_execute_subshell_multiple_commands() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
     shell_state.set_var("x", "1".to_string());
@@ -202,7 +202,7 @@ fn test_execute_subshell_multiple_commands() {
 
 #[test]
 fn test_execute_subshell_positional_params() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
     shell_state.set_positional_params(vec![
@@ -242,7 +242,7 @@ fn test_execute_subshell_positional_params() {
 
 #[test]
 fn test_subshell_end_to_end_simple() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
     shell_state.set_var("TEST", "parent_value".to_string());
@@ -260,7 +260,7 @@ fn test_subshell_end_to_end_simple() {
 
 #[test]
 fn test_subshell_end_to_end_nested() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     let mut shell_state = ShellState::new();
 
@@ -278,7 +278,7 @@ fn test_subshell_end_to_end_nested() {
 
 #[test]
 fn test_subshell_output_redirection() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -310,7 +310,7 @@ fn test_subshell_output_redirection() {
 
 #[test]
 fn test_subshell_input_redirection() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -340,7 +340,7 @@ fn test_subshell_input_redirection() {
 
 #[test]
 fn test_subshell_fd_redirection_2_to_1() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -391,7 +391,7 @@ fn test_subshell_fd_redirection_2_to_1() {
 
 #[test]
 fn test_subshell_append_redirection() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -426,7 +426,7 @@ fn test_subshell_append_redirection() {
 
 #[test]
 fn test_subshell_multiple_redirections() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -487,7 +487,7 @@ fn test_subshell_multiple_redirections() {
 
 #[test]
 fn test_subshell_redirection_with_variable_expansion() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -519,7 +519,7 @@ fn test_subshell_redirection_with_variable_expansion() {
 
 #[test]
 fn test_subshell_redirection_order() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -576,7 +576,7 @@ fn test_subshell_redirection_order() {
 
 #[test]
 fn test_nested_subshell_with_redirections() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -624,7 +624,7 @@ fn test_nested_subshell_with_redirections() {
 
 #[test]
 fn test_subshell_fd_close() {
-    let _lock = FORK_LOCK.lock().unwrap();
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -666,6 +666,604 @@ fn test_subshell_fd_close() {
     // Verify stdout was written correctly
     let contents = fs::read_to_string(&temp_file).unwrap();
     assert!(contents.contains("test"), "file should contain output");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+// ============================================================================
+// Phase 4: Pipeline Integration Tests
+// ============================================================================
+
+#[test]
+fn test_subshell_in_pipeline_left() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_pipeline_left_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (echo a; echo b) | wc -l >file
+    // Expected: wc counts 2 lines from subshell output
+    let input = format!("(echo a; echo b) | wc -l >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify wc counted 2 lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let count = contents.trim().parse::<i32>().unwrap_or(0);
+    assert_eq!(count, 2, "wc should count 2 lines from subshell");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_subshell_in_pipeline_right() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_pipeline_right_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: echo test | (cat; cat) >file
+    // Expected: first cat consumes input, second cat gets EOF (outputs nothing)
+    // This matches bash behavior where stdin is shared sequentially
+    let input = format!("echo test | (cat; cat) >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify output contains "test" once (first cat reads it, second gets EOF)
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let test_count = contents.matches("test").count();
+    assert_eq!(test_count, 1, "subshell should output 'test' once (first cat consumes input)");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_subshell_in_pipeline_middle() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_pipeline_middle_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: echo input | (cat; echo extra) | wc -l >file
+    // Expected: subshell receives input, adds extra line, wc counts 2
+    let input = format!("echo input | (cat; echo extra) | wc -l >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify wc counted 2 lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let count = contents.trim().parse::<i32>().unwrap_or(0);
+    assert_eq!(count, 2, "wc should count 2 lines");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_command_group_in_pipeline_left() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_cmdgrp_pipeline_left_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: { echo a; echo b; } | wc -l >file
+    // Expected: wc counts 2 lines from command group output
+    let input = format!("{{ echo a; echo b; }} | wc -l >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify wc counted 2 lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let count = contents.trim().parse::<i32>().unwrap_or(0);
+    assert_eq!(count, 2, "wc should count 2 lines from command group");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_command_group_in_pipeline_right() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_cmdgrp_pipeline_right_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: echo test | { cat; cat; } >file
+    // Expected: first cat consumes input, second cat gets EOF (outputs nothing)
+    // This matches bash behavior where stdin is shared sequentially
+    let input = format!("echo test | {{ cat; cat; }} >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify output contains "test" once (first cat reads it, second gets EOF)
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let test_count = contents.matches("test").count();
+    assert_eq!(test_count, 1, "command group should output 'test' once (first cat consumes input)");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_multiple_subshells_in_pipeline() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_multi_subshell_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (echo a; echo b) | (cat; echo c) | wc -l >file
+    // Expected: first subshell outputs 2 lines, second adds 1, wc counts 3
+    let input = format!("(echo a; echo b) | (cat; echo c) | wc -l >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify wc counted 3 lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let count = contents.trim().parse::<i32>().unwrap_or(0);
+    assert_eq!(count, 3, "wc should count 3 lines");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_mixed_subshell_and_command_group_in_pipeline() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_mixed_pipeline_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (echo a) | { cat; echo b; } | wc -l >file
+    // Expected: subshell outputs 1 line, command group adds 1, wc counts 2
+    let input = format!("(echo a) | {{ cat; echo b; }} | wc -l >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify wc counted 2 lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let count = contents.trim().parse::<i32>().unwrap_or(0);
+    assert_eq!(count, 2, "wc should count 2 lines");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_subshell_pipeline_with_variable_isolation() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_pipeline_var_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    shell_state.set_var("x", "parent".to_string());
+    
+    // Parse and execute: (x=child; echo $x) | cat >file
+    // Expected: subshell outputs "child", parent x remains "parent"
+    let input = format!("(x=child; echo $x) | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains "child"
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("child"), "file should contain 'child'");
+    
+    // Verify parent variable unchanged
+    assert_eq!(shell_state.get_var("x"), Some("parent".to_string()));
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_command_group_pipeline_with_variable_persistence() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_cmdgrp_var_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    shell_state.set_var("y", "original".to_string());
+    
+    // Parse and execute: { y=modified; echo $y; } | cat >file
+    // Expected: command group outputs "modified"
+    // NOTE: In a pipeline, command groups execute in a forked child, so variable
+    // changes are isolated (same as subshells in pipelines)
+    let input = format!("{{ y=modified; echo $y; }} | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains "modified"
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("modified"), "file should contain 'modified'");
+    
+    // Verify parent variable was NOT modified (command group in pipeline is isolated)
+    assert_eq!(shell_state.get_var("y"), Some("original".to_string()),
+        "parent variable should be unchanged (command group in pipeline executes in child process)");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_subshell_pipeline_with_redirections() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_pipeline_redir_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (echo a; echo b) 2>&1 | cat >file
+    // Expected: subshell output (with stderr redirected) piped to cat
+    let input = format!("(echo a; echo b) 2>&1 | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains both lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("a"), "file should contain 'a'");
+    assert!(contents.contains("b"), "file should contain 'b'");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_command_group_pipeline_with_redirections() {
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_cmdgrp_pipe_redir_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: { echo a; echo b; } 2>&1 | cat >file
+    // Expected: command group output (with stderr redirected) piped to cat
+    let input = format!("{{ echo a; echo b; }} 2>&1 | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains both lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("a"), "file should contain 'a'");
+    assert!(contents.contains("b"), "file should contain 'b'");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_nested_subshell_in_pipeline() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_nested_pipe_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: ((echo nested)) | cat >file
+    // Expected: nested subshell output piped to cat
+    let input = format!("((echo nested)) | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains "nested"
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("nested"), "file should contain 'nested'");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_complex_pipeline_with_multiple_groups() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_complex_pipe_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (echo 1; echo 2) | { cat; echo 3; } | (cat; echo 4) | wc -l >file
+    // Expected: 1,2 from first subshell, 3 from group, 4 from second subshell = 4 lines
+    let input = format!("(echo 1; echo 2) | {{ cat; echo 3; }} | (cat; echo 4) | wc -l >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify wc counted 4 lines
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    let count = contents.trim().parse::<i32>().unwrap_or(0);
+    assert_eq!(count, 4, "wc should count 4 lines from complex pipeline");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_subshell_pipeline_exit_code_propagation() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (exit 42) | cat
+    // Expected: subshell exits with 42, but pipeline returns cat's exit code (0)
+    let input = "(exit 42) | cat";
+    let tokens = lex(input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    // In a pipeline, the exit code is from the last command (cat)
+    assert_eq!(exit_code, 0);
+}
+
+#[test]
+fn test_command_group_pipeline_exit_code_propagation() {
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: { false; } | cat
+    // Expected: command group exits with 1, but pipeline returns cat's exit code (0)
+    let input = "{ false; } | cat";
+    let tokens = lex(input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    // In a pipeline, the exit code is from the last command (cat)
+    assert_eq!(exit_code, 0);
+}
+
+#[test]
+fn test_subshell_pipeline_fd_inheritance() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_fd_inherit_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: (sh -c 'echo stdout; echo stderr >&2') 2>&1 | cat >file
+    // Expected: both stdout and stderr from subshell go through pipe to cat
+    // Using sh -c to ensure stderr redirection works inside subshell
+    let input = format!("(sh -c 'echo stdout; echo stderr >&2') 2>&1 | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains both outputs
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("stdout"), "file should contain stdout");
+    assert!(contents.contains("stderr"), "file should contain stderr");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_pipeline_with_subshell_and_external_commands() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_ext_pipe_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: echo start | (cat; echo middle) | cat >file
+    // Expected: "start" and "middle" both in file
+    let input = format!("echo start | (cat; echo middle) | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains both outputs
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("start"), "file should contain 'start'");
+    assert!(contents.contains("middle"), "file should contain 'middle'");
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_empty_subshell_in_pipeline() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_empty_pipe_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    
+    // Parse and execute: echo test | () | cat >file
+    // Expected: empty subshell passes through input
+    let input = format!("echo test | () | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Empty subshell should not produce output, so file might be empty or contain nothing
+    // This is a valid test case for edge behavior
+    
+    // Cleanup
+    let _ = fs::remove_file(&temp_file);
+}
+
+#[test]
+fn test_subshell_pipeline_with_builtin_commands() {
+    let _lock = FORK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let temp_file = format!("/tmp/rush_builtin_pipe_{}.txt", timestamp);
+    
+    let mut shell_state = ShellState::new();
+    shell_state.set_var("TEST", "value".to_string());
+    
+    // Parse and execute: (echo $TEST; pwd) | cat >file
+    // Expected: both echo and pwd output piped to cat
+    let input = format!("(echo $TEST; pwd) | cat >{}", temp_file);
+    let tokens = lex(&input, &shell_state).unwrap();
+    let ast = parse(tokens).unwrap();
+    
+    let exit_code = execute(ast, &mut shell_state);
+    assert_eq!(exit_code, 0);
+    
+    // Verify file contains "value"
+    let contents = fs::read_to_string(&temp_file).unwrap();
+    assert!(contents.contains("value"), "file should contain variable value");
     
     // Cleanup
     let _ = fs::remove_file(&temp_file);

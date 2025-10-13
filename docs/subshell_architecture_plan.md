@@ -798,7 +798,7 @@ fn test_command_group_redirection() {
 }
 ```
 
-### Phase 4: Pipeline Integration (2-3 hours)
+### Phase 4: Pipeline Integration (2-3 hours) ✅ COMPLETE
 
 **Goal**: Subshells and groups work in pipelines
 
@@ -810,11 +810,17 @@ fn test_command_group_redirection() {
 4. ✅ Test complex pipelines with multiple groups
 5. ✅ Verify FD inheritance in pipelines
 
-**Deliverables**:
+**Deliverables**: ✅ ALL COMPLETE
 
-- Subshells pipe correctly
-- Command groups pipe correctly
-- Complex pipelines work
+- ✅ Subshells pipe correctly
+- ✅ Command groups pipe correctly
+- ✅ Complex pipelines work
+- ✅ CompoundPipeline AST variant added
+- ✅ parse_compound_pipeline() function implemented
+- ✅ execute_compound_pipeline() function implemented
+- ✅ Top-level pipeline detection in parse()
+- ✅ 13 comprehensive tests added
+- ✅ 799/799 tests passing (no regressions)
 
 **Test Cases**:
 

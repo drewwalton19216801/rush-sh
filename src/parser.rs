@@ -3,6 +3,9 @@ use super::lexer::Token;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Ast {
     Pipeline(Vec<ShellCommand>),
+    /// Pipeline containing compound commands (subshells, command groups, etc.)
+    /// Each element is connected by pipes
+    CompoundPipeline(Vec<Ast>),
     Sequence(Vec<Ast>),
     Assignment {
         var: String,
@@ -168,7 +171,32 @@ fn skip_to_matching_esac(tokens: &[Token], i: &mut usize) {
 }
 
 pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
-    // First, try to detect and parse function definitions that span multiple lines
+    // First, check if this is a pipeline at the top level
+    // We need to do this before parse_commands_sequentially to avoid treating
+    // compound commands in pipelines as sequences
+    let mut paren_depth: i32 = 0;
+    let mut brace_depth: i32 = 0;
+    let mut has_pipe = false;
+    
+    for token in &tokens {
+        match token {
+            Token::LeftParen => paren_depth += 1,
+            Token::RightParen => paren_depth = paren_depth.saturating_sub(1),
+            Token::LeftBrace => brace_depth += 1,
+            Token::RightBrace => brace_depth = brace_depth.saturating_sub(1),
+            Token::Pipe if paren_depth == 0 && brace_depth == 0 => {
+                has_pipe = true;
+            }
+            _ => {}
+        }
+    }
+    
+    // If we found a pipe at the top level, parse as pipeline
+    if has_pipe {
+        return parse_pipeline(&tokens);
+    }
+    
+    // Next, try to detect and parse function definitions that span multiple lines
     if tokens.len() >= 4
         && let (Token::Word(_), Token::LeftParen, Token::RightParen, Token::LeftBrace) =
             (&tokens[0], &tokens[1], &tokens[2], &tokens[3])
@@ -623,29 +651,44 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             }
         } else {
             // For simple commands, stop at newline, semicolon, &&, or ||
-            // But check if the next token after newline is a control flow keyword
+            // But track depth of parentheses and braces to avoid stopping inside compound commands
+            let mut paren_depth: i32 = 0;
+            let mut brace_depth: i32 = 0;
+            
             while i < tokens.len() {
-                if tokens[i] == Token::Newline
-                    || tokens[i] == Token::Semicolon
-                    || tokens[i] == Token::And
-                    || tokens[i] == Token::Or
-                {
-                    // Look ahead to see if the next non-newline token is else/elif/fi
-                    let mut j = i + 1;
-                    while j < tokens.len() && tokens[j] == Token::Newline {
-                        j += 1;
-                    }
-                    // If we find else/elif/fi, this is likely part of an if statement that wasn't properly detected
-                    if j < tokens.len()
-                        && (tokens[j] == Token::Else
-                            || tokens[j] == Token::Elif
-                            || tokens[j] == Token::Fi)
+                // Track depth for compound commands
+                match tokens[i] {
+                    Token::LeftParen => paren_depth += 1,
+                    Token::RightParen => paren_depth = paren_depth.saturating_sub(1),
+                    Token::LeftBrace => brace_depth += 1,
+                    Token::RightBrace => brace_depth = brace_depth.saturating_sub(1),
+                    _ => {}
+                }
+                
+                // Only stop at separators if we're not inside compound commands
+                if paren_depth == 0 && brace_depth == 0 {
+                    if tokens[i] == Token::Newline
+                        || tokens[i] == Token::Semicolon
+                        || tokens[i] == Token::And
+                        || tokens[i] == Token::Or
                     {
-                        // Skip this token and continue - it will be handled as a parse error
-                        i = j + 1;
-                        continue;
+                        // Look ahead to see if the next non-newline token is else/elif/fi
+                        let mut j = i + 1;
+                        while j < tokens.len() && tokens[j] == Token::Newline {
+                            j += 1;
+                        }
+                        // If we find else/elif/fi, this is likely part of an if statement that wasn't properly detected
+                        if j < tokens.len()
+                            && (tokens[j] == Token::Else
+                                || tokens[j] == Token::Elif
+                                || tokens[j] == Token::Fi)
+                        {
+                            // Skip this token and continue - it will be handled as a parse error
+                            i = j + 1;
+                            continue;
+                        }
+                        break;
                     }
-                    break;
                 }
                 i += 1;
             }
@@ -722,6 +765,15 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 }
 
 fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
+    // First, check if this pipeline contains any compound commands (subshells or command groups)
+    // If so, we need to use CompoundPipeline instead of Pipeline
+    let has_compound = tokens.iter().any(|t| matches!(t, Token::LeftParen | Token::LeftBrace));
+    
+    if has_compound {
+        return parse_compound_pipeline(tokens);
+    }
+    
+    // Regular pipeline with only simple commands
     let mut commands = Vec::new();
     let mut current_cmd = ShellCommand::default();
 
@@ -860,6 +912,116 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
     }
 
     Ok(Ast::Pipeline(commands))
+}
+
+/// Parse a pipeline that contains compound commands (subshells or command groups)
+fn parse_compound_pipeline(tokens: &[Token]) -> Result<Ast, String> {
+    let mut elements = Vec::new();
+    let mut i = 0;
+    
+    while i < tokens.len() {
+        let start = i;
+        
+        // Determine the extent of this pipeline element
+        if tokens[i] == Token::LeftParen {
+            // Subshell - find matching ) and any redirections
+            let mut depth = 1;
+            i += 1;
+            while i < tokens.len() && depth > 0 {
+                match tokens[i] {
+                    Token::LeftParen => depth += 1,
+                    Token::RightParen => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1; // Include the closing )
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+            // Continue to collect any redirections after )
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::RedirOut | Token::RedirIn | Token::RedirAppend => {
+                        i += 1;
+                        // Consume the filename
+                        if i < tokens.len() && matches!(tokens[i], Token::Word(_)) {
+                            i += 1;
+                        }
+                    }
+                    Token::RedirFdOut(..) | Token::RedirFdAppend(..) |
+                    Token::RedirFdIn(..) | Token::RedirFdDupOutput(..) |
+                    Token::RedirFdDupInput(..) | Token::RedirFdClose(..) => {
+                        i += 1;
+                    }
+                    Token::Pipe => break,
+                    _ => break,
+                }
+            }
+        } else if tokens[i] == Token::LeftBrace {
+            // Command group - find matching } and any redirections
+            let mut depth = 1;
+            i += 1;
+            while i < tokens.len() && depth > 0 {
+                match tokens[i] {
+                    Token::LeftBrace => depth += 1,
+                    Token::RightBrace => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1; // Include the closing }
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+            // Continue to collect any redirections after }
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::RedirOut | Token::RedirIn | Token::RedirAppend => {
+                        i += 1;
+                        // Consume the filename
+                        if i < tokens.len() && matches!(tokens[i], Token::Word(_)) {
+                            i += 1;
+                        }
+                    }
+                    Token::RedirFdOut(..) | Token::RedirFdAppend(..) |
+                    Token::RedirFdIn(..) | Token::RedirFdDupOutput(..) |
+                    Token::RedirFdDupInput(..) | Token::RedirFdClose(..) => {
+                        i += 1;
+                    }
+                    Token::Pipe => break,
+                    _ => break,
+                }
+            }
+        } else {
+            // Simple command - find end (pipe or end of tokens)
+            while i < tokens.len() && tokens[i] != Token::Pipe {
+                i += 1;
+            }
+        }
+        
+        // Parse this element
+        let element_tokens = &tokens[start..i];
+        if !element_tokens.is_empty() {
+            let element_ast = parse_slice(element_tokens)?;
+            elements.push(element_ast);
+        }
+        
+        // Skip pipe if present
+        if i < tokens.len() && tokens[i] == Token::Pipe {
+            i += 1;
+        }
+    }
+    
+    if elements.is_empty() {
+        return Err("No commands found in compound pipeline".to_string());
+    }
+    
+    Ok(Ast::CompoundPipeline(elements))
 }
 
 fn parse_if(tokens: &[Token]) -> Result<Ast, String> {

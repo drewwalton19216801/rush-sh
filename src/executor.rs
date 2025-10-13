@@ -844,6 +844,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             shell_state.set_var(&var, expanded_value);
             0
         }
+        Ast::CompoundPipeline(elements) => {
+            execute_compound_pipeline(&elements, shell_state)
+        }
         Ast::LocalAssignment { var, value } => {
             // Expand variables and command substitutions in the value
             let expanded_value = expand_variables_in_string(&value, shell_state);
@@ -1219,6 +1222,404 @@ fn execute_command_group(
             eprintln!("FD restore error: {}", e);
         }
         return 1;
+    }
+    
+    exit_code
+}
+
+/// Execute a compound pipeline containing subshells and/or command groups
+/// This handles pipelines where elements can be compound commands, not just simple commands
+fn execute_compound_pipeline(elements: &[Ast], shell_state: &mut ShellState) -> i32 {
+    if elements.is_empty() {
+        return 0;
+    }
+    
+    if elements.len() == 1 {
+        // Single element - just execute it
+        return execute(elements[0].clone(), shell_state);
+    }
+    
+    // Multi-element pipeline - need to set up pipes between elements
+    use std::os::unix::io::AsRawFd;
+    use nix::unistd::close;
+    
+    let mut children = Vec::new();
+    let mut prev_pipe_read_fd: Option<i32> = None;
+    
+    for (i, element) in elements.iter().enumerate() {
+        let is_last = i == elements.len() - 1;
+        
+        // Create pipe for this element's output (unless it's the last)
+        let (pipe_read_fd, pipe_write_fd) = if !is_last {
+            match pipe() {
+                Ok((r, w)) => {
+                    let read_fd = r.as_raw_fd();
+                    let write_fd = w.as_raw_fd();
+                    // Forget the File objects so they don't close on drop
+                    std::mem::forget(r);
+                    std::mem::forget(w);
+                    (Some(read_fd), Some(write_fd))
+                }
+                Err(e) => {
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}Error creating pipe: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
+                        );
+                    } else {
+                        eprintln!("Error creating pipe: {}", e);
+                    }
+                    return 1;
+                }
+            }
+        } else {
+            (None, None)
+        };
+        
+        // Fork for this pipeline element
+        match unsafe { fork() } {
+            Ok(ForkResult::Child) => {
+                // Child process
+                use std::os::unix::io::{FromRawFd, OwnedFd};
+                use nix::unistd::dup2;
+                
+                // Redirect stdin from previous pipe if exists
+                if let Some(prev_fd) = prev_pipe_read_fd {
+                    unsafe {
+                        let source = OwnedFd::from_raw_fd(prev_fd);
+                        let mut target = OwnedFd::from_raw_fd(0);
+                        if dup2(&source, &mut target).is_err() {
+                            std::process::exit(1);
+                        }
+                        std::mem::forget(target);
+                        // source closes when dropped
+                    }
+                }
+                
+                // Redirect stdout to next pipe if exists
+                if let Some(write_fd) = pipe_write_fd {
+                    unsafe {
+                        let source = OwnedFd::from_raw_fd(write_fd);
+                        let mut target = OwnedFd::from_raw_fd(1);
+                        if dup2(&source, &mut target).is_err() {
+                            std::process::exit(1);
+                        }
+                        std::mem::forget(target);
+                        // source closes when dropped
+                    }
+                }
+                
+                // Close the read end of our own pipe (child doesn't read from it)
+                if let Some(read_fd) = pipe_read_fd {
+                    let _ = close(read_fd);
+                }
+                
+                // Execute the element with cloned state
+                let mut child_state = shell_state.clone();
+                
+                // For subshells and command groups in pipelines, we need to execute
+                // their body directly without forking again, since we're already in
+                // a forked child process with proper FD setup
+                let code = match element {
+                    Ast::Subshell { body, redirections } => {
+                        // Apply subshell redirections in this child process
+                        if !redirections.is_empty() {
+                            use std::fs::OpenOptions;
+                            use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
+                            use nix::unistd::dup2;
+                            
+                            for redir in redirections {
+                                match redir {
+                                    FdRedirection::ToFile { fd, filename } => {
+                                        let expanded_filename = expand_variables_in_string(filename, &mut child_state);
+                                        match OpenOptions::new()
+                                            .write(true)
+                                            .create(true)
+                                            .truncate(true)
+                                            .open(&expanded_filename)
+                                        {
+                                            Ok(file) => {
+                                                let file_fd = file.as_raw_fd();
+                                                if file_fd != *fd as i32 {
+                                                    unsafe {
+                                                        let mut target = OwnedFd::from_raw_fd(*fd as i32);
+                                                        if dup2(&file, &mut target).is_err() {
+                                                            std::process::exit(1);
+                                                        }
+                                                        std::mem::forget(target);
+                                                    }
+                                                    let _ = close(file_fd);
+                                                }
+                                                std::mem::forget(file);
+                                            }
+                                            Err(_) => std::process::exit(1),
+                                        }
+                                    }
+                                    FdRedirection::AppendToFile { fd, filename } => {
+                                        let expanded_filename = expand_variables_in_string(filename, &mut child_state);
+                                        match OpenOptions::new()
+                                            .write(true)
+                                            .create(true)
+                                            .append(true)
+                                            .open(&expanded_filename)
+                                        {
+                                            Ok(file) => {
+                                                let file_fd = file.as_raw_fd();
+                                                if file_fd != *fd as i32 {
+                                                    unsafe {
+                                                        let mut target = OwnedFd::from_raw_fd(*fd as i32);
+                                                        if dup2(&file, &mut target).is_err() {
+                                                            std::process::exit(1);
+                                                        }
+                                                        std::mem::forget(target);
+                                                    }
+                                                    let _ = close(file_fd);
+                                                }
+                                                std::mem::forget(file);
+                                            }
+                                            Err(_) => std::process::exit(1),
+                                        }
+                                    }
+                                    FdRedirection::FromFile { fd, filename } => {
+                                        let expanded_filename = expand_variables_in_string(filename, &mut child_state);
+                                        match OpenOptions::new()
+                                            .read(true)
+                                            .open(&expanded_filename)
+                                        {
+                                            Ok(file) => {
+                                                let file_fd = file.as_raw_fd();
+                                                if file_fd != *fd as i32 {
+                                                    unsafe {
+                                                        let mut target = OwnedFd::from_raw_fd(*fd as i32);
+                                                        if dup2(&file, &mut target).is_err() {
+                                                            std::process::exit(1);
+                                                        }
+                                                        std::mem::forget(target);
+                                                    }
+                                                    let _ = close(file_fd);
+                                                }
+                                                std::mem::forget(file);
+                                            }
+                                            Err(_) => std::process::exit(1),
+                                        }
+                                    }
+                                    FdRedirection::DuplicateOutput { source_fd, target_fd } => {
+                                        unsafe {
+                                            let source = OwnedFd::from_raw_fd(*target_fd as i32);
+                                            let mut target = OwnedFd::from_raw_fd(*source_fd as i32);
+                                            if dup2(&source, &mut target).is_err() {
+                                                std::process::exit(1);
+                                            }
+                                            std::mem::forget(source);
+                                            std::mem::forget(target);
+                                        }
+                                    }
+                                    FdRedirection::DuplicateInput { source_fd, target_fd } => {
+                                        unsafe {
+                                            let source = OwnedFd::from_raw_fd(*target_fd as i32);
+                                            let mut target = OwnedFd::from_raw_fd(*source_fd as i32);
+                                            if dup2(&source, &mut target).is_err() {
+                                                std::process::exit(1);
+                                            }
+                                            std::mem::forget(source);
+                                            std::mem::forget(target);
+                                        }
+                                    }
+                                    FdRedirection::Close { fd } => {
+                                        if close(*fd as i32).is_err() {
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Execute body directly (no fork - we're already in a child)
+                        execute(*body.clone(), &mut child_state)
+                    }
+                    Ast::CommandGroup { body, redirections } => {
+                        // Apply command group redirections in this child process
+                        if !redirections.is_empty() {
+                            use std::fs::OpenOptions;
+                            use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
+                            use nix::unistd::dup2;
+                            
+                            for redir in redirections {
+                                match redir {
+                                    FdRedirection::ToFile { fd, filename } => {
+                                        let expanded_filename = expand_variables_in_string(filename, &mut child_state);
+                                        match OpenOptions::new()
+                                            .write(true)
+                                            .create(true)
+                                            .truncate(true)
+                                            .open(&expanded_filename)
+                                        {
+                                            Ok(file) => {
+                                                let file_fd = file.as_raw_fd();
+                                                if file_fd != *fd as i32 {
+                                                    unsafe {
+                                                        let mut target = OwnedFd::from_raw_fd(*fd as i32);
+                                                        if dup2(&file, &mut target).is_err() {
+                                                            std::process::exit(1);
+                                                        }
+                                                        std::mem::forget(target);
+                                                    }
+                                                    let _ = close(file_fd);
+                                                }
+                                                std::mem::forget(file);
+                                            }
+                                            Err(_) => std::process::exit(1),
+                                        }
+                                    }
+                                    FdRedirection::AppendToFile { fd, filename } => {
+                                        let expanded_filename = expand_variables_in_string(filename, &mut child_state);
+                                        match OpenOptions::new()
+                                            .write(true)
+                                            .create(true)
+                                            .append(true)
+                                            .open(&expanded_filename)
+                                        {
+                                            Ok(file) => {
+                                                let file_fd = file.as_raw_fd();
+                                                if file_fd != *fd as i32 {
+                                                    unsafe {
+                                                        let mut target = OwnedFd::from_raw_fd(*fd as i32);
+                                                        if dup2(&file, &mut target).is_err() {
+                                                            std::process::exit(1);
+                                                        }
+                                                        std::mem::forget(target);
+                                                    }
+                                                    let _ = close(file_fd);
+                                                }
+                                                std::mem::forget(file);
+                                            }
+                                            Err(_) => std::process::exit(1),
+                                        }
+                                    }
+                                    FdRedirection::FromFile { fd, filename } => {
+                                        let expanded_filename = expand_variables_in_string(filename, &mut child_state);
+                                        match OpenOptions::new()
+                                            .read(true)
+                                            .open(&expanded_filename)
+                                        {
+                                            Ok(file) => {
+                                                let file_fd = file.as_raw_fd();
+                                                if file_fd != *fd as i32 {
+                                                    unsafe {
+                                                        let mut target = OwnedFd::from_raw_fd(*fd as i32);
+                                                        if dup2(&file, &mut target).is_err() {
+                                                            std::process::exit(1);
+                                                        }
+                                                        std::mem::forget(target);
+                                                    }
+                                                    let _ = close(file_fd);
+                                                }
+                                                std::mem::forget(file);
+                                            }
+                                            Err(_) => std::process::exit(1),
+                                        }
+                                    }
+                                    FdRedirection::DuplicateOutput { source_fd, target_fd } => {
+                                        unsafe {
+                                            let source = OwnedFd::from_raw_fd(*target_fd as i32);
+                                            let mut target = OwnedFd::from_raw_fd(*source_fd as i32);
+                                            if dup2(&source, &mut target).is_err() {
+                                                std::process::exit(1);
+                                            }
+                                            std::mem::forget(source);
+                                            std::mem::forget(target);
+                                        }
+                                    }
+                                    FdRedirection::DuplicateInput { source_fd, target_fd } => {
+                                        unsafe {
+                                            let source = OwnedFd::from_raw_fd(*target_fd as i32);
+                                            let mut target = OwnedFd::from_raw_fd(*source_fd as i32);
+                                            if dup2(&source, &mut target).is_err() {
+                                                std::process::exit(1);
+                                            }
+                                            std::mem::forget(source);
+                                            std::mem::forget(target);
+                                        }
+                                    }
+                                    FdRedirection::Close { fd } => {
+                                        if close(*fd as i32).is_err() {
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        // Execute body directly (no fork - we're already in a child)
+                        execute(*body.clone(), &mut child_state)
+                    }
+                    _ => {
+                        // For other AST types, execute normally
+                        execute(element.clone(), &mut child_state)
+                    }
+                };
+                
+                std::process::exit(code);
+            }
+            Ok(ForkResult::Parent { child }) => {
+                // Parent process
+                children.push(child);
+                
+                // Close the write end (parent doesn't write)
+                if let Some(write_fd) = pipe_write_fd {
+                    let _ = close(write_fd);
+                }
+                
+                // Close the previous read end (we're done with it)
+                if let Some(prev_fd) = prev_pipe_read_fd {
+                    let _ = close(prev_fd);
+                }
+                
+                // Save the read end for next iteration
+                prev_pipe_read_fd = pipe_read_fd;
+            }
+            Err(_) => {
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}Fork failed for pipeline element\x1b[0m",
+                        shell_state.color_scheme.error
+                    );
+                } else {
+                    eprintln!("Fork failed for pipeline element");
+                }
+                return 1;
+            }
+        }
+    }
+    
+    // Close the final read end in parent
+    if let Some(final_fd) = prev_pipe_read_fd {
+        let _ = close(final_fd);
+    }
+    
+    // Wait for all children
+    let mut exit_code = 0;
+    for child in children {
+        match waitpid(child, None) {
+            Ok(WaitStatus::Exited(_pid, code)) => {
+                exit_code = code; // Last child's exit code becomes pipeline exit code
+            }
+            Ok(WaitStatus::Signaled(_pid, signal, _)) => {
+                exit_code = 128 + signal as i32;
+            }
+            Ok(_) => {
+                exit_code = 1;
+            }
+            Err(_) => {
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}Error waiting for pipeline element\x1b[0m",
+                        shell_state.color_scheme.error
+                    );
+                } else {
+                    eprintln!("Error waiting for pipeline element");
+                }
+                exit_code = 1;
+            }
+        }
     }
     
     exit_code
@@ -1944,12 +2345,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
     
-    // Mutex to serialize tests that perform file I/O with redirections
-    // This prevents stdout/stderr from other tests leaking into test files
-    static FILE_IO_LOCK: Mutex<()> = Mutex::new(());
-
     #[test]
     fn test_execute_single_command_builtin() {
         let cmd = ShellCommand {
