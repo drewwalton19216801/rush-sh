@@ -334,6 +334,7 @@ impl FdManager {
     }
 
     /// Check if any redirections are present
+    #[allow(dead_code)]
     pub fn has_redirections(&self) -> bool {
         !self.redirections.is_empty()
     }

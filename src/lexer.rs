@@ -368,6 +368,18 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 flush_current_token(&mut current, &mut tokens);
                 chars.next();
             }
+            '\\' if !in_double_quote && !in_single_quote => {
+                // Check for line continuation (backslash followed by newline)
+                chars.next(); // consume backslash
+                if let Some(&'\n') = chars.peek() {
+                    // Line continuation - skip the newline and continue parsing
+                    chars.next(); // consume newline
+                    // Don't add anything to current or tokens - just continue
+                } else {
+                    // Not line continuation, treat backslash as part of word
+                    current.push('\\');
+                }
+            }
             '\n' if !in_double_quote && !in_single_quote => {
                 flush_current_token(&mut current, &mut tokens);
                 tokens.push(Token::Newline);
@@ -2246,6 +2258,50 @@ mod tests {
                 Token::RedirHereString("fallback".to_string()),
                 Token::RedirOut,
                 Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_backslash_line_continuation() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test \\\narg1 \\\narg2", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::Word("arg1".to_string()),
+                Token::Word("arg2".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_backslash_line_continuation_with_redirections() {
+        let shell_state = ShellState::new();
+        let result = lex("command \\\n>/tmp/file \\\n2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirOut,
+                Token::Word("/tmp/file".to_string()),
+                Token::RedirFdDup(2, "1".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_backslash_not_continuation() {
+        let shell_state = ShellState::new();
+        // Backslash not followed by newline should be kept
+        let result = lex("echo test\\arg", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test\\arg".to_string())
             ]
         );
     }

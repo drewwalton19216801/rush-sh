@@ -490,7 +490,31 @@ fn line_contains_heredoc(line: &str, shell_state: &state::ShellState) -> Option<
     }
 }
 
+/// Preprocess script content to handle backslash line continuation
+/// Joins lines that end with backslash to the next line
+fn preprocess_line_continuation(content: &str) -> String {
+    let mut result = String::new();
+    let mut chars = content.chars().peekable();
+    
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            // Check if next character is newline
+            if let Some(&'\n') = chars.peek() {
+                // Line continuation - skip both backslash and newline
+                chars.next(); // consume newline
+                continue;
+            }
+        }
+        result.push(ch);
+    }
+    
+    result
+}
+
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
+    // Preprocess to handle backslash line continuation
+    let processed_content = preprocess_line_continuation(content);
+    
     let mut current_block = String::new();
     let mut in_if_block = false;
     let mut if_depth = 0;
@@ -502,7 +526,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut in_while_block = false;
     let mut while_depth = 0;
 
-    let lines: Vec<&str> = content.lines().collect();
+    let lines: Vec<&str> = processed_content.lines().collect();
     let mut i = 0;
 
     while i < lines.len() {

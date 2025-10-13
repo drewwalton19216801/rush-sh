@@ -78,15 +78,10 @@ echo
 
 # Example 9: Complex redirection scenario
 echo "9. Complex scenario: logging with timestamps"
-LOGFILE="/tmp/rush_complex.log"
-sh -c "
-    echo '[INFO] Starting process'
-    echo '[ERROR] Simulated error' >&2
-    echo '[DEBUG] Debug info' >&3
-" >/dev/null 2>&1 3>>"$LOGFILE"
+sh -c "echo '[INFO] Starting process'; echo '[ERROR] Simulated error' >&2; echo '[DEBUG] Debug info' >&3" >/dev/null 2>&1 3>/tmp/rush_complex.log
 echo "Log file contents:"
-cat "$LOGFILE"
-rm "$LOGFILE"
+cat /tmp/rush_complex.log
+rm /tmp/rush_complex.log
 echo
 
 echo "=== Demo Complete ==="
