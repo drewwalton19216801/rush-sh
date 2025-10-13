@@ -12,6 +12,7 @@ mod brace_expansion;
 mod builtins;
 mod completion;
 mod executor;
+mod fd_manager;
 mod lexer;
 mod parameter_expansion;
 mod parser;

@@ -399,6 +399,7 @@ dependencies = [
  "clap",
  "glob",
  "lazy_static",
+ "nix",
  "rustyline",
  "signal-hook",
 ]

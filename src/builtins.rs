@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{self, Write};
 
+use crate::fd_manager::FdManager;
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
@@ -103,20 +104,46 @@ pub fn execute_builtin(
     shell_state: &mut ShellState,
     output_override: Option<Box<dyn Write>>,
 ) -> i32 {
+    // Store color settings to avoid borrowing issues
+    let colors_enabled = shell_state.colors_enabled;
+    let error_color = shell_state.color_scheme.error.clone();
+    
     // Helper function for colored error messages
     let print_error = |msg: &str| {
-        if shell_state.colors_enabled {
-            eprintln!("{}{}\x1b[0m", shell_state.color_scheme.error, msg);
+        if colors_enabled {
+            eprintln!("{}{}\x1b[0m", error_color, msg);
         } else {
             eprintln!("{}", msg);
         }
     };
+    
+    // Handle FD redirections for built-in commands
+    let has_fd_redirections = !cmd.fd_redirections.is_empty();
+    let mut fd_manager = if has_fd_redirections {
+        let mut manager = FdManager::new();
+        manager.prepare_redirections(&cmd.fd_redirections);
+        
+        // Apply FD redirections
+        if let Err(e) = manager.apply_for_builtin() {
+            print_error(&format!("FD redirection error: {}", e));
+            return 1;
+        }
+        
+        Some(manager)
+    } else {
+        None
+    };
+    
     // Handle input redirection for built-ins that might need it
     let _input_content = if let Some(ref input_file) = cmd.input {
         match std::fs::read_to_string(input_file) {
             Ok(content) => Some(content),
             Err(e) => {
                 print_error(&format!("Error reading input file '{}': {}", input_file, e));
+                // Restore FDs before returning
+                if let Some(ref mut manager) = fd_manager {
+                    let _ = manager.restore();
+                }
                 return 1;
             }
         }
@@ -136,6 +163,10 @@ pub fn execute_builtin(
                     "Error creating output file '{}': {}",
                     output_file, e
                 ));
+                // Restore FDs before returning
+                if let Some(ref mut manager) = fd_manager {
+                    let _ = manager.restore();
+                }
                 return 1;
             }
         }
@@ -148,6 +179,10 @@ pub fn execute_builtin(
                     "Error opening append file '{}': {}",
                     append_file, e
                 ));
+                // Restore FDs before returning
+                if let Some(ref mut manager) = fd_manager {
+                    let _ = manager.restore();
+                }
                 return 1;
             }
         }
@@ -157,14 +192,24 @@ pub fn execute_builtin(
     };
 
     let builtins = get_builtins();
-    if let Some(builtin) = builtins
+    let result = if let Some(builtin) = builtins
         .into_iter()
         .find(|b| b.names().contains(&cmd.args[0].as_str()))
     {
         builtin.run(cmd, shell_state, &mut *output_writer)
     } else {
         1
+    };
+    
+    // Restore FD state after builtin execution
+    if let Some(mut manager) = fd_manager {
+        if let Err(e) = manager.restore() {
+            print_error(&format!("FD restore error: {}", e));
+            return 1;
+        }
     }
+    
+    result
 }
 
 #[cfg(test)]

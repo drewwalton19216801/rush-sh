@@ -1,11 +1,13 @@
 use std::cell::RefCell;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufRead, BufReader, pipe};
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
-use super::parser::{Ast, FdRedirection, ShellCommand};
-use super::state::ShellState;
+use crate::fd_manager::FdManager;
+use crate::parser::{Ast, FdRedirection, ShellCommand};
+use crate::state::ShellState;
 
 /// Execute a command and capture its output as a string
 /// This is used for command substitution $(...)
@@ -1228,15 +1230,20 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             // If no command, here-string was processed for side effects
         }
 
-        // Handle output redirection (process even if no command)
+        // Build complete list of FD redirections including output/append
+        let mut all_redirections = Vec::new();
+        
+        // Add output redirection as FD redirection
         if let Some(ref output_file) = cmd.output {
             let expanded_output = expand_variables_in_string(output_file, shell_state);
+            // Verify file can be created (for side effects even if no command)
             match File::create(&expanded_output) {
-                Ok(file) => {
-                    if let Some(ref mut command) = command {
-                        command.stdout(Stdio::from(file));
-                    }
-                    // If no command, file was created for side effects (POSIX requirement)
+                Ok(_) => {
+                    // Add to redirections list for command execution
+                    all_redirections.push(FdRedirection::ToFile {
+                        fd: 1,
+                        filename: expanded_output,
+                    });
                 }
                 Err(e) => {
                     if shell_state.colors_enabled {
@@ -1254,16 +1261,18 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             }
         } else if let Some(ref append_file) = cmd.append {
             let expanded_append = expand_variables_in_string(append_file, shell_state);
+            // Verify file can be opened/created (for side effects even if no command)
             match File::options()
                 .append(true)
                 .create(true)
                 .open(&expanded_append)
             {
-                Ok(file) => {
-                    if let Some(ref mut command) = command {
-                        command.stdout(Stdio::from(file));
-                    }
-                    // If no command, file was opened/created for side effects (POSIX requirement)
+                Ok(_) => {
+                    // Add to redirections list for command execution
+                    all_redirections.push(FdRedirection::AppendToFile {
+                        fd: 1,
+                        filename: expanded_append,
+                    });
                 }
                 Err(e) => {
                     if shell_state.colors_enabled {
@@ -1281,125 +1290,34 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             }
         }
 
-        // Process FD redirections
-        // Note: The current implementation has limitations due to the Command API
-        // A full implementation would require using pre_exec hooks with dup2()
-        for fd_redir in &cmd.fd_redirections {
-            match fd_redir {
-                FdRedirection::ToFile { fd, filename } => {
-                    // Redirect specific FD to file (e.g., 2>error.log)
-                    let expanded_file = expand_variables_in_string(filename, shell_state);
-                    match File::create(&expanded_file) {
-                        Ok(file) => {
-                            if let Some(ref mut command) = command {
-                                // Use Stdio::from to safely transfer ownership
-                                if *fd == 1 {
-                                    command.stdout(Stdio::from(file));
-                                } else if *fd == 2 {
-                                    command.stderr(Stdio::from(file));
-                                }
-                                // For other FDs, we'd need pre_exec hooks
-                            }
-                        }
-                        Err(e) => {
-                            if shell_state.colors_enabled {
-                                eprintln!(
-                                    "{}Error creating file '{}' for FD {}: {}\x1b[0m",
-                                    shell_state.color_scheme.error, filename, fd, e
-                                );
-                            } else {
-                                eprintln!("Error creating file '{}' for FD {}: {}", filename, fd, e);
-                            }
-                            return 1;
-                        }
-                    }
-                }
+        // Add explicit FD redirections
+        for redir in &cmd.fd_redirections {
+            let expanded = match redir {
+                FdRedirection::ToFile { fd, filename } => FdRedirection::ToFile {
+                    fd: *fd,
+                    filename: expand_variables_in_string(filename, shell_state),
+                },
                 FdRedirection::AppendToFile { fd, filename } => {
-                    // Redirect specific FD to file in append mode (e.g., 2>>error.log)
-                    let expanded_file = expand_variables_in_string(filename, shell_state);
-                    match OpenOptions::new()
-                        .append(true)
-                        .create(true)
-                        .open(&expanded_file)
-                    {
-                        Ok(file) => {
-                            if let Some(ref mut command) = command {
-                                if *fd == 1 {
-                                    command.stdout(Stdio::from(file));
-                                } else if *fd == 2 {
-                                    command.stderr(Stdio::from(file));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            if shell_state.colors_enabled {
-                                eprintln!(
-                                    "{}Error opening file '{}' for FD {} append: {}\x1b[0m",
-                                    shell_state.color_scheme.error, filename, fd, e
-                                );
-                            } else {
-                                eprintln!(
-                                    "Error opening file '{}' for FD {} append: {}",
-                                    filename, fd, e
-                                );
-                            }
-                            return 1;
-                        }
+                    FdRedirection::AppendToFile {
+                        fd: *fd,
+                        filename: expand_variables_in_string(filename, shell_state),
                     }
                 }
-                FdRedirection::FromFile { fd, filename } => {
-                    // Redirect specific FD from file (e.g., 0<input.txt)
-                    let expanded_file = expand_variables_in_string(filename, shell_state);
-                    match File::open(&expanded_file) {
-                        Ok(file) => {
-                            if let Some(ref mut command) = command {
-                                if *fd == 0 {
-                                    command.stdin(Stdio::from(file));
-                                }
-                                // For other FDs, we'd need pre_exec hooks
-                            }
-                        }
-                        Err(e) => {
-                            if shell_state.colors_enabled {
-                                eprintln!(
-                                    "{}Error opening file '{}' for FD {} input: {}\x1b[0m",
-                                    shell_state.color_scheme.error, filename, fd, e
-                                );
-                            } else {
-                                eprintln!(
-                                    "Error opening file '{}' for FD {} input: {}",
-                                    filename, fd, e
-                                );
-                            }
-                            return 1;
-                        }
-                    }
-                }
-                FdRedirection::Duplicate { source_fd, target_fd } => {
-                    // Duplicate one FD to another (e.g., 2>&1)
-                    // This requires pre_exec hooks for proper implementation
-                    // For now, we'll handle the common case of 2>&1 with a workaround
-                    if *source_fd == 2 && *target_fd == 1 {
-                        if let Some(ref mut command) = command {
-                            // This is a simplified implementation
-                            // Proper implementation would use pre_exec with dup2()
-                            command.stderr(Stdio::inherit());
-                        }
-                    }
-                    // Other FD duplications would need pre_exec hooks
-                }
-                FdRedirection::Close { fd } => {
-                    // Close specific FD (e.g., 2>&-)
-                    if let Some(ref mut command) = command {
-                        if *fd == 2 {
-                            command.stderr(Stdio::null());
-                        } else if *fd == 1 {
-                            command.stdout(Stdio::null());
-                        } else if *fd == 0 {
-                            command.stdin(Stdio::null());
-                        }
-                    }
-                }
+                FdRedirection::FromFile { fd, filename } => FdRedirection::FromFile {
+                    fd: *fd,
+                    filename: expand_variables_in_string(filename, shell_state),
+                },
+                other => other.clone(),
+            };
+            all_redirections.push(expanded);
+        }
+
+        // Apply all FD redirections using FdManager for full POSIX compliance
+        if !all_redirections.is_empty() && command.is_some() {
+            let redirections_clone = all_redirections.clone();
+            unsafe {
+                command.as_mut().unwrap()
+                    .pre_exec(move || FdManager::create_pre_exec(redirections_clone.clone())());
             }
         }
 
@@ -2196,16 +2114,20 @@ mod tests {
     fn test_fd_redirection_to_file() {
         use std::fs;
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         // Create unique temp file
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_{}.txt", timestamp);
-        
+
         let cmd = ShellCommand {
-            args: vec!["sh".to_string(), "-c".to_string(), "echo error >&2".to_string()],
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo error >&2".to_string(),
+            ],
             input: None,
             output: None,
             append: None,
@@ -2217,11 +2139,11 @@ mod tests {
                 filename: temp_file.clone(),
             }],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Cleanup
         let _ = fs::remove_file(&temp_file);
     }
@@ -2238,7 +2160,7 @@ mod tests {
             here_string_content: None,
             fd_redirections: vec![FdRedirection::Close { fd: 2 }],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
@@ -2259,7 +2181,7 @@ mod tests {
                 target_fd: 1,
             }],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
@@ -2269,14 +2191,14 @@ mod tests {
     fn test_multiple_fd_redirections() {
         use std::fs;
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let temp_file1 = format!("/tmp/rush_test_fd1_{}.txt", timestamp);
         let temp_file2 = format!("/tmp/rush_test_fd2_{}.txt", timestamp);
-        
+
         let cmd = ShellCommand {
             args: vec!["sh".to_string(), "-c".to_string(), "echo test".to_string()],
             input: None,
@@ -2296,11 +2218,11 @@ mod tests {
                 },
             ],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Cleanup
         let _ = fs::remove_file(&temp_file1);
         let _ = fs::remove_file(&temp_file2);
@@ -2310,16 +2232,16 @@ mod tests {
     fn test_fd_redirection_with_variable_expansion() {
         use std::fs;
         use std::time::{SystemTime, UNIX_EPOCH};
-        
+
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_var_{}.txt", timestamp);
-        
+
         let mut shell_state = ShellState::new();
         shell_state.set_var("LOGFILE", temp_file.clone());
-        
+
         let cmd = ShellCommand {
             args: vec!["sh".to_string(), "-c".to_string(), "echo test".to_string()],
             input: None,
@@ -2333,11 +2255,258 @@ mod tests {
                 filename: "$LOGFILE".to_string(),
             }],
         };
-        
+
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Cleanup
         let _ = fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_fd_duplication_2_to_1_with_pre_exec() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_fd_dup2to1_{}.txt", timestamp);
+
+        // Test 2>&1 redirection - stderr should go to stdout
+        let cmd = ShellCommand {
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo error >&2".to_string(),
+            ],
+            input: None,
+            output: Some(temp_file.clone()),
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::Duplicate {
+                source_fd: 2,
+                target_fd: 1,
+            }],
+        };
+
+        let mut shell_state = ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Verify that stderr output was captured in stdout file
+        let contents = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(contents.contains("error"));
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_arbitrary_fd_number_redirect() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_fd3_{}.txt", timestamp);
+
+        // Test redirecting FD 3 to a file
+        let cmd = ShellCommand {
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo test >&3".to_string(),
+            ],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::ToFile {
+                fd: 3,
+                filename: temp_file.clone(),
+            }],
+        };
+
+        let mut shell_state = ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Verify file was created and contains output
+        assert!(std::path::Path::new(&temp_file).exists());
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_multiple_fd_redirections_with_duplication() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_multi_fd_{}.txt", timestamp);
+
+        // Test: redirect stdout to file, then duplicate stderr to stdout
+        // Result: both stdout and stderr go to the file
+        let cmd = ShellCommand {
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo stdout; echo stderr >&2".to_string(),
+            ],
+            input: None,
+            output: Some(temp_file.clone()),
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::Duplicate {
+                source_fd: 2,
+                target_fd: 1,
+            }],
+        };
+
+        let mut shell_state = ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Verify both outputs are in the file
+        let contents = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(contents.contains("stdout"));
+        assert!(contents.contains("stderr"));
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_fd_close_with_pre_exec() {
+        // Test closing FD 2 (stderr)
+        // When stderr is closed and a command tries to write to it, it fails
+        let cmd = ShellCommand {
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo test; echo error >&2".to_string(),
+            ],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::Close { fd: 2 }],
+        };
+
+        let mut shell_state = ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
+        // Command fails because it tries to write to closed stderr
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_fd_append_mode() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_fd_append_{}.txt", timestamp);
+
+        // First write
+        let cmd1 = ShellCommand {
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo line1 >&3".to_string(),
+            ],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::ToFile {
+                fd: 3,
+                filename: temp_file.clone(),
+            }],
+        };
+
+        let mut shell_state = ShellState::new();
+        execute_single_command(&cmd1, &mut shell_state);
+
+        // Second write in append mode
+        let cmd2 = ShellCommand {
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo line2 >&3".to_string(),
+            ],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::AppendToFile {
+                fd: 3,
+                filename: temp_file.clone(),
+            }],
+        };
+
+        execute_single_command(&cmd2, &mut shell_state);
+
+        // Verify both lines are in the file
+        let contents = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(contents.contains("line1"));
+        assert!(contents.contains("line2"));
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_fd_input_redirection() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let input_file = format!("/tmp/rush_test_fd_input_{}.txt", timestamp);
+
+        // Create input file
+        std::fs::write(&input_file, "test input data\n").unwrap();
+
+        // Test reading from FD 3
+        let cmd = ShellCommand {
+            args: vec!["sh".to_string(), "-c".to_string(), "cat <&3".to_string()],
+            input: None,
+            output: None,
+            append: None,
+            here_doc_delimiter: None,
+            here_doc_quoted: false,
+            here_string_content: None,
+            fd_redirections: vec![FdRedirection::FromFile {
+                fd: 3,
+                filename: input_file.clone(),
+            }],
+        };
+
+        let mut shell_state = ShellState::new();
+        let exit_code = execute_single_command(&cmd, &mut shell_state);
+        assert_eq!(exit_code, 0);
+
+        // Cleanup
+        let _ = std::fs::remove_file(&input_file);
     }
 }

@@ -8,6 +8,7 @@ pub mod brace_expansion;
 pub mod builtins;
 pub mod completion;
 pub mod executor;
+pub mod fd_manager;
 pub mod lexer;
 pub mod parameter_expansion;
 pub mod parser;
