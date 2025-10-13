@@ -5,6 +5,9 @@ use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
+use nix::sys::wait::{waitpid, WaitStatus};
+use nix::unistd::{fork, ForkResult};
+
 use crate::fd_manager::FdManager;
 use crate::parser::{Ast, FdRedirection, ShellCommand};
 use crate::state::ShellState;
@@ -659,6 +662,71 @@ pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32
     result
 }
 
+/// Execute a subshell in a forked child process
+/// This provides process isolation - variable changes don't affect the parent shell
+fn execute_subshell(
+    body: Ast,
+    _redirections: Vec<FdRedirection>,
+    shell_state: &mut ShellState,
+) -> i32 {
+    // Fork a new process for the subshell
+    match unsafe { fork() } {
+        Ok(ForkResult::Child) => {
+            // Child process - execute subshell body with cloned state
+            let mut subshell_state = shell_state.clone();
+            
+            // TODO: Phase 2 will apply redirections here
+            // For now, redirections are parsed but not processed
+            
+            // Execute body in isolated state
+            let exit_code = execute(body, &mut subshell_state);
+            
+            // Exit child process with subshell's exit code
+            // Use std::process::exit to ensure proper cleanup
+            std::process::exit(exit_code);
+        }
+        Ok(ForkResult::Parent { child }) => {
+            // Parent process - wait for child to complete
+            match waitpid(child, None) {
+                Ok(WaitStatus::Exited(_pid, exit_code)) => exit_code,
+                Ok(WaitStatus::Signaled(_pid, signal, _)) => {
+                    // Child was terminated by signal
+                    // Return 128 + signal number per POSIX convention
+                    128 + signal as i32
+                }
+                Ok(_) => {
+                    // Other wait statuses (stopped, continued, etc.)
+                    1
+                }
+                Err(_) => {
+                    // Wait failed
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}Error waiting for subshell\x1b[0m",
+                            shell_state.color_scheme.error
+                        );
+                    } else {
+                        eprintln!("Error waiting for subshell");
+                    }
+                    1
+                }
+            }
+        }
+        Err(_) => {
+            // Fork failed
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}Fork failed for subshell\x1b[0m",
+                    shell_state.color_scheme.error
+                );
+            } else {
+                eprintln!("Fork failed for subshell");
+            }
+            1
+        }
+    }
+}
+
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
@@ -962,6 +1030,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             } else {
                 left_exit
             }
+        }
+        Ast::Subshell { body, redirections } => {
+            let exit_code = execute_subshell(*body, redirections, shell_state);
+            shell_state.set_last_exit_code(exit_code);
+            exit_code
         }
     }
 }

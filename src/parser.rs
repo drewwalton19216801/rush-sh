@@ -49,6 +49,12 @@ pub enum Ast {
         left: Box<Ast>,
         right: Box<Ast>,
     },
+    /// Subshell execution (...)
+    /// Executes commands in a forked child process with isolated state
+    Subshell {
+        body: Box<Ast>,
+        redirections: Vec<FdRedirection>,
+    },
 }
 
 /// Represents a file descriptor redirection operation
@@ -261,6 +267,11 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         return Err("No commands found".to_string());
     }
 
+    // Check if it's a subshell: LeftParen at start
+    if tokens[0] == Token::LeftParen {
+        return parse_subshell(tokens);
+    }
+
     // Check if it's an assignment
     if tokens.len() == 2 {
         // Check for pattern: VAR= VALUE
@@ -446,7 +457,42 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
         let start = i;
 
         // Special handling for compound commands
-        if tokens[i] == Token::If {
+        // Check for subshell
+        if tokens[i] == Token::LeftParen {
+            // Find matching RightParen
+            let mut depth = 1;
+            i += 1;
+            while i < tokens.len() && depth > 0 {
+                match tokens[i] {
+                    Token::LeftParen => depth += 1,
+                    Token::RightParen => depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
+            // Continue to collect any redirections after )
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::RedirOut | Token::RedirIn | Token::RedirAppend |
+                    Token::RedirFdOut(..) | Token::RedirFdAppend(..) |
+                    Token::RedirFdIn(..) | Token::RedirFdDupOutput(..) |
+                    Token::RedirFdDupInput(..) | Token::RedirFdClose(..) => {
+                        i += 1;
+                        // Also consume the filename if present for simple redirections
+                        if i < tokens.len() && matches!(tokens[i], Token::Word(_)) {
+                            // Check if previous token needs a filename
+                            match tokens[i - 1] {
+                                Token::RedirOut | Token::RedirIn | Token::RedirAppend => {
+                                    i += 1;
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => break,
+                }
+            }
+        } else if tokens[i] == Token::If {
             // For if statements, find the matching fi
             let mut depth = 0;
             while i < tokens.len() {
@@ -1372,6 +1418,146 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
     })
 }
 
+/// Parse a subshell construct: (commands)
+/// Handles nested subshells and collects redirections after the closing )
+fn parse_subshell(tokens: &[Token]) -> Result<Ast, String> {
+    if tokens.is_empty() || tokens[0] != Token::LeftParen {
+        return Err("Expected ( for subshell".to_string());
+    }
+
+    let mut i = 1; // Skip opening (
+    let mut depth = 1;
+    let mut body_tokens = Vec::new();
+
+    // Collect tokens until matching )
+    while i < tokens.len() && depth > 0 {
+        match &tokens[i] {
+            Token::LeftParen => {
+                depth += 1;
+                body_tokens.push(tokens[i].clone());
+            }
+            Token::RightParen => {
+                depth -= 1;
+                if depth > 0 {
+                    body_tokens.push(tokens[i].clone());
+                }
+            }
+            _ => {
+                body_tokens.push(tokens[i].clone());
+            }
+        }
+        i += 1;
+    }
+
+    if depth != 0 {
+        return Err("Unmatched ( in subshell".to_string());
+    }
+
+    // Parse redirections after the closing )
+    let mut redirections = Vec::new();
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::RedirOut => {
+                i += 1;
+                if i < tokens.len() {
+                    if let Token::Word(filename) = &tokens[i] {
+                        redirections.push(FdRedirection::ToFile {
+                            fd: 1,
+                            filename: filename.clone(),
+                        });
+                        i += 1;
+                    }
+                }
+            }
+            Token::RedirIn => {
+                i += 1;
+                if i < tokens.len() {
+                    if let Token::Word(filename) = &tokens[i] {
+                        redirections.push(FdRedirection::FromFile {
+                            fd: 0,
+                            filename: filename.clone(),
+                        });
+                        i += 1;
+                    }
+                }
+            }
+            Token::RedirAppend => {
+                i += 1;
+                if i < tokens.len() {
+                    if let Token::Word(filename) = &tokens[i] {
+                        redirections.push(FdRedirection::AppendToFile {
+                            fd: 1,
+                            filename: filename.clone(),
+                        });
+                        i += 1;
+                    }
+                }
+            }
+            Token::RedirFdOut(fd, filename) => {
+                redirections.push(FdRedirection::ToFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+                i += 1;
+            }
+            Token::RedirFdAppend(fd, filename) => {
+                redirections.push(FdRedirection::AppendToFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+                i += 1;
+            }
+            Token::RedirFdIn(fd, filename) => {
+                redirections.push(FdRedirection::FromFile {
+                    fd: *fd,
+                    filename: filename.clone(),
+                });
+                i += 1;
+            }
+            Token::RedirFdDupOutput(source_fd, target) => {
+                if let Ok(target_fd) = target.parse::<u32>() {
+                    redirections.push(FdRedirection::DuplicateOutput {
+                        source_fd: *source_fd,
+                        target_fd,
+                    });
+                }
+                i += 1;
+            }
+            Token::RedirFdDupInput(source_fd, target) => {
+                if let Ok(target_fd) = target.parse::<u32>() {
+                    redirections.push(FdRedirection::DuplicateInput {
+                        source_fd: *source_fd,
+                        target_fd,
+                    });
+                }
+                i += 1;
+            }
+            Token::RedirFdClose(fd) => {
+                redirections.push(FdRedirection::Close { fd: *fd });
+                i += 1;
+            }
+            Token::Pipe | Token::Semicolon | Token::Newline | Token::And | Token::Or => {
+                break; // End of subshell construct
+            }
+            _ => {
+                return Err(format!("Unexpected token after subshell: {:?}", tokens[i]));
+            }
+        }
+    }
+
+    // Parse body
+    let body_ast = if body_tokens.is_empty() {
+        create_empty_body_ast()
+    } else {
+        parse_commands_sequentially(&body_tokens)?
+    };
+
+    Ok(Ast::Subshell {
+        body: Box::new(body_ast),
+        redirections,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::lexer::Token;
@@ -2059,5 +2245,201 @@ mod tests {
                 }],
             }])
         );
+    }
+
+    // ============================================================================
+    // Phase 1: Subshell Parser Tests
+    // ============================================================================
+
+    #[test]
+    fn test_parse_simple_subshell() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::RightParen,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, redirections } => {
+                assert!(redirections.is_empty());
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in subshell body");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_nested_subshells() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("nested".to_string()),
+            Token::RightParen,
+            Token::RightParen,
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, .. } => {
+                // Outer subshell
+                if let Ast::Subshell { body: inner_body, .. } = *body {
+                    // Inner subshell
+                    if let Ast::Pipeline(cmds) = *inner_body {
+                        assert_eq!(cmds[0].args, vec!["echo", "nested"]);
+                    } else {
+                        panic!("Expected Pipeline in inner subshell");
+                    }
+                } else {
+                    panic!("Expected nested Subshell");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_unmatched_subshell_paren() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+        ];
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Unmatched ( in subshell");
+    }
+
+    #[test]
+    fn test_parse_empty_subshell() {
+        let tokens = vec![Token::LeftParen, Token::RightParen];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, redirections } => {
+                assert!(redirections.is_empty());
+                // Empty body should be a true command
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["true"]);
+                } else {
+                    panic!("Expected Pipeline for empty subshell");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subshell_with_output_redirection() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::RightParen,
+            Token::RedirOut,
+            Token::Word("file.txt".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, redirections } => {
+                assert_eq!(redirections.len(), 1);
+                match &redirections[0] {
+                    FdRedirection::ToFile { fd, filename } => {
+                        assert_eq!(*fd, 1);
+                        assert_eq!(filename, "file.txt");
+                    }
+                    _ => panic!("Expected ToFile redirection"),
+                }
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in subshell body");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subshell_with_fd_redirection() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::RightParen,
+            Token::RedirFdDupOutput(2, "1".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, redirections } => {
+                assert_eq!(redirections.len(), 1);
+                match &redirections[0] {
+                    FdRedirection::DuplicateOutput {
+                        source_fd,
+                        target_fd,
+                    } => {
+                        assert_eq!(*source_fd, 2);
+                        assert_eq!(*target_fd, 1);
+                    }
+                    _ => panic!("Expected DuplicateOutput redirection"),
+                }
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in subshell body");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subshell_with_multiple_redirections() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("test".to_string()),
+            Token::RightParen,
+            Token::RedirOut,
+            Token::Word("out.txt".to_string()),
+            Token::RedirFdDupOutput(2, "1".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Subshell { body, redirections } => {
+                assert_eq!(redirections.len(), 2);
+                if let Ast::Pipeline(cmds) = *body {
+                    assert_eq!(cmds[0].args, vec!["echo", "test"]);
+                } else {
+                    panic!("Expected Pipeline in subshell body");
+                }
+            }
+            _ => panic!("Expected Subshell AST"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subshell_in_sequence() {
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("echo".to_string()),
+            Token::Word("a".to_string()),
+            Token::RightParen,
+            Token::Semicolon,
+            Token::Word("echo".to_string()),
+            Token::Word("b".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        match result {
+            Ast::Sequence(asts) => {
+                assert_eq!(asts.len(), 2);
+                assert!(matches!(asts[0], Ast::Subshell { .. }));
+                assert!(matches!(asts[1], Ast::Pipeline(_)));
+            }
+            _ => panic!("Expected Sequence AST"),
+        }
     }
 }
