@@ -854,7 +854,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             _ => {
-                if ch == '~' && current.is_empty() {
+                // Tilde expansion should only happen when:
+                // 1. The tilde is at the start of a word (current.is_empty())
+                // 2. We're not inside quotes (neither single nor double)
+                if ch == '~' && current.is_empty() && !in_single_quote && !in_double_quote {
                     if let Ok(home) = env::var("HOME") {
                         current.push_str(&home);
                     } else {
@@ -1994,6 +1997,64 @@ mod tests {
                 Token::RedirHereString("fallback".to_string()),
                 Token::RedirOut,
                 Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tilde_expansion_unquoted() {
+        use std::env;
+        let shell_state = ShellState::new();
+        let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
+        let result = lex("echo ~", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word(home)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tilde_expansion_single_quoted() {
+        let shell_state = ShellState::new();
+        let result = lex("echo '~'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("~".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tilde_expansion_double_quoted() {
+        let shell_state = ShellState::new();
+        let result = lex("echo \"~\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("~".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tilde_expansion_mixed_quotes() {
+        use std::env;
+        let shell_state = ShellState::new();
+        let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
+        let result = lex("echo ~ '~' \"~\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word(home),
+                Token::Word("~".to_string()),
+                Token::Word("~".to_string())
             ]
         );
     }
