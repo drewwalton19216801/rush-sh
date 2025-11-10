@@ -23,7 +23,7 @@ impl super::Builtin for CdBuiltin {
     fn run(
         &self,
         cmd: &ShellCommand,
-        _shell_state: &mut ShellState,
+        shell_state: &mut ShellState,
         output_writer: &mut dyn Write,
     ) -> i32 {
         let dir = if cmd.args.len() > 1 {
@@ -36,10 +36,30 @@ impl super::Builtin for CdBuiltin {
         } else {
             dir
         };
+        
+        // Save current directory as OLDPWD before changing
+        if let Ok(current) = env::current_dir() {
+            let current_str = current.to_string_lossy().to_string();
+            shell_state.set_exported_var("OLDPWD", current_str.clone());
+            // Also update the environment variable
+            unsafe {
+                env::set_var("OLDPWD", current_str);
+            }
+        }
+        
         if let Err(e) = env::set_current_dir(Path::new(&path)) {
             let _ = writeln!(output_writer, "cd: {}: {}", path, e);
             1
         } else {
+            // Update PWD to the new directory
+            if let Ok(new_dir) = env::current_dir() {
+                let new_dir_str = new_dir.to_string_lossy().to_string();
+                shell_state.set_exported_var("PWD", new_dir_str.clone());
+                // Also update the environment variable so subsequent commands see the new PWD
+                unsafe {
+                    env::set_var("PWD", new_dir_str);
+                }
+            }
             0
         }
     }
