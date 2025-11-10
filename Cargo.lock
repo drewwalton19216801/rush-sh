@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "rush-sh"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "clap",
  "glob",
