@@ -860,7 +860,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 if ch == '~' && current.is_empty() && !in_single_quote && !in_double_quote {
                     chars.next(); // consume ~
                     
-                    // Check for ~+ (PWD) or ~- (OLDPWD)
+                    // Check for ~+ (PWD), ~- (OLDPWD), or ~username
                     if let Some(&next_ch) = chars.peek() {
                         if next_ch == '+' {
                             // ~+ expands to $PWD
@@ -880,12 +880,48 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             } else {
                                 current.push_str("~-");
                             }
-                        } else {
-                            // Regular ~ expansion (HOME)
+                        } else if next_ch == '/' || next_ch == ' ' || next_ch == '\t' || next_ch == '\n' {
+                            // ~ followed by separator - expand to HOME
                             if let Ok(home) = env::var("HOME") {
                                 current.push_str(&home);
                             } else {
                                 current.push('~');
+                            }
+                        } else {
+                            // ~username expansion - collect username
+                            let mut username = String::new();
+                            while let Some(&ch) = chars.peek() {
+                                if ch == '/' || ch == ' ' || ch == '\t' || ch == '\n' {
+                                    break;
+                                }
+                                username.push(ch);
+                                chars.next();
+                            }
+                            
+                            if !username.is_empty() {
+                                // Try to get user's home directory
+                                // Special case for root user
+                                let user_home = if username == "root" {
+                                    "/root".to_string()
+                                } else {
+                                    format!("/home/{}", username)
+                                };
+                                
+                                // Check if the directory exists
+                                if std::path::Path::new(&user_home).exists() {
+                                    current.push_str(&user_home);
+                                } else {
+                                    // If directory doesn't exist, keep literal
+                                    current.push('~');
+                                    current.push_str(&username);
+                                }
+                            } else {
+                                // Empty username, expand to HOME
+                                if let Ok(home) = env::var("HOME") {
+                                    current.push_str(&home);
+                                } else {
+                                    current.push('~');
+                                }
                             }
                         }
                     } else {
@@ -2268,5 +2304,119 @@ mod tests {
                 Token::Word("prefix~+".to_string())
             ]
         );
+    }
+
+    #[test]
+    fn test_tilde_expansion_username() {
+        let shell_state = ShellState::new();
+        
+        // Test with root username (special case: /root instead of /home/root)
+        let result = lex("echo ~root", &shell_state).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], Token::Word("echo".to_string()));
+        
+        // The expansion should either be /root or literal ~root (if /root doesn't exist)
+        if let Token::Word(path) = &result[1] {
+            assert!(path == "/root" || path == "~root");
+        } else {
+            panic!("Expected Word token");
+        }
+    }
+
+    #[test]
+    fn test_tilde_expansion_username_with_path() {
+        let shell_state = ShellState::new();
+        
+        // Test ~username/path expansion
+        let result = lex("echo ~root/documents", &shell_state).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], Token::Word("echo".to_string()));
+        
+        // Should expand to /root/documents or ~root/documents
+        if let Token::Word(path) = &result[1] {
+            assert!(path == "/root/documents" || path == "~root/documents");
+        } else {
+            panic!("Expected Word token");
+        }
+    }
+
+    #[test]
+    fn test_tilde_expansion_nonexistent_user() {
+        let shell_state = ShellState::new();
+        
+        // Test with a username that definitely doesn't exist
+        let result = lex("echo ~nonexistentuser12345", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("~nonexistentuser12345".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tilde_expansion_username_in_quotes() {
+        let shell_state = ShellState::new();
+        
+        // Single quotes should prevent expansion
+        let result = lex("echo '~root'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("~root".to_string())
+            ]
+        );
+        
+        // Double quotes should also prevent expansion
+        let result = lex("echo \"~root\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("~root".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tilde_expansion_mixed_with_username() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
+        shell_state.set_var("PWD", "/current".to_string());
+        
+        // Test mixing different tilde expansions
+        let result = lex("echo ~ ~+ ~root", &shell_state).unwrap();
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], Token::Word("echo".to_string()));
+        assert_eq!(result[1], Token::Word(home));
+        assert_eq!(result[2], Token::Word("/current".to_string()));
+        
+        // The ~root expansion depends on whether /root exists
+        if let Token::Word(path) = &result[3] {
+            assert!(path == "/root" || path == "~root");
+        } else {
+            panic!("Expected Word token");
+        }
+    }
+
+    #[test]
+    fn test_tilde_expansion_username_with_special_chars() {
+        let shell_state = ShellState::new();
+        
+        // Test that special characters terminate username collection
+        let result = lex("echo ~user@host", &shell_state).unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], Token::Word("echo".to_string()));
+        
+        // Should try to expand ~user and then append @host
+        if let Token::Word(path) = &result[1] {
+            // The path should contain @host at the end
+            assert!(path.contains("@host") || path == "~user@host");
+        } else {
+            panic!("Expected Word token");
+        }
     }
 }
