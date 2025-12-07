@@ -13,6 +13,10 @@ pub enum Token {
     RedirAppend,
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
     RedirHereString(String),    // Here-string: <<<"content"
+    RedirFdOut(u32),            // File descriptor output redirection (e.g., 2>file)
+    RedirFdIn(u32),             // File descriptor input redirection (e.g., 3<file)
+    RedirFdDup(u32, u32),       // File descriptor duplication (e.g., 2>&1)
+    RedirFdClose(u32),          // File descriptor closing (e.g., 2>&-)
     If,
     Then,
     Else,
@@ -590,164 +594,365 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '>' if !in_double_quote && !in_single_quote => {
-                // Check if this is a file descriptor redirection like 2>&1
+                // Check if this is a file descriptor redirection like 2>&1 or 2>file
                 // Look back to see if current ends with a digit
-                let is_fd_redirect = if !current.is_empty() {
-                    current
+                let fd_number = if !current.is_empty() {
+                    // Check if the entire current token is just digits (FD number)
+                    if current.chars().all(|c| c.is_ascii_digit()) {
+                        current.parse::<u32>().ok()
+                    } else if current
                         .chars()
                         .last()
                         .map(|c| c.is_ascii_digit())
                         .unwrap_or(false)
-                } else {
-                    false
-                };
+                    {
+                        // Extract trailing digits as FD number
+                        let mut fd_str = String::new();
+                        let mut remaining = String::new();
+                        let mut found_digit = false;
 
-                if is_fd_redirect {
-                    // This might be a file descriptor redirection like 2>&1
-                    chars.next(); // consume >
-                    if let Some(&'&') = chars.peek() {
-                        chars.next(); // consume &
-                        // Now collect the target fd or '-'
-                        let mut target = String::new();
-                        while let Some(&ch) = chars.peek() {
-                            if ch.is_ascii_digit() || ch == '-' {
-                                target.push(ch);
-                                chars.next();
+                        for ch in current.chars().rev() {
+                            if ch.is_ascii_digit() && !found_digit {
+                                fd_str.insert(0, ch);
                             } else {
-                                break;
+                                found_digit = true;
+                                remaining.insert(0, ch);
                             }
                         }
 
-                        if !target.is_empty() {
-                            // This is a valid fd redirection like 2>&1 or 2>&-
-                            // Remove the trailing digit from current (the fd number)
-                            current.pop();
-
-                            // Push any remaining content as a token
-                            flush_current_token(&mut current, &mut tokens);
-
-                            // For now, we'll just skip the fd redirection (treat as no-op)
-                            // since we don't fully support it, but we won't treat it as an error
-                            continue;
+                        if !fd_str.is_empty() && !remaining.is_empty() {
+                            // There's content before the FD number, not a pure FD redirect
+                            None
                         } else {
-                            // Invalid syntax, put back what we consumed
-                            current.push('>');
-                            current.push('&');
+                            fd_str.parse::<u32>().ok()
                         }
                     } else {
-                        // Not a fd redirection, handle as normal redirect
-                        // Put the > back into processing
-                        flush_current_token(&mut current, &mut tokens);
-
-                        if let Some(&next_ch) = chars.peek() {
-                            if next_ch == '>' {
-                                chars.next();
-                                tokens.push(Token::RedirAppend);
-                            } else {
-                                tokens.push(Token::RedirOut);
-                            }
-                        } else {
-                            tokens.push(Token::RedirOut);
-                        }
+                        None
                     }
                 } else {
-                    // Normal redirection
-                    flush_current_token(&mut current, &mut tokens);
-                    chars.next();
-                    if let Some(&next_ch) = chars.peek() {
-                        if next_ch == '>' {
-                            chars.next();
-                            tokens.push(Token::RedirAppend);
+                    None
+                };
+
+                if let Some(fd) = fd_number {
+                    // This is a file descriptor redirection like 2>&1 or 2>file
+                    chars.next(); // consume >
+
+                    if let Some(&'&') = chars.peek() {
+                        chars.next(); // consume &
+
+                        // Check for closing (>&-) or duplication (>&N)
+                        if let Some(&'-') = chars.peek() {
+                            chars.next(); // consume -
+                            // FD close: N>&-
+                            current.clear();
+                            flush_current_token(&mut current, &mut tokens);
+                            tokens.push(Token::RedirFdClose(fd));
                         } else {
-                            tokens.push(Token::RedirOut);
+                            // Collect target FD number
+                            let mut target_fd_str = String::new();
+                            while let Some(&ch) = chars.peek() {
+                                if ch.is_ascii_digit() {
+                                    target_fd_str.push(ch);
+                                    chars.next();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if !target_fd_str.is_empty() {
+                                if let Ok(target_fd) = target_fd_str.parse::<u32>() {
+                                    // FD duplication: N>&M
+                                    current.clear();
+                                    flush_current_token(&mut current, &mut tokens);
+                                    tokens.push(Token::RedirFdDup(fd, target_fd));
+                                } else {
+                                    // Invalid target FD, treat as literal
+                                    current.push_str(&fd.to_string());
+                                    current.push('>');
+                                    current.push('&');
+                                    current.push_str(&target_fd_str);
+                                }
+                            } else {
+                                // No target FD after >&, invalid syntax
+                                current.push_str(&fd.to_string());
+                                current.push('>');
+                                current.push('&');
+                            }
                         }
+                    } else if let Some(&'>') = chars.peek() {
+                        // Append redirection with FD: N>>file
+                        chars.next(); // consume second >
+                        current.clear();
+                        flush_current_token(&mut current, &mut tokens);
+                        tokens.push(Token::RedirFdOut(fd));
+                        tokens.push(Token::RedirAppend);
+                    } else {
+                        // Output redirection with FD: N>file
+                        current.clear();
+                        flush_current_token(&mut current, &mut tokens);
+                        tokens.push(Token::RedirFdOut(fd));
+                        tokens.push(Token::RedirOut);
+                    }
+                } else {
+                    // Normal redirection without FD prefix
+                    flush_current_token(&mut current, &mut tokens);
+                    chars.next(); // consume >
+
+                    if let Some(&'&') = chars.peek() {
+                        chars.next(); // consume &
+
+                        // Check for >&N (stdout duplication) or >&- (stdout close)
+                        if let Some(&'-') = chars.peek() {
+                            chars.next(); // consume -
+                            // Close stdout: >&-
+                            tokens.push(Token::RedirFdClose(1));
+                        } else {
+                            // Collect target FD
+                            let mut target_fd_str = String::new();
+                            while let Some(&ch) = chars.peek() {
+                                if ch.is_ascii_digit() {
+                                    target_fd_str.push(ch);
+                                    chars.next();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if !target_fd_str.is_empty() {
+                                if let Ok(target_fd) = target_fd_str.parse::<u32>() {
+                                    // Duplicate stdout: >&N (equivalent to 1>&N)
+                                    tokens.push(Token::RedirFdDup(1, target_fd));
+                                } else {
+                                    // Invalid, treat as literal
+                                    tokens.push(Token::Word(">&".to_string()));
+                                    tokens.push(Token::Word(target_fd_str));
+                                }
+                            } else {
+                                // No target FD, invalid
+                                tokens.push(Token::Word(">&".to_string()));
+                            }
+                        }
+                    } else if let Some(&'>') = chars.peek() {
+                        chars.next(); // consume second >
+                        tokens.push(Token::RedirAppend);
                     } else {
                         tokens.push(Token::RedirOut);
                     }
                 }
             }
             '<' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
-                chars.next(); // consume <
-                if let Some(&'<') = chars.peek() {
-                    // Check for here-string <<<
-                    chars.next(); // consume second <
-                    if let Some(&'<') = chars.peek() {
-                        chars.next(); // consume third <
-                        // Here-string: skip whitespace, then collect content
-                        skip_whitespace(&mut chars);
+                // Check if this is a file descriptor input redirection like 3<file
+                let fd_number = if !current.is_empty() {
+                    // Check if the entire current token is just digits (FD number)
+                    if current.chars().all(|c| c.is_ascii_digit()) {
+                        current.parse::<u32>().ok()
+                    } else if current
+                        .chars()
+                        .last()
+                        .map(|c| c.is_ascii_digit())
+                        .unwrap_or(false)
+                    {
+                        // Extract trailing digits as FD number
+                        let mut fd_str = String::new();
+                        let mut remaining = String::new();
+                        let mut found_digit = false;
 
-                        let mut content = String::new();
-                        let mut in_quote = false;
-                        let mut quote_char = ' ';
-
-                        while let Some(&ch) = chars.peek() {
-                            if ch == '\n' && !in_quote {
-                                break;
-                            }
-                            if (ch == '"' || ch == '\'') && !in_quote {
-                                in_quote = true;
-                                quote_char = ch;
-                                chars.next(); // consume quote but don't add to content
-                            } else if in_quote && ch == quote_char {
-                                in_quote = false;
-                                chars.next(); // consume quote but don't add to content
-                            } else if !in_quote && (ch == ' ' || ch == '\t') {
-                                break;
+                        for ch in current.chars().rev() {
+                            if ch.is_ascii_digit() && !found_digit {
+                                fd_str.insert(0, ch);
                             } else {
-                                content.push(ch);
-                                chars.next();
+                                found_digit = true;
+                                remaining.insert(0, ch);
                             }
                         }
 
-                        if !content.is_empty() {
-                            tokens.push(Token::RedirHereString(content));
+                        if !fd_str.is_empty() && !remaining.is_empty() {
+                            // There's content before the FD number, not a pure FD redirect
+                            None
                         } else {
-                            return Err("Invalid here-string syntax: expected content after <<<"
-                                .to_string());
+                            fd_str.parse::<u32>().ok()
                         }
                     } else {
-                        // Here-document: skip whitespace, then collect delimiter
-                        skip_whitespace(&mut chars);
-
-                        let mut delimiter = String::new();
-                        let mut in_quote = false;
-                        let mut quote_char = ' ';
-                        let mut was_quoted = false; // Track if any quotes were found
-
-                        while let Some(&ch) = chars.peek() {
-                            if ch == '\n' && !in_quote {
-                                break;
-                            }
-                            if (ch == '"' || ch == '\'') && !in_quote {
-                                in_quote = true;
-                                quote_char = ch;
-                                was_quoted = true; // Mark that we found a quote
-                                chars.next(); // consume quote but don't add to delimiter
-                            } else if in_quote && ch == quote_char {
-                                in_quote = false;
-                                chars.next(); // consume quote but don't add to delimiter
-                            } else if !in_quote && (ch == ' ' || ch == '\t') {
-                                break;
-                            } else {
-                                delimiter.push(ch);
-                                chars.next();
-                            }
-                        }
-
-                        if !delimiter.is_empty() {
-                            // Pass both delimiter and whether it was quoted
-                            tokens.push(Token::RedirHereDoc(delimiter, was_quoted));
-                        } else {
-                            return Err(
-                                "Invalid here-document syntax: expected delimiter after <<"
-                                    .to_string(),
-                            );
-                        }
+                        None
                     }
                 } else {
-                    // Regular input redirection
-                    tokens.push(Token::RedirIn);
+                    None
+                };
+
+                if let Some(fd) = fd_number {
+                    // This is a file descriptor input redirection like 3<file or 3<&4
+                    chars.next(); // consume <
+
+                    if let Some(&'&') = chars.peek() {
+                        chars.next(); // consume &
+
+                        // Check for closing (<&-) or duplication (<&N)
+                        if let Some(&'-') = chars.peek() {
+                            chars.next(); // consume -
+                            // FD close: N<&-
+                            current.clear();
+                            flush_current_token(&mut current, &mut tokens);
+                            tokens.push(Token::RedirFdClose(fd));
+                        } else {
+                            // Collect target FD number
+                            let mut target_fd_str = String::new();
+                            while let Some(&ch) = chars.peek() {
+                                if ch.is_ascii_digit() {
+                                    target_fd_str.push(ch);
+                                    chars.next();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if !target_fd_str.is_empty() {
+                                if let Ok(target_fd) = target_fd_str.parse::<u32>() {
+                                    // FD duplication: N<&M
+                                    current.clear();
+                                    flush_current_token(&mut current, &mut tokens);
+                                    tokens.push(Token::RedirFdDup(fd, target_fd));
+                                } else {
+                                    // Invalid target FD, treat as literal
+                                    current.push_str(&fd.to_string());
+                                    current.push('<');
+                                    current.push('&');
+                                    current.push_str(&target_fd_str);
+                                }
+                            } else {
+                                // No target FD after <&, invalid syntax
+                                current.push_str(&fd.to_string());
+                                current.push('<');
+                                current.push('&');
+                            }
+                        }
+                    } else {
+                        // Input redirection with FD: N<file
+                        current.clear();
+                        flush_current_token(&mut current, &mut tokens);
+                        tokens.push(Token::RedirFdIn(fd));
+                        tokens.push(Token::RedirIn);
+                    }
+                } else {
+                    // Normal input redirection without FD prefix
+                    flush_current_token(&mut current, &mut tokens);
+                    chars.next(); // consume <
+
+                    if let Some(&'&') = chars.peek() {
+                        chars.next(); // consume &
+
+                        // Check for <&N (stdin duplication) or <&- (stdin close)
+                        if let Some(&'-') = chars.peek() {
+                            chars.next(); // consume -
+                            // Close stdin: <&-
+                            tokens.push(Token::RedirFdClose(0));
+                        } else {
+                            // Collect target FD
+                            let mut target_fd_str = String::new();
+                            while let Some(&ch) = chars.peek() {
+                                if ch.is_ascii_digit() {
+                                    target_fd_str.push(ch);
+                                    chars.next();
+                                } else {
+                                    break;
+                                }
+                            }
+
+                            if !target_fd_str.is_empty() {
+                                if let Ok(target_fd) = target_fd_str.parse::<u32>() {
+                                    // Duplicate stdin: <&N (equivalent to 0<&N)
+                                    tokens.push(Token::RedirFdDup(0, target_fd));
+                                } else {
+                                    // Invalid, treat as literal
+                                    tokens.push(Token::Word("<&".to_string()));
+                                    tokens.push(Token::Word(target_fd_str));
+                                }
+                            } else {
+                                // No target FD, invalid
+                                tokens.push(Token::Word("<&".to_string()));
+                            }
+                        }
+                    } else if let Some(&'<') = chars.peek() {
+                        // Check for here-string <<<
+                        chars.next(); // consume second <
+                        if let Some(&'<') = chars.peek() {
+                            chars.next(); // consume third <
+                            // Here-string: skip whitespace, then collect content
+                            skip_whitespace(&mut chars);
+
+                            let mut content = String::new();
+                            let mut in_quote = false;
+                            let mut quote_char = ' ';
+
+                            while let Some(&ch) = chars.peek() {
+                                if ch == '\n' && !in_quote {
+                                    break;
+                                }
+                                if (ch == '"' || ch == '\'') && !in_quote {
+                                    in_quote = true;
+                                    quote_char = ch;
+                                    chars.next(); // consume quote but don't add to content
+                                } else if in_quote && ch == quote_char {
+                                    in_quote = false;
+                                    chars.next(); // consume quote but don't add to content
+                                } else if !in_quote && (ch == ' ' || ch == '\t') {
+                                    break;
+                                } else {
+                                    content.push(ch);
+                                    chars.next();
+                                }
+                            }
+
+                            if !content.is_empty() {
+                                tokens.push(Token::RedirHereString(content));
+                            } else {
+                                return Err(
+                                    "Invalid here-string syntax: expected content after <<<"
+                                        .to_string(),
+                                );
+                            }
+                        } else {
+                            // Here-document: skip whitespace, then collect delimiter
+                            skip_whitespace(&mut chars);
+
+                            let mut delimiter = String::new();
+                            let mut in_quote = false;
+                            let mut quote_char = ' ';
+                            let mut was_quoted = false; // Track if any quotes were found
+
+                            while let Some(&ch) = chars.peek() {
+                                if ch == '\n' && !in_quote {
+                                    break;
+                                }
+                                if (ch == '"' || ch == '\'') && !in_quote {
+                                    in_quote = true;
+                                    quote_char = ch;
+                                    was_quoted = true; // Mark that we found a quote
+                                    chars.next(); // consume quote but don't add to delimiter
+                                } else if in_quote && ch == quote_char {
+                                    in_quote = false;
+                                    chars.next(); // consume quote but don't add to delimiter
+                                } else if !in_quote && (ch == ' ' || ch == '\t') {
+                                    break;
+                                } else {
+                                    delimiter.push(ch);
+                                    chars.next();
+                                }
+                            }
+
+                            if !delimiter.is_empty() {
+                                // Pass both delimiter and whether it was quoted
+                                tokens.push(Token::RedirHereDoc(delimiter, was_quoted));
+                            } else {
+                                return Err(
+                                    "Invalid here-document syntax: expected delimiter after <<"
+                                        .to_string(),
+                                );
+                            }
+                        }
+                    } else {
+                        // Regular input redirection
+                        tokens.push(Token::RedirIn);
+                    }
                 }
             }
             ')' if !in_double_quote && !in_single_quote => {
@@ -859,13 +1064,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 // 2. We're not inside quotes (neither single nor double)
                 if ch == '~' && current.is_empty() && !in_single_quote && !in_double_quote {
                     chars.next(); // consume ~
-                    
+
                     // Check for ~+ (PWD), ~- (OLDPWD), or ~username
                     if let Some(&next_ch) = chars.peek() {
                         if next_ch == '+' {
                             // ~+ expands to $PWD
                             chars.next(); // consume +
-                            if let Some(pwd) = shell_state.get_var("PWD").or_else(|| env::var("PWD").ok()) {
+                            if let Some(pwd) =
+                                shell_state.get_var("PWD").or_else(|| env::var("PWD").ok())
+                            {
                                 current.push_str(&pwd);
                             } else if let Ok(pwd) = env::current_dir() {
                                 current.push_str(&pwd.to_string_lossy());
@@ -875,12 +1082,19 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if next_ch == '-' {
                             // ~- expands to $OLDPWD
                             chars.next(); // consume -
-                            if let Some(oldpwd) = shell_state.get_var("OLDPWD").or_else(|| env::var("OLDPWD").ok()) {
+                            if let Some(oldpwd) = shell_state
+                                .get_var("OLDPWD")
+                                .or_else(|| env::var("OLDPWD").ok())
+                            {
                                 current.push_str(&oldpwd);
                             } else {
                                 current.push_str("~-");
                             }
-                        } else if next_ch == '/' || next_ch == ' ' || next_ch == '\t' || next_ch == '\n' {
+                        } else if next_ch == '/'
+                            || next_ch == ' '
+                            || next_ch == '\t'
+                            || next_ch == '\n'
+                        {
                             // ~ followed by separator - expand to HOME
                             if let Ok(home) = env::var("HOME") {
                                 current.push_str(&home);
@@ -897,7 +1111,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 username.push(ch);
                                 chars.next();
                             }
-                            
+
                             if !username.is_empty() {
                                 // Try to get user's home directory
                                 // Special case for root user
@@ -906,7 +1120,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 } else {
                                     format!("/home/{}", username)
                                 };
-                                
+
                                 // Check if the directory exists
                                 if std::path::Path::new(&user_home).exists() {
                                     current.push_str(&user_home);
@@ -2082,10 +2296,7 @@ mod tests {
         let result = lex("echo ~", &shell_state).unwrap();
         assert_eq!(
             result,
-            vec![
-                Token::Word("echo".to_string()),
-                Token::Word(home)
-            ]
+            vec![Token::Word("echo".to_string()), Token::Word(home)]
         );
     }
 
@@ -2135,11 +2346,11 @@ mod tests {
     #[test]
     fn test_tilde_expansion_pwd() {
         let mut shell_state = ShellState::new();
-        
+
         // Set PWD variable
         let test_pwd = "/test/current/dir";
         shell_state.set_var("PWD", test_pwd.to_string());
-        
+
         let result = lex("echo ~+", &shell_state).unwrap();
         assert_eq!(
             result,
@@ -2153,11 +2364,11 @@ mod tests {
     #[test]
     fn test_tilde_expansion_oldpwd() {
         let mut shell_state = ShellState::new();
-        
+
         // Set OLDPWD variable
         let test_oldpwd = "/test/old/dir";
         shell_state.set_var("OLDPWD", test_oldpwd.to_string());
-        
+
         let result = lex("echo ~-", &shell_state).unwrap();
         assert_eq!(
             result,
@@ -2172,12 +2383,12 @@ mod tests {
     fn test_tilde_expansion_pwd_unset() {
         let _lock = ENV_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
-        
+
         // When PWD is not set, ~+ should expand to current directory
         let result = lex("echo ~+", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // The second token should be a valid path (either from env::current_dir or literal ~+)
         if let Token::Word(path) = &result[1] {
             // Should either be a path or the literal ~+
@@ -2191,15 +2402,15 @@ mod tests {
     fn test_tilde_expansion_oldpwd_unset() {
         // Lock to prevent parallel tests from interfering with environment variables
         let _lock = ENV_LOCK.lock().unwrap();
-        
+
         // Save and clear OLDPWD
         let original_oldpwd = env::var("OLDPWD").ok();
         unsafe {
             env::remove_var("OLDPWD");
         }
-        
+
         let shell_state = ShellState::new();
-        
+
         // When OLDPWD is not set, ~- should remain as literal
         let result = lex("echo ~-", &shell_state).unwrap();
         assert_eq!(
@@ -2209,7 +2420,7 @@ mod tests {
                 Token::Word("~-".to_string())
             ]
         );
-        
+
         // Restore OLDPWD
         unsafe {
             if let Some(oldpwd) = original_oldpwd {
@@ -2222,7 +2433,7 @@ mod tests {
     fn test_tilde_expansion_pwd_in_quotes() {
         let mut shell_state = ShellState::new();
         shell_state.set_var("PWD", "/test/dir".to_string());
-        
+
         // Single quotes should prevent expansion
         let result = lex("echo '~+'", &shell_state).unwrap();
         assert_eq!(
@@ -2232,7 +2443,7 @@ mod tests {
                 Token::Word("~+".to_string())
             ]
         );
-        
+
         // Double quotes should also prevent expansion
         let result = lex("echo \"~+\"", &shell_state).unwrap();
         assert_eq!(
@@ -2248,7 +2459,7 @@ mod tests {
     fn test_tilde_expansion_oldpwd_in_quotes() {
         let mut shell_state = ShellState::new();
         shell_state.set_var("OLDPWD", "/test/old".to_string());
-        
+
         // Single quotes should prevent expansion
         let result = lex("echo '~-'", &shell_state).unwrap();
         assert_eq!(
@@ -2258,7 +2469,7 @@ mod tests {
                 Token::Word("~-".to_string())
             ]
         );
-        
+
         // Double quotes should also prevent expansion
         let result = lex("echo \"~-\"", &shell_state).unwrap();
         assert_eq!(
@@ -2277,7 +2488,7 @@ mod tests {
         let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
         shell_state.set_var("PWD", "/current".to_string());
         shell_state.set_var("OLDPWD", "/previous".to_string());
-        
+
         let result = lex("echo ~ ~+ ~-", &shell_state).unwrap();
         assert_eq!(
             result,
@@ -2294,7 +2505,7 @@ mod tests {
     fn test_tilde_expansion_not_at_start() {
         let mut shell_state = ShellState::new();
         shell_state.set_var("PWD", "/test".to_string());
-        
+
         // Tilde should not expand when not at start of word
         let result = lex("echo prefix~+", &shell_state).unwrap();
         assert_eq!(
@@ -2309,12 +2520,12 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username() {
         let shell_state = ShellState::new();
-        
+
         // Test with root username (special case: /root instead of /home/root)
         let result = lex("echo ~root", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // The expansion should either be /root or literal ~root (if /root doesn't exist)
         if let Token::Word(path) = &result[1] {
             assert!(path == "/root" || path == "~root");
@@ -2326,12 +2537,12 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username_with_path() {
         let shell_state = ShellState::new();
-        
+
         // Test ~username/path expansion
         let result = lex("echo ~root/documents", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // Should expand to /root/documents or ~root/documents
         if let Token::Word(path) = &result[1] {
             assert!(path == "/root/documents" || path == "~root/documents");
@@ -2343,7 +2554,7 @@ mod tests {
     #[test]
     fn test_tilde_expansion_nonexistent_user() {
         let shell_state = ShellState::new();
-        
+
         // Test with a username that definitely doesn't exist
         let result = lex("echo ~nonexistentuser12345", &shell_state).unwrap();
         assert_eq!(
@@ -2358,7 +2569,7 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username_in_quotes() {
         let shell_state = ShellState::new();
-        
+
         // Single quotes should prevent expansion
         let result = lex("echo '~root'", &shell_state).unwrap();
         assert_eq!(
@@ -2368,7 +2579,7 @@ mod tests {
                 Token::Word("~root".to_string())
             ]
         );
-        
+
         // Double quotes should also prevent expansion
         let result = lex("echo \"~root\"", &shell_state).unwrap();
         assert_eq!(
@@ -2386,14 +2597,14 @@ mod tests {
         let mut shell_state = ShellState::new();
         let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
         shell_state.set_var("PWD", "/current".to_string());
-        
+
         // Test mixing different tilde expansions
         let result = lex("echo ~ ~+ ~root", &shell_state).unwrap();
         assert_eq!(result.len(), 4);
         assert_eq!(result[0], Token::Word("echo".to_string()));
         assert_eq!(result[1], Token::Word(home));
         assert_eq!(result[2], Token::Word("/current".to_string()));
-        
+
         // The ~root expansion depends on whether /root exists
         if let Token::Word(path) = &result[3] {
             assert!(path == "/root" || path == "~root");
@@ -2405,12 +2616,12 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username_with_special_chars() {
         let shell_state = ShellState::new();
-        
+
         // Test that special characters terminate username collection
         let result = lex("echo ~user@host", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // Should try to expand ~user and then append @host
         if let Token::Word(path) = &result[1] {
             // The path should contain @host at the end
@@ -2418,5 +2629,319 @@ mod tests {
         } else {
             panic!("Expected Word token");
         }
+    }
+
+    // ===== File Descriptor Redirection Tests =====
+
+    #[test]
+    fn test_fd_redirect_stderr_to_file() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>error.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(2),
+                Token::RedirOut,
+                Token::Word("error.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_redirect_stderr_append() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>>error.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(2),
+                Token::RedirAppend,
+                Token::Word("error.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_redirect_custom_fd_output() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(3),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_redirect_custom_fd_input() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<input.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdIn(3),
+                Token::RedirIn,
+                Token::Word("input.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_stderr_to_stdout() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdDup(2, 1)]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_stdout_to_stderr() {
+        let shell_state = ShellState::new();
+        let result = lex("command 1>&2", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdDup(1, 2)]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_shorthand_stdout() {
+        let shell_state = ShellState::new();
+        let result = lex("command >&2", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdDup(1, 2)]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_custom_fds() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>&4", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdDup(3, 4)]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_input() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<&4", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdDup(3, 4)]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_stdin_shorthand() {
+        let shell_state = ShellState::new();
+        let result = lex("command <&3", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdDup(0, 3)]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_stderr() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdClose(2)]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_stdout() {
+        let shell_state = ShellState::new();
+        let result = lex("command 1>&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdClose(1)]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_shorthand_stdout() {
+        let shell_state = ShellState::new();
+        let result = lex("command >&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdClose(1)]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_custom_fd() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdClose(3)]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_stdin() {
+        let shell_state = ShellState::new();
+        let result = lex("command <&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdClose(0)]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_input_custom() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![Token::Word("command".to_string()), Token::RedirFdClose(3)]
+        );
+    }
+
+    #[test]
+    fn test_fd_multiple_redirections() {
+        let shell_state = ShellState::new();
+        let result = lex("command >output.txt 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string()),
+                Token::RedirFdDup(2, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_complex_redirection_chain() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>file.txt 2>&1 1>&3", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(3),
+                Token::RedirOut,
+                Token::Word("file.txt".to_string()),
+                Token::RedirFdDup(2, 1),
+                Token::RedirFdDup(1, 3)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_with_pipeline() {
+        let shell_state = ShellState::new();
+        let result = lex("command1 2>&1 | command2", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command1".to_string()),
+                Token::RedirFdDup(2, 1),
+                Token::Pipe,
+                Token::Word("command2".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_high_number() {
+        let shell_state = ShellState::new();
+        let result = lex("command 99>file.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(99),
+                Token::RedirOut,
+                Token::Word("file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_not_at_word_boundary() {
+        let shell_state = ShellState::new();
+        // When FD number is part of a larger word, it should not be treated as FD redirect
+        let result = lex("echo test2>file", &shell_state).unwrap();
+        // "test2" stays together because our FD detection only triggers when
+        // the entire token is just digits (not when digits are part of a larger word)
+        assert_eq!(result.len(), 4);
+        assert_eq!(result[0], Token::Word("echo".to_string()));
+        assert_eq!(result[1], Token::Word("test2".to_string()));
+        assert_eq!(result[2], Token::RedirOut);
+        assert_eq!(result[3], Token::Word("file".to_string()));
+    }
+
+    #[test]
+    fn test_fd_redirect_with_spaces() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2> error.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(2),
+                Token::RedirOut,
+                Token::Word("error.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_with_spaces() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2 >&1", &shell_state).unwrap();
+        // With space between FD and >&, they should be separate tokens
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], Token::Word("command".to_string()));
+        assert_eq!(result[1], Token::Word("2".to_string()));
+        assert_eq!(result[2], Token::RedirFdDup(1, 1));
+    }
+
+    #[test]
+    fn test_fd_zero_redirect() {
+        let shell_state = ShellState::new();
+        let result = lex("command 0<input.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdIn(0),
+                Token::RedirIn,
+                Token::Word("input.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_one_redirect() {
+        let shell_state = ShellState::new();
+        let result = lex("command 1>output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirFdOut(1),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string())
+            ]
+        );
     }
 }
