@@ -855,15 +855,16 @@ mod tests {
 
         // First, ensure we're in a safe directory that definitely exists
         // This prevents failures if the current directory was deleted by another test
-        env::set_current_dir("/tmp").unwrap();
+        let temp_dir = env::temp_dir().canonicalize().unwrap();
+        env::set_current_dir(&temp_dir).unwrap();
 
-        let line = "cd /tmp";
+        let line = &format!("cd {}", temp_dir.to_string_lossy());
         let mut shell_state = state::ShellState::new();
         let tokens = lexer::lex(line, &shell_state).unwrap();
         let ast = parser::parse(tokens).unwrap();
         let exit_code = executor::execute(ast, &mut shell_state);
         assert_eq!(exit_code, 0);
-        assert_eq!(env::current_dir().unwrap(), Path::new("/tmp"));
+        assert_eq!(env::current_dir().unwrap(), temp_dir);
 
         // No need to restore since we're already in /tmp and the lock ensures
         // other directory-changing tests won't run concurrently
