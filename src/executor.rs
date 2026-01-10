@@ -1198,6 +1198,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 left_exit
             }
         }
+        Ast::Subshell { body } => {
+            execute_subshell(*body, shell_state)
+        }
     }
 }
 
@@ -1574,6 +1577,42 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
         }
     }
 
+    exit_code
+}
+
+/// Execute a subshell with isolated state
+///
+/// # Arguments
+/// * `body` - The AST to execute in the subshell
+/// * `shell_state` - The parent shell state (will be cloned)
+///
+/// # Returns
+/// * Exit code from the subshell execution
+///
+/// # Behavior
+/// - Clones the shell state for isolation
+/// - Executes the body in the cloned state
+/// - Returns the exit code without modifying parent state
+/// - Preserves parent state completely (variables, functions, etc.)
+fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
+    // Save current directory for restoration
+    let original_dir = std::env::current_dir().ok();
+    
+    // Clone the shell state for isolation
+    let mut subshell_state = shell_state.clone();
+    
+    // Execute the body in the isolated state
+    let exit_code = execute(body, &mut subshell_state);
+    
+    // Restore original directory (in case subshell changed it)
+    if let Some(dir) = original_dir {
+        let _ = std::env::set_current_dir(dir);
+    }
+    
+    // Update parent's last_exit_code to reflect subshell result
+    shell_state.last_exit_code = exit_code;
+    
+    // Return the exit code
     exit_code
 }
 
