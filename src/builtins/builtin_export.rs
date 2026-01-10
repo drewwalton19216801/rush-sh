@@ -59,6 +59,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["export".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_exported_var("TEST_VAR", "test_value".to_string());
@@ -75,6 +76,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["export".to_string(), "NEW_VAR=new_value".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = ExportBuiltin;
@@ -93,6 +95,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["export".to_string(), "EXISTING_VAR".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_var("EXISTING_VAR", "existing_value".to_string());

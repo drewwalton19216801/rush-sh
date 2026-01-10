@@ -300,6 +300,7 @@ mod tests {
                 "INT".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -322,6 +323,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "-".to_string(), "INT".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -343,6 +345,7 @@ mod tests {
                 "INVALID".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -365,6 +368,7 @@ mod tests {
                 "KILL".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -389,6 +393,7 @@ mod tests {
                 "HUP".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -413,6 +418,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["trap".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -432,6 +438,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "-l".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -451,6 +458,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "".to_string(), "INT".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;
@@ -472,6 +480,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
 
         let builtin = TrapBuiltin;

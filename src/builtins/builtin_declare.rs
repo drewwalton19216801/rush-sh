@@ -300,6 +300,7 @@ mod tests {
         let cmd = crate::parser::ShellCommand {
             args: vec!["declare".to_string(), "-f".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -310,6 +311,7 @@ mod tests {
             Ast::Pipeline(vec![crate::parser::ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
+            compound: None,
             }]),
         );
 
@@ -330,6 +332,7 @@ mod tests {
                 "test_func".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -340,6 +343,7 @@ mod tests {
             Ast::Pipeline(vec![crate::parser::ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
+            compound: None,
             }]),
         );
 
@@ -362,6 +366,7 @@ mod tests {
                 "nonexistent".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -379,6 +384,7 @@ mod tests {
         let cmd = crate::parser::ShellCommand {
             args: vec!["declare".to_string(), "-x".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;

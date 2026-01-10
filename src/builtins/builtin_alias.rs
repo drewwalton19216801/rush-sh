@@ -70,6 +70,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["alias".to_string(), "ll=ls -l".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = AliasBuiltin;
@@ -84,6 +85,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["alias".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("ll", "ls -l".to_string());
@@ -98,6 +100,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["alias".to_string(), "ll".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("ll", "ls -l".to_string());
@@ -112,6 +115,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["alias".to_string(), "nonexistent".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = AliasBuiltin;

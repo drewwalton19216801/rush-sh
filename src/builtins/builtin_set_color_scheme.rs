@@ -121,6 +121,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["set_color_scheme".to_string(), "default".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = SetColorSchemeBuiltin;
@@ -136,6 +137,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["set_color_scheme".to_string(), "dark".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = SetColorSchemeBuiltin;

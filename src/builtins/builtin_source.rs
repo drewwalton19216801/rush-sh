@@ -90,6 +90,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["source".to_string(), temp_script.to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = SourceBuiltin;

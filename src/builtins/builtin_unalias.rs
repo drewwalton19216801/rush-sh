@@ -72,6 +72,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "test_alias".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let builtin = UnaliasBuiltin;
         let mut output = Vec::new();
@@ -87,6 +88,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "nonexistent".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -100,6 +102,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -117,6 +120,7 @@ mod tests {
                 "arg2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -136,6 +140,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "-a".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let builtin = UnaliasBuiltin;
         let mut output = Vec::new();
@@ -152,6 +157,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "-a".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -169,6 +175,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "-a".to_string(), "extra".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
