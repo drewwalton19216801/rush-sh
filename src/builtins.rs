@@ -1,4 +1,3 @@
-use std::fs::File;
 use std::io::{self, Write};
 
 use crate::parser::ShellCommand;
@@ -104,128 +103,204 @@ pub fn execute_builtin(
     output_override: Option<Box<dyn Write>>,
 ) -> i32 {
     // Helper function for colored error messages
-    let print_error = |msg: &str| {
-        if shell_state.colors_enabled {
-            eprintln!("{}{}\x1b[0m", shell_state.color_scheme.error, msg);
+    let colors_enabled = shell_state.colors_enabled;
+    let error_color = shell_state.color_scheme.error.clone();
+    let print_error = move |msg: &str| {
+        if colors_enabled {
+            eprintln!("{}{}\x1b[0m", error_color, msg);
         } else {
             eprintln!("{}", msg);
         }
     };
-    // Handle redirections for built-ins
+
+    // If output_override is provided, use the old simple path for command substitution
+    if output_override.is_some() {
+        let mut output_writer = output_override.unwrap();
+        let builtins = get_builtins();
+        if let Some(builtin) = builtins
+            .into_iter()
+            .find(|b| b.names().contains(&cmd.args[0].as_str()))
+        {
+            return builtin.run(cmd, shell_state, &mut *output_writer);
+        } else {
+            return 1;
+        }
+    }
+
+    // Handle redirections using FileDescriptorTable for proper POSIX compliance
     use crate::parser::Redirection;
     
-    // Check for input redirections
-    let _input_content = cmd.redirections.iter().find_map(|r| {
-        if let Redirection::Input(file) = r {
-            match std::fs::read_to_string(file) {
-                Ok(content) => Some(content),
-                Err(e) => {
-                    print_error(&format!("Error reading input file '{}': {}", file, e));
-                    None
-                }
+    // Clone redirections to avoid borrow checker issues
+    let redirections = cmd.redirections.clone();
+    
+    // First, expand all filenames in redirections (needs mutable borrow of shell_state)
+    // Collect all filenames that need expansion
+    let mut files_to_expand: Vec<String> = Vec::new();
+    for redir in &redirections {
+        match redir {
+            Redirection::Input(file)
+            | Redirection::Output(file)
+            | Redirection::Append(file)
+            | Redirection::FdInput(_, file)
+            | Redirection::FdOutput(_, file)
+            | Redirection::FdAppend(_, file)
+            | Redirection::FdInputOutput(_, file) => {
+                files_to_expand.push(file.clone());
             }
+            _ => {
+                files_to_expand.push(String::new()); // Placeholder for non-file redirections
+            }
+        }
+    }
+    
+    // Now expand all filenames (single mutable borrow)
+    let mut expanded_files: Vec<String> = Vec::new();
+    for f in &files_to_expand {
+        if f.is_empty() {
+            expanded_files.push(String::new());
         } else {
+            expanded_files.push(crate::executor::expand_variables_in_string(f, shell_state));
+        }
+    }
+    
+    // Pair redirections with their expanded filenames
+    let mut expanded_redirections: Vec<(Redirection, Option<String>)> = Vec::new();
+    for (i, redir) in redirections.iter().enumerate() {
+        let expanded_file = if expanded_files[i].is_empty() {
             None
-        }
-    });
+        } else {
+            Some(expanded_files[i].clone())
+        };
+        expanded_redirections.push((redir.clone(), expanded_file));
+    }
+    
+    // Save all current file descriptors before applying redirections
+    if let Err(e) = shell_state.fd_table.borrow_mut().save_all_fds() {
+        print_error(&format!("Failed to save file descriptors: {}", e));
+        return 1;
+    }
 
-    // Prepare output destination
-    let mut output_writer: Box<dyn Write> = if let Some(override_writer) = output_override {
-        override_writer
-    } else {
-        // Check for output redirections
-        let mut found_output = false;
-        for redir in &cmd.redirections {
-            match redir {
-                Redirection::Output(file) => {
-                    match File::create(file) {
-                        Ok(_f) => {
-                            found_output = true;
-                            break;
-                        }
-                        Err(e) => {
-                            print_error(&format!("Error creating output file '{}': {}", file, e));
-                            return 1;
-                        }
-                    }
-                }
-                Redirection::Append(file) => {
-                    match File::options().append(true).create(true).open(file) {
-                        Ok(_f) => {
-                            found_output = true;
-                            break;
-                        }
-                        Err(e) => {
-                            print_error(&format!("Error opening append file '{}': {}", file, e));
-                            return 1;
-                        }
-                    }
-                }
-                _ => {}
+    // Apply all redirections in left-to-right order (POSIX requirement)
+    for (redir, expanded_file) in &expanded_redirections {
+        let result = match redir {
+            Redirection::Input(_) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    0,
+                    file,
+                    true,  // read
+                    false, // write
+                    false, // append
+                    false, // truncate
+                )
             }
-        }
-        
-        if found_output {
-            // Re-open the file for writing (this is a simplified approach)
-            // In a real implementation, we'd want to handle this more efficiently
-            for redir in &cmd.redirections {
-                match redir {
-                    Redirection::Output(file) => {
-                        return match File::create(file) {
-                            Ok(f) => {
-                                let builtins = get_builtins();
-                                if let Some(builtin) = builtins
-                                    .into_iter()
-                                    .find(|b| b.names().contains(&cmd.args[0].as_str()))
-                                {
-                                    builtin.run(cmd, shell_state, &mut Box::new(f) as &mut dyn Write)
-                                } else {
-                                    1
-                                }
-                            }
-                            Err(e) => {
-                                print_error(&format!("Error creating output file '{}': {}", file, e));
-                                1
-                            }
-                        };
-                    }
-                    Redirection::Append(file) => {
-                        return match File::options().append(true).create(true).open(file) {
-                            Ok(f) => {
-                                let builtins = get_builtins();
-                                if let Some(builtin) = builtins
-                                    .into_iter()
-                                    .find(|b| b.names().contains(&cmd.args[0].as_str()))
-                                {
-                                    builtin.run(cmd, shell_state, &mut Box::new(f) as &mut dyn Write)
-                                } else {
-                                    1
-                                }
-                            }
-                            Err(e) => {
-                                print_error(&format!("Error opening append file '{}': {}", file, e));
-                                1
-                            }
-                        };
-                    }
-                    _ => {}
-                }
+            Redirection::Output(_) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    1,
+                    file,
+                    false, // read
+                    true,  // write
+                    false, // append
+                    true,  // truncate
+                )
             }
-        }
-        
-        // Terminal output
-        Box::new(ColoredWriter::new(io::stdout()))
-    };
+            Redirection::Append(_) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    1,
+                    file,
+                    false, // read
+                    true,  // write
+                    true,  // append
+                    false, // truncate
+                )
+            }
+            Redirection::FdInput(fd, _) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    *fd,
+                    file,
+                    true,  // read
+                    false, // write
+                    false, // append
+                    false, // truncate
+                )
+            }
+            Redirection::FdOutput(fd, _) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    *fd,
+                    file,
+                    false, // read
+                    true,  // write
+                    false, // append
+                    true,  // truncate
+                )
+            }
+            Redirection::FdAppend(fd, _) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    *fd,
+                    file,
+                    false, // read
+                    true,  // write
+                    true,  // append
+                    false, // truncate
+                )
+            }
+            Redirection::FdDuplicate(target_fd, source_fd) => {
+                shell_state
+                    .fd_table
+                    .borrow_mut()
+                    .duplicate_fd(*source_fd, *target_fd)
+            }
+            Redirection::FdClose(fd) => shell_state.fd_table.borrow_mut().close_fd(*fd),
+            Redirection::FdInputOutput(fd, _) => {
+                let file = expanded_file.as_ref().unwrap();
+                shell_state.fd_table.borrow_mut().open_fd(
+                    *fd,
+                    file,
+                    true,  // read
+                    true,  // write
+                    false, // append
+                    false, // truncate
+                )
+            }
+            // Here-documents and here-strings are handled differently for builtins
+            // They don't modify the fd table directly
+            Redirection::HereDoc(_, _) | Redirection::HereString(_) => Ok(()),
+        };
 
+        if let Err(e) = result {
+            print_error(&format!("Redirection error: {}", e));
+            // Restore file descriptors before returning
+            let _ = shell_state.fd_table.borrow_mut().restore_all_fds();
+            return 1;
+        }
+    }
+
+    // Get output writer - use stdout by default
+    let mut output_writer: Box<dyn Write> = Box::new(ColoredWriter::new(io::stdout()));
+
+    // Execute the builtin command
     let builtins = get_builtins();
-    if let Some(builtin) = builtins
+    let exit_code = if let Some(builtin) = builtins
         .into_iter()
         .find(|b| b.names().contains(&cmd.args[0].as_str()))
     {
         builtin.run(cmd, shell_state, &mut *output_writer)
     } else {
         1
+    };
+
+    // Restore all file descriptors after builtin execution
+    if let Err(e) = shell_state.fd_table.borrow_mut().restore_all_fds() {
+        print_error(&format!("Failed to restore file descriptors: {}", e));
+        return 1;
     }
+
+    exit_code
 }
 
 #[cfg(test)]
