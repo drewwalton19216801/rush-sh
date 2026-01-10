@@ -11,6 +11,7 @@ pub mod executor;
 pub mod lexer;
 pub mod parameter_expansion;
 pub mod parser;
+pub mod script_engine;
 pub mod state;
 
 // Re-export main types for convenience
