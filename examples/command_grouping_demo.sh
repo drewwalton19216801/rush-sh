@@ -42,12 +42,12 @@ echo -e "\n--- Nested Grouping ---"
     echo "Outer End"
 }
 
-# 5. Pipeline Interaction (Coming in Phase 3)
-echo -e "\n--- Pipeline Interaction (Future Feature) ---"
-echo "Piping group output to wc -l (Currently limited):"
+# 5. Pipeline Interaction
+echo -e "\n--- Pipeline Interaction ---"
+echo "Piping group output to wc -l:"
 {
     echo "line 1"
     echo "line 2"
     echo "line 3"
 } | wc -l
-echo "Note: Full pipeline support for compound commands is planned for Phase 3."
+echo "Command groups can be part of pipelines just like individual commands."

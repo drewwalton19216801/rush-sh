@@ -735,10 +735,19 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
             // Check if this is part of a pipeline
             if i < tokens.len() && tokens[i] == Token::Pipe {
-                // This group is part of a pipeline - parse the entire line as a pipeline
-                let pipeline_ast = parse_pipeline(&tokens[start..])?;
+                // This group is part of a pipeline - find end of line
+                let mut end = i;
+                while end < tokens.len()
+                    && tokens[end] != Token::Newline
+                    && tokens[end] != Token::Semicolon
+                {
+                    end += 1;
+                }
+
+                let pipeline_ast = parse_pipeline(&tokens[start..end])?;
                 commands.push(pipeline_ast);
-                break; // We've consumed the rest of the tokens
+                i = end; // Move to the end of the line
+                continue;
             }
 
             // Handle operators after group (&&, ||, ;, newline)
@@ -1098,10 +1107,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     }
                 }
 
-                // Push the command with subshell
-                commands.push(current_cmd.clone());
-                current_cmd = ShellCommand::default();
-
+                // Stage will be pushed at next | or end of loop
                 continue;
             }
             Token::LeftParen => {
@@ -1231,10 +1237,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     }
                 }
 
-                // Push the command with subshell
-                commands.push(current_cmd.clone());
-                current_cmd = ShellCommand::default();
-
+                // Stage will be pushed at next | or end of loop
                 continue;
             }
             Token::Word(word) => {
@@ -1332,9 +1335,8 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 return Err("Unexpected ) in pipeline".to_string());
             }
             Token::Newline => {
-                // Newlines are handled at the sequence level, skip them in pipelines
-                i += 1;
-                continue;
+                // Newlines separate commands, so they should end the pipeline
+                break;
             }
             Token::Do
             | Token::Done

@@ -1606,20 +1606,17 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
     for (i, cmd) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
 
-        // Check if this is a compound command (subshell)
         if let Some(ref compound_ast) = cmd.compound {
             // Execute compound command (subshell) in pipeline
-            exit_code = execute_compound_in_pipeline(
+            let (com_exit_code, com_stdout) = execute_compound_in_pipeline(
                 compound_ast,
                 shell_state,
                 i == 0,
                 is_last,
                 &cmd.redirections,
             );
-
-            // For Phase 2, compound commands in pipelines don't produce stdout for next stage
-            // This will be enhanced in Phase 3 with proper pipe handling
-            previous_stdout = None;
+            exit_code = com_exit_code;
+            previous_stdout = com_stdout;
             continue;
         }
 
@@ -2061,17 +2058,23 @@ fn execute_compound_in_pipeline(
     shell_state: &mut ShellState,
     is_first: bool,
     is_last: bool,
-    _redirections: &[Redirection],
-) -> i32 {
+    redirections: &[Redirection],
+) -> (i32, Option<Stdio>) {
     match compound_ast {
         Ast::Subshell { body } | Ast::CommandGroup { body } => {
             // Clone state for subshell
             let mut subshell_state = shell_state.clone();
 
-            // If we are not the first command in pipeline, and since we don't receive input (broken pipe),
-            // we use stdin_override to force reading from /dev/null, without modifying process-global 0.
-            // We keep the file handle alive for the duration of the subshell execution.
-            let _null_file = if !is_first {
+            // Setup stdin from stdin_override if provided (for nested pipelines)
+            // But we already handle stdin in execute_pipeline for the command.
+            // However, compound commands are executed differently.
+
+            // If we are not the first command in pipeline, use stdin_override
+            // Note: We don't have the parent's pipe reader here yet because it's passed via previous_stdout.
+            // This is a current limitation: compound commands in pipelines (other than first)
+            // don't easily inherit the previous stage's pipe without process-global stdin redirection.
+
+            let _null_file = if !is_first && subshell_state.stdin_override.is_none() {
                 if let Ok(f) = File::open("/dev/null") {
                     subshell_state.stdin_override = Some(f.as_raw_fd());
                     Some(f)
@@ -2082,38 +2085,96 @@ fn execute_compound_in_pipeline(
                 None
             };
 
-            // Execute subshell with appropriate stdout capture
-            let exit_code = if !is_last || shell_state.capture_output.is_some() {
-                // Need to capture subshell output
-                let capture_buffer = Rc::new(RefCell::new(Vec::new()));
-                subshell_state.capture_output = Some(capture_buffer.clone());
+            // Setup output capture if not last or if parent is capturing
+            let capture_buffer = if !is_last || shell_state.capture_output.is_some() {
+                let buffer = Rc::new(RefCell::new(Vec::new()));
+                subshell_state.capture_output = Some(buffer.clone());
+                Some(buffer)
+            } else {
+                None
+            };
 
-                // Execute subshell
-                let code = execute(*body.clone(), &mut subshell_state);
-
-                // Transfer captured output to parent's capture buffer
-                if let Some(ref parent_capture) = shell_state.capture_output {
-                    let captured = capture_buffer.borrow().clone();
-                    parent_capture.borrow_mut().extend_from_slice(&captured);
+            // Apply redirections (saving/restoring if it's a group)
+            let exit_code = if matches!(compound_ast, Ast::CommandGroup { .. }) {
+                // Save FDs before applying redirections
+                if let Err(e) = subshell_state.fd_table.borrow_mut().save_all_fds() {
+                    eprintln!("Error saving FDs: {}", e);
+                    return (1, None);
                 }
 
-                // Update parent's last_exit_code
-                shell_state.last_exit_code = code;
+                // Apply redirections to current process
+                if let Err(e) = apply_redirections(redirections, &mut subshell_state, None) {
+                    if subshell_state.colors_enabled {
+                        eprintln!("{}{}\u{001b}[0m", subshell_state.color_scheme.error, e);
+                    } else {
+                        eprintln!("{}", e);
+                    }
+                    subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
+                    return (1, None);
+                }
 
+                // Execute the body
+                let code = execute(*body.clone(), &mut subshell_state);
+
+                // Restore FDs
+                if let Err(e) = subshell_state.fd_table.borrow_mut().restore_all_fds() {
+                    eprintln!("Error restoring FDs: {}", e);
+                }
                 code
             } else {
-                // Last command, no capture needed
+                // Subshell handling (needs state-based redirection if no fork)
+                // For now, subshells with redirections in pipelines are handled similarly
+                // but without process-global FD manipulation to avoid side effects.
+                // Actually, subshells SHOULD be isolated.
+                // But Rush doesn't fork. So we use the same save/restore trick.
+                if let Err(e) = subshell_state.fd_table.borrow_mut().save_all_fds() {
+                    eprintln!("Error saving FDs: {}", e);
+                    return (1, None);
+                }
+                if let Err(e) = apply_redirections(redirections, &mut subshell_state, None) {
+                    eprintln!("{}", e);
+                    subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
+                    return (1, None);
+                }
                 let code = execute(*body.clone(), &mut subshell_state);
-                shell_state.last_exit_code = code;
+                subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
                 code
             };
 
-            exit_code
+            // Prepare stdout for next stage if captured
+            let mut next_stdout = None;
+            if let Some(buffer) = capture_buffer {
+                let captured = buffer.borrow().clone();
+
+                // If not last, create a pipe and write captured output to it
+                if !is_last {
+                    use std::io::Write;
+                    let (reader, mut writer) = match pipe() {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("Error creating pipe for compound command: {}", e);
+                            return (exit_code, None);
+                        }
+                    };
+                    if let Err(e) = writer.write_all(&captured) {
+                        eprintln!("Error writing to pipe: {}", e);
+                    }
+                    drop(writer); // Close write end so reader sees EOF
+                    next_stdout = Some(Stdio::from(reader));
+                }
+
+                // If parent is capturing, also pass data up
+                if let Some(ref parent_capture) = shell_state.capture_output {
+                    parent_capture.borrow_mut().extend_from_slice(&captured);
+                }
+            }
+
+            shell_state.last_exit_code = exit_code;
+            (exit_code, next_stdout)
         }
         _ => {
-            // Other compound commands not yet supported
             eprintln!("Unsupported compound command in pipeline");
-            1
+            (1, None)
         }
     }
 }
