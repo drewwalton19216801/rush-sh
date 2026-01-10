@@ -588,6 +588,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut if_depth = 0;
     let mut in_case_block = false;
     let mut in_function_block = false;
+    let mut in_group_block = false;
     let mut brace_depth = 0;
     let mut in_for_block = false;
     let mut for_depth = 0;
@@ -684,6 +685,13 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             } else if starts_with_keyword(line, "while") {
                 in_while_block = true;
                 while_depth += 1;
+            } else if {
+                let trimmed = line.trim();
+                trimmed == "{" || trimmed.starts_with("{ ") || trimmed.starts_with("{\t")
+            } {
+                in_group_block = true;
+                brace_depth += line.matches('{').count() as i32;
+                brace_depth -= line.matches('}').count() as i32;
             }
         }
 
@@ -695,7 +703,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             // Count opening braces on this line
             brace_depth += line.matches('{').count() as i32;
             brace_depth -= line.matches('}').count() as i32;
-        } else if in_function_block {
+        } else if in_function_block || in_group_block {
             // Track braces inside function
             // Note: Simplistic brace counting, ideally should respect quotes/comments too
             // But for now, we trust the user writes valid shell code inside functions
@@ -712,9 +720,10 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
         // Check for end of multi-line constructs
         // Only check if we are NOT in a quote
         if keywords_active {
-            if in_function_block && brace_depth == 0 {
-                // Function is complete
+            if (in_function_block || in_group_block) && brace_depth == 0 {
+                // Function or group is complete
                 in_function_block = false;
+                in_group_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
 
@@ -770,6 +779,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             } else if !in_if_block
                 && !in_case_block
                 && !in_function_block
+                && !in_group_block
                 && !in_for_block
                 && !in_while_block
             {

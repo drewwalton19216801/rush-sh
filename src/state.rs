@@ -273,6 +273,15 @@ impl FileDescriptorTable {
         for fd_num in fd_nums {
             self.save_fd(fd_num)?;
         }
+
+        // Also explicitly save standard FDs (0, 1, 2) if they aren't already tracked
+        // This ensures changes to standard streams (via CommandGroup etc.) can be restored
+        for fd in 0..=2 {
+            if !self.fds.contains_key(&fd) {
+                // Try to save, ignore error if fd is closed/invalid
+                let _ = self.save_fd(fd);
+            }
+        }
         Ok(())
     }
 

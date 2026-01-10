@@ -692,9 +692,29 @@ fn apply_input_redirection(
         // stdin redirection - apply to Command if present
         if let Some(cmd) = command {
             cmd.stdin(Stdio::from(file_handle));
+        } else {
+            // For builtins or command groups (command is None), redirect shell's stdin
+            shell_state.fd_table.borrow_mut().open_fd(
+                0,
+                &expanded_file,
+                true,  // read
+                false, // write
+                false, // append
+                false, // truncate
+            )?;
+
+            // Also perform OS-level dup2
+            let raw_fd = shell_state.fd_table.borrow().get_raw_fd(0);
+            if let Some(rfd) = raw_fd {
+                if rfd != 0 {
+                    unsafe {
+                        if libc::dup2(rfd, 0) < 0 {
+                            return Err(format!("Failed to dup2 fd {} to 0", rfd));
+                        }
+                    }
+                }
+            }
         }
-        // For builtins (command is None), the stdin is already handled by the shell's stdin
-        // The builtin will need to read from fd 0 which is already set up
     } else {
         // Custom fd - for external commands, we need to redirect the custom fd for reading
         // Open the file (we need to keep the handle alive for the command)
@@ -761,18 +781,30 @@ fn apply_output_redirection(
             .map_err(|e| format!("Cannot create {}: {}", expanded_file, e))?
     };
 
-    if fd == 1 {
-        // stdout redirection - apply to Command if present
-        if let Some(cmd) = command {
+    if let Some(cmd) = command {
+        if fd == 1 {
+            // stdout redirection - apply to Command if present
             cmd.stdout(Stdio::from(file_handle));
-        }
-    } else if fd == 2 {
-        // stderr redirection - apply to Command if present
-        if let Some(cmd) = command {
+        } else if fd == 2 {
+            // stderr redirection - apply to Command if present
             cmd.stderr(Stdio::from(file_handle));
+        } else {
+            // Custom fd - store in fd table (and pre_exec will handle it?)
+            // Actually, for external commands, custom FDs need to be inherited/set up.
+            // But we can update the shell's FD table temporarily if we want?
+            // Existing logic for custom FD WAS to update fd_table.
+            shell_state.fd_table.borrow_mut().open_fd(
+                fd,
+                &expanded_file,
+                false, // read
+                true,  // write
+                append,
+                !append, // truncate if not appending
+            )?;
         }
     } else {
-        // Custom fd - store in fd table
+        // Current process redirection (builtins, command groups)
+        // We MUST update the file descriptor table for ALL FDs including 1 and 2
         shell_state.fd_table.borrow_mut().open_fd(
             fd,
             &expanded_file,
@@ -781,6 +813,20 @@ fn apply_output_redirection(
             append,
             !append, // truncate if not appending
         )?;
+
+        // Also perform OS-level dup2 to ensure child processes inherit the redirection
+        // (This is critical for external commands running inside command groups)
+        let raw_fd = shell_state.fd_table.borrow().get_raw_fd(fd);
+        if let Some(rfd) = raw_fd {
+            // Avoid dup2-ing to itself if raw_fd happens to equal fd (unlikely but possible if we closed 1 then opened)
+            if rfd != fd {
+                unsafe {
+                    if libc::dup2(rfd, fd) < 0 {
+                        return Err(format!("Failed to dup2 fd {} to {}", rfd, fd));
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
