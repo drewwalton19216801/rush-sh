@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write, pipe};
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
@@ -696,8 +696,8 @@ fn apply_input_redirection(
         // For builtins (command is None), the stdin is already handled by the shell's stdin
         // The builtin will need to read from fd 0 which is already set up
     } else {
-        // Custom fd - for external commands, we need to redirect stdin to the custom fd
-        // Open the file again (we need to keep the handle alive for the command)
+        // Custom fd - for external commands, we need to redirect the custom fd for reading
+        // Open the file (we need to keep the handle alive for the command)
         let fd_file = File::open(&expanded_file)
             .map_err(|e| format!("Cannot open {}: {}", expanded_file, e))?;
 
@@ -711,15 +711,24 @@ fn apply_input_redirection(
             false, // truncate
         )?;
 
-        // If we have an external command, set up stdin redirect via pre_exec
+        // If we have an external command, set up the file descriptor in the child process
         if let Some(cmd) = command {
-            let raw_fd = fd_file.as_raw_fd();
+            // Keep fd_file alive by moving it into the closure
+            // It will be dropped (and closed) when the closure is dropped in the parent
+            let target_fd = fd;
             unsafe {
                 cmd.pre_exec(move || {
-                    // Redirect stdin (fd 0) to the custom fd
-                    let result = libc::dup2(raw_fd, 0);
-                    if result < 0 {
-                        return Err(std::io::Error::last_os_error());
+                    let raw_fd = fd_file.as_raw_fd();
+
+                    // The inherited file descriptor might not be at the target fd number
+                    // Use dup2 to ensure it's at the correct fd number
+                    if raw_fd != target_fd {
+                        let result = libc::dup2(raw_fd, target_fd);
+                        if result < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        // We don't need to close raw_fd manually because fd_file
+                        // has CLOEXEC set by default and will be closed on exec
                     }
                     Ok(())
                 });
@@ -1416,6 +1425,16 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         let mut command = Command::new(&expanded_args[command_start_idx]);
         command.args(&expanded_args[command_start_idx + 1..]);
 
+        // Check for stdin override (for pipeline subshells)
+        if let Some(fd) = shell_state.stdin_override {
+            unsafe {
+                let dup_fd = libc::dup(fd);
+                if dup_fd >= 0 {
+                    command.stdin(Stdio::from_raw_fd(dup_fd));
+                }
+            }
+        }
+
         // Set environment for child process
         let mut child_env = shell_state.get_env_for_child();
 
@@ -1543,8 +1562,13 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
         // Check if this is a compound command (subshell)
         if let Some(ref compound_ast) = cmd.compound {
             // Execute compound command (subshell) in pipeline
-            exit_code =
-                execute_compound_in_pipeline(compound_ast, shell_state, is_last, &cmd.redirections);
+            exit_code = execute_compound_in_pipeline(
+                compound_ast,
+                shell_state,
+                i == 0,
+                is_last,
+                &cmd.redirections,
+            );
 
             // For Phase 2, compound commands in pipelines don't produce stdout for next stage
             // This will be enhanced in Phase 3 with proper pipe handling
@@ -1643,6 +1667,20 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             // Set stdin from previous command's stdout
             if let Some(prev) = previous_stdout.take() {
                 command.stdin(prev);
+            } else if i > 0 {
+                // We are in a pipeline (not first command) but have no input pipe.
+                // This means the previous command didn't produce a pipe.
+                // We should treat this as empty input (EOF), not inherit stdin!
+                command.stdin(Stdio::null());
+            } else if let Some(fd) = shell_state.stdin_override {
+                // We have a stdin override (e.g. from parent subshell)
+                // We must duplicate it because Stdio takes ownership
+                unsafe {
+                    let dup_fd = libc::dup(fd);
+                    if dup_fd >= 0 {
+                        command.stdin(Stdio::from_raw_fd(dup_fd));
+                    }
+                }
             }
 
             // Set stdout for next command, or for capturing if this is the last
@@ -1926,6 +1964,7 @@ fn execute_compound_with_redirections(
 fn execute_compound_in_pipeline(
     compound_ast: &Ast,
     shell_state: &mut ShellState,
+    is_first: bool,
     is_last: bool,
     _redirections: &[Redirection],
 ) -> i32 {
@@ -1934,14 +1973,28 @@ fn execute_compound_in_pipeline(
             // Clone state for subshell
             let mut subshell_state = shell_state.clone();
 
-            // Handle stdout capture for next pipeline stage or command substitution
-            if !is_last || shell_state.capture_output.is_some() {
+            // If we are not the first command in pipeline, and since we don't receive input (broken pipe),
+            // we use stdin_override to force reading from /dev/null, without modifying process-global 0.
+            // We keep the file handle alive for the duration of the subshell execution.
+            let _null_file = if !is_first {
+                if let Ok(f) = File::open("/dev/null") {
+                    subshell_state.stdin_override = Some(f.as_raw_fd());
+                    Some(f)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            // Execute subshell with appropriate stdout capture
+            let exit_code = if !is_last || shell_state.capture_output.is_some() {
                 // Need to capture subshell output
                 let capture_buffer = Rc::new(RefCell::new(Vec::new()));
                 subshell_state.capture_output = Some(capture_buffer.clone());
 
                 // Execute subshell
-                let exit_code = execute(*body.clone(), &mut subshell_state);
+                let code = execute(*body.clone(), &mut subshell_state);
 
                 // Transfer captured output to parent's capture buffer
                 if let Some(ref parent_capture) = shell_state.capture_output {
@@ -1950,15 +2003,17 @@ fn execute_compound_in_pipeline(
                 }
 
                 // Update parent's last_exit_code
-                shell_state.last_exit_code = exit_code;
+                shell_state.last_exit_code = code;
 
-                exit_code
+                code
             } else {
                 // Last command, no capture needed
-                let exit_code = execute(*body.clone(), &mut subshell_state);
-                shell_state.last_exit_code = exit_code;
-                exit_code
-            }
+                let code = execute(*body.clone(), &mut subshell_state);
+                shell_state.last_exit_code = code;
+                code
+            };
+
+            exit_code
         }
         _ => {
             // Other compound commands not yet supported
@@ -2660,11 +2715,11 @@ mod tests {
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_invalid_{}.txt", timestamp);
 
-        // Test: Invalid fd number (>9)
+        // Test: Invalid fd number (>1024)
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "test".to_string()],
             compound: None,
-            redirections: vec![Redirection::FdOutput(10, temp_file.clone())],
+            redirections: vec![Redirection::FdOutput(1025, temp_file.clone())],
         };
 
         let mut shell_state = ShellState::new();

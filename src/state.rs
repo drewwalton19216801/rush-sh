@@ -94,7 +94,7 @@ impl FileDescriptorTable {
         truncate: bool,
     ) -> Result<(), String> {
         // Validate fd number
-        if !(0..=9).contains(&fd_num) {
+        if !(0..=1024).contains(&fd_num) {
             return Err(format!("Invalid file descriptor number: {}", fd_num));
         }
 
@@ -124,10 +124,10 @@ impl FileDescriptorTable {
     /// * `Err(String)` with error message on failure
     pub fn duplicate_fd(&mut self, source_fd: i32, target_fd: i32) -> Result<(), String> {
         // Validate fd numbers
-        if !(0..=9).contains(&source_fd) {
+        if !(0..=1024).contains(&source_fd) {
             return Err(format!("Invalid source file descriptor: {}", source_fd));
         }
-        if !(0..=9).contains(&target_fd) {
+        if !(0..=1024).contains(&target_fd) {
             return Err(format!("Invalid target file descriptor: {}", target_fd));
         }
 
@@ -163,7 +163,7 @@ impl FileDescriptorTable {
     /// * `Err(String)` with error message on failure
     pub fn close_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
-        if !(0..=9).contains(&fd_num) {
+        if !(0..=1024).contains(&fd_num) {
             return Err(format!("Invalid file descriptor number: {}", fd_num));
         }
 
@@ -182,7 +182,7 @@ impl FileDescriptorTable {
     /// * `Err(String)` with error message on failure
     pub fn save_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
-        if !(0..=9).contains(&fd_num) {
+        if !(0..=1024).contains(&fd_num) {
             return Err(format!("Invalid file descriptor number: {}", fd_num));
         }
 
@@ -210,7 +210,7 @@ impl FileDescriptorTable {
     /// * `Err(String)` with error message on failure
     pub fn restore_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
-        if !(0..=9).contains(&fd_num) {
+        if !(0..=1024).contains(&fd_num) {
             return Err(format!("Invalid file descriptor number: {}", fd_num));
         }
 
@@ -445,6 +445,8 @@ pub struct ShellState {
     pub fd_table: Rc<RefCell<FileDescriptorTable>>,
     /// Current subshell nesting depth (for recursion limit)
     pub subshell_depth: usize,
+    /// Override for stdin (used for pipeline subshells to avoid process-global fd manipulation)
+    pub stdin_override: Option<RawFd>,
 }
 
 impl ShellState {
@@ -505,6 +507,7 @@ impl ShellState {
             collecting_heredoc: None,
             fd_table: Rc::new(RefCell::new(FileDescriptorTable::new())),
             subshell_depth: 0,
+            stdin_override: None,
         }
     }
 
@@ -1260,7 +1263,7 @@ mod tests {
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid file descriptor"));
 
-        let result = fd_table.open_fd(10, "/tmp/test.txt", true, false, false, false);
+        let result = fd_table.open_fd(1025, "/tmp/test.txt", true, false, false, false);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid file descriptor"));
     }
@@ -1374,12 +1377,21 @@ mod tests {
         std::fs::write(&temp_file1, "test content 1").unwrap();
         std::fs::write(&temp_file2, "test content 2").unwrap();
 
-        // Open files on fd 3 and 4
+        // Open files on fd 50 and 51
+        // Manually dup2 to ensure these FDs are valid for save_fd()
+        // Using higher FDs to avoid conflict with parallel tests using 0-9
+        let f1 = File::open(&temp_file1).unwrap();
+        let f2 = File::open(&temp_file2).unwrap();
+        unsafe {
+            libc::dup2(f1.as_raw_fd(), 50);
+            libc::dup2(f2.as_raw_fd(), 51);
+        }
+
         fd_table
-            .open_fd(3, &temp_file1, true, false, false, false)
+            .open_fd(50, &temp_file1, true, false, false, false)
             .unwrap();
         fd_table
-            .open_fd(4, &temp_file2, true, false, false, false)
+            .open_fd(51, &temp_file2, true, false, false, false)
             .unwrap();
 
         // Save all fds
@@ -1391,6 +1403,10 @@ mod tests {
         assert!(result.is_ok());
 
         // Clean up
+        unsafe {
+            libc::close(50);
+            libc::close(51);
+        }
         let _ = std::fs::remove_file(&temp_file1);
         let _ = std::fs::remove_file(&temp_file2);
     }
@@ -1403,11 +1419,15 @@ mod tests {
         let temp_file = "/tmp/rush_test_fd_clear.txt";
         std::fs::write(temp_file, "test content").unwrap();
 
-        // Open file on fd 3
+        // Open file on fd 50 (was 3)
+        // Manual setup not strictly needed for clear() test as it checks map?
+        // But clear() might close FDs?
+        // FileDescriptorTable::clear() just clears map. File drops.
+
         fd_table
-            .open_fd(3, temp_file, true, false, false, false)
+            .open_fd(50, temp_file, true, false, false, false)
             .unwrap();
-        assert!(fd_table.is_open(3));
+        assert!(fd_table.is_open(50));
 
         // Clear all fds
         fd_table.clear();

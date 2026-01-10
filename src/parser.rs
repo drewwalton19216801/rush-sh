@@ -477,9 +477,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             let subshell_tokens = &tokens[i + 1..j - 1];
 
             // Parse the subshell body recursively
-            // Empty subshells are valid and equivalent to 'true'
+            // Empty subshells are not allowed
             let body_ast = if subshell_tokens.is_empty() {
-                create_empty_body_ast()
+                return Err("Empty subshell".to_string());
             } else {
                 parse_commands_sequentially(subshell_tokens)?
             };
