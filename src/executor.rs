@@ -1795,6 +1795,26 @@ fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
     // Clone the shell state for isolation
     let mut subshell_state = shell_state.clone();
 
+    // Deep clone the file descriptor table for isolation
+    // shell_state.clone() only clones the Rc, so we need to manually deep clone the table
+    // and put it in a new Rc<RefCell<_>>
+    match shell_state.fd_table.borrow().deep_clone() {
+        Ok(new_fd_table) => {
+            subshell_state.fd_table = Rc::new(RefCell::new(new_fd_table));
+        }
+        Err(e) => {
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}Failed to clone file descriptor table: {}\x1b[0m",
+                    shell_state.color_scheme.error, e
+                );
+            } else {
+                eprintln!("Failed to clone file descriptor table: {}", e);
+            }
+            return 1;
+        }
+    }
+
     // Increment subshell depth in the cloned state
     subshell_state.subshell_depth = shell_state.subshell_depth + 1;
 
