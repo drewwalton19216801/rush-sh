@@ -114,6 +114,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
     - Local variables: `local var=value`
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
+  - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
 - **Built-in Commands** (20 total):
   - `cd`: Change directory
   - `exit`: Exit the shell
@@ -164,6 +165,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
 **Enhanced Built-in Command Suite** - Comprehensive set of 20 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
+
+**Command Grouping** - POSIX-compliant command grouping `{ commands; }` for executing commands in the current shell context with shared state, variable persistence, and proper redirection handling.
 
 ## Detailed Feature Updates
 
@@ -238,6 +241,37 @@ trap 'echo "Signal received"' INT
 - Maximum depth of 100 levels prevents stack overflow attacks
 
 For practical examples, see the example scripts that demonstrate subshell usage in various scenarios.
+
+### Command Grouping
+
+Rush implements POSIX-compliant command grouping, allowing multiple commands to be executed as a single unit in the current shell context:
+
+- **Syntax**: `{ command1; command2; }` (must end with semicolon or newline before closing brace)
+- **Shared State**: Commands run in the current shell, so variable changes persist (unlike subshells)
+- **Redirection**: Redirections applied to the group apply to all commands within it
+- **Efficiency**: No subshell overhead, simply groups commands for control flow or redirection
+
+**Usage Examples:**
+
+```bash
+# Grouping with redirection
+{
+    echo "Date: $(date)"
+    echo "User: $USER"
+} > session_info.txt
+
+# Variable persistence (difference from subshells)
+x=1
+{ x=2; }
+echo $x  # Prints 2 (variables persist)
+
+# Nested grouping
+{
+    echo "Start"
+    { echo "Middle"; }
+    echo "End"
+}
+```
 
 ### Environment Variable Support
 

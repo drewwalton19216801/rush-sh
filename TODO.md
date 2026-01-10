@@ -99,7 +99,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 #### 2.3.1 Grouping
 
 - ✅ Subshell ((...)) with state isolation, trap inheritance, and depth limit protection
-- ❌ Command grouping {...}
+- ✅ Command grouping {...}
 
 #### 2.3.2 Conditional Constructs
 
@@ -234,8 +234,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - `umask` (set file creation mask)
     - `wait` (wait for background jobs)
 
-2. **Command Grouping**
-    - Command grouping with braces `{...}` (currently only subshells `(...)` are supported)
+    - `wait` (wait for background jobs)
 
 ### Medium Priority
 
@@ -280,7 +279,6 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ Command grouping with braces `{...}`
 - ❌ Missing built-in functionality (eval, exec, set, readonly, return, break, continue, etc.)
 - ❌ Job control features (bg, fg, jobs, &)
 
@@ -291,7 +289,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
-- **Control Structures**: 90% ✅ (if/elif/else, case with glob patterns, for/while loops, functions, subshells implemented; command grouping `{...}` missing)
+- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions, subshells, command grouping implemented)
 - **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)

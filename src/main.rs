@@ -588,6 +588,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut if_depth = 0;
     let mut in_case_block = false;
     let mut in_function_block = false;
+    let mut in_group_block = false;
     let mut brace_depth = 0;
     let mut in_for_block = false;
     let mut for_depth = 0;
@@ -684,6 +685,13 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             } else if starts_with_keyword(line, "while") {
                 in_while_block = true;
                 while_depth += 1;
+            } else if {
+                let trimmed = line.trim();
+                trimmed == "{" || trimmed.starts_with("{ ") || trimmed.starts_with("{\t")
+            } {
+                in_group_block = true;
+                brace_depth += line.matches('{').count() as i32;
+                brace_depth -= line.matches('}').count() as i32;
             }
         }
 
@@ -695,7 +703,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             // Count opening braces on this line
             brace_depth += line.matches('{').count() as i32;
             brace_depth -= line.matches('}').count() as i32;
-        } else if in_function_block {
+        } else if in_function_block || in_group_block {
             // Track braces inside function
             // Note: Simplistic brace counting, ideally should respect quotes/comments too
             // But for now, we trust the user writes valid shell code inside functions
@@ -712,9 +720,10 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
         // Check for end of multi-line constructs
         // Only check if we are NOT in a quote
         if keywords_active {
-            if in_function_block && brace_depth == 0 {
-                // Function is complete
+            if (in_function_block || in_group_block) && brace_depth == 0 {
+                // Function or group is complete
                 in_function_block = false;
+                in_group_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
 
@@ -770,6 +779,7 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             } else if !in_if_block
                 && !in_case_block
                 && !in_function_block
+                && !in_group_block
                 && !in_for_block
                 && !in_while_block
             {
@@ -2122,6 +2132,78 @@ mod tests {
         assert_eq!(exit_code, 0);
         // Parent variable should be unchanged
         assert_eq!(shell_state.get_var("VAR"), Some("parent".to_string()));
+    }
+
+    #[test]
+    fn test_compound_group_pipeline_with_redirection_suppression() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let mut shell_state = state::ShellState::new();
+
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_out = format!("/tmp/rush_test_group_suppress_out_{}.txt", timestamp);
+        let temp_pipe = format!("/tmp/rush_test_group_suppress_pipe_{}.txt", timestamp);
+
+        // { echo hello; } > temp_out | cat > temp_pipe
+        let line = format!("{{ echo hello; }} > {} | cat > {}", temp_out, temp_pipe);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let _ = executor::execute(ast, &mut shell_state);
+
+        // Verify temp_out has "hello"
+        let out_content = std::fs::read_to_string(&temp_out).unwrap();
+        assert!(out_content.contains("hello"));
+
+        // Verify temp_pipe is empty
+        let pipe_content = std::fs::read_to_string(&temp_pipe).unwrap();
+        assert!(
+            pipe_content.is_empty(),
+            "Pipe should be empty but contains: '{}'",
+            pipe_content
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_out);
+        let _ = std::fs::remove_file(&temp_pipe);
+    }
+
+    #[test]
+    fn test_subshell_pipeline_with_redirection_suppression() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let mut shell_state = state::ShellState::new();
+
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_out = format!("/tmp/rush_test_sub_suppress_out_{}.txt", timestamp);
+        let temp_pipe = format!("/tmp/rush_test_sub_suppress_pipe_{}.txt", timestamp);
+
+        // (echo hello) > temp_out | cat > temp_pipe
+        let line = format!("(echo hello) > {} | cat > {}", temp_out, temp_pipe);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let _ = executor::execute(ast, &mut shell_state);
+
+        // Verify temp_out has "hello"
+        let out_content = std::fs::read_to_string(&temp_out).unwrap();
+        assert!(out_content.contains("hello"));
+
+        // Verify temp_pipe is empty
+        let pipe_content = std::fs::read_to_string(&temp_pipe).unwrap();
+        assert!(
+            pipe_content.is_empty(),
+            "Pipe should be empty but contains: '{}'",
+            pipe_content
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_out);
+        let _ = std::fs::remove_file(&temp_pipe);
     }
 
     #[test]

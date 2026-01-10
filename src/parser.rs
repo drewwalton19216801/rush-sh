@@ -54,6 +54,11 @@ pub enum Ast {
     Subshell {
         body: Box<Ast>,
     },
+    /// Command group execution: { commands; }
+    /// Commands execute in the current shell state
+    CommandGroup {
+        body: Box<Ast>,
+    },
 }
 
 /// Represents a single redirection operation
@@ -558,21 +563,64 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
             }
 
-            // If redirections found, wrap subshell in a pipeline with redirections
+            // Check if this subshell is part of a pipeline
+            if i < tokens.len() && tokens[i] == Token::Pipe {
+                // Find end of pipeline
+                let mut end = i;
+                let mut brace_depth = 0;
+                let mut paren_depth = 0;
+                let mut last_was_pipe = true; // Started with a pipe
+                while end < tokens.len() {
+                    match &tokens[end] {
+                        Token::Pipe => last_was_pipe = true,
+                        Token::LeftBrace => {
+                            brace_depth += 1;
+                            last_was_pipe = false;
+                        }
+                        Token::RightBrace => {
+                            if brace_depth > 0 {
+                                brace_depth -= 1;
+                            } else {
+                                break;
+                            }
+                            last_was_pipe = false;
+                        }
+                        Token::LeftParen => {
+                            paren_depth += 1;
+                            last_was_pipe = false;
+                        }
+                        Token::RightParen => {
+                            if paren_depth > 0 {
+                                paren_depth -= 1;
+                            } else {
+                                break;
+                            }
+                            last_was_pipe = false;
+                        }
+                        Token::Newline | Token::Semicolon => {
+                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
+                                break;
+                            }
+                        }
+                        Token::Word(_) => last_was_pipe = false,
+                        _ => {}
+                    }
+                    end += 1;
+                }
+
+                let pipeline_ast = parse_pipeline(&tokens[start..end])?;
+                commands.push(pipeline_ast);
+                i = end;
+                continue;
+            }
+
+            // If not part of a pipeline, apply redirections to the subshell itself
             if !redirections.is_empty() {
                 subshell_ast = Ast::Pipeline(vec![ShellCommand {
                     args: Vec::new(),
                     redirections,
                     compound: Some(Box::new(subshell_ast)),
                 }]);
-            }
-
-            // Check if this is part of a pipeline
-            if i < tokens.len() && tokens[i] == Token::Pipe {
-                // This subshell is part of a pipeline - parse the entire line as a pipeline
-                let pipeline_ast = parse_pipeline(&tokens[start..])?;
-                commands.push(pipeline_ast);
-                break; // We've consumed the rest of the tokens
             }
 
             // Handle operators after subshell (&&, ||, ;, newline)
@@ -604,11 +652,215 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
                 commands.push(combined_ast);
                 break; // We've consumed the rest of the tokens
-            } else {
-                commands.push(subshell_ast);
             }
 
+            commands.push(subshell_ast);
+
             // Skip semicolon or newline after subshell
+            if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                i += 1;
+            }
+            continue;
+        }
+
+        // Check for command group: LeftBrace at start of command
+        if tokens[i] == Token::LeftBrace {
+            // This is a command group - find the matching RightBrace
+            let mut brace_depth = 1;
+            let mut j = i + 1;
+
+            while j < tokens.len() && brace_depth > 0 {
+                match tokens[j] {
+                    Token::LeftBrace => brace_depth += 1,
+                    Token::RightBrace => brace_depth -= 1,
+                    _ => {}
+                }
+                j += 1;
+            }
+
+            if brace_depth != 0 {
+                return Err("Unmatched brace in command group".to_string());
+            }
+
+            // Extract group body (tokens between braces)
+            let group_tokens = &tokens[i + 1..j - 1];
+
+            // Parse the group body recursively
+            // Empty groups are not allowed
+            let body_ast = if group_tokens.is_empty() {
+                return Err("Empty command group".to_string());
+            } else {
+                parse_commands_sequentially(group_tokens)?
+            };
+
+            let mut group_ast = Ast::CommandGroup {
+                body: Box::new(body_ast),
+            };
+
+            i = j; // Move past the closing brace
+
+            // Check for redirections after command group
+            let mut redirections = Vec::new();
+            while i < tokens.len() {
+                match &tokens[i] {
+                    Token::RedirOut => {
+                        i += 1;
+                        if i < tokens.len() {
+                            if let Token::Word(file) = &tokens[i] {
+                                redirections.push(Redirection::Output(file.clone()));
+                                i += 1;
+                            }
+                        }
+                    }
+                    Token::RedirIn => {
+                        i += 1;
+                        if i < tokens.len() {
+                            if let Token::Word(file) = &tokens[i] {
+                                redirections.push(Redirection::Input(file.clone()));
+                                i += 1;
+                            }
+                        }
+                    }
+                    Token::RedirAppend => {
+                        i += 1;
+                        if i < tokens.len() {
+                            if let Token::Word(file) = &tokens[i] {
+                                redirections.push(Redirection::Append(file.clone()));
+                                i += 1;
+                            }
+                        }
+                    }
+                    Token::RedirectFdOut(fd, file) => {
+                        redirections.push(Redirection::FdOutput(*fd, file.clone()));
+                        i += 1;
+                    }
+                    Token::RedirectFdIn(fd, file) => {
+                        redirections.push(Redirection::FdInput(*fd, file.clone()));
+                        i += 1;
+                    }
+                    Token::RedirectFdAppend(fd, file) => {
+                        redirections.push(Redirection::FdAppend(*fd, file.clone()));
+                        i += 1;
+                    }
+                    Token::RedirectFdDup(from_fd, to_fd) => {
+                        redirections.push(Redirection::FdDuplicate(*from_fd, *to_fd));
+                        i += 1;
+                    }
+                    Token::RedirectFdClose(fd) => {
+                        redirections.push(Redirection::FdClose(*fd));
+                        i += 1;
+                    }
+                    Token::RedirectFdInOut(fd, file) => {
+                        redirections.push(Redirection::FdInputOutput(*fd, file.clone()));
+                        i += 1;
+                    }
+                    Token::RedirHereDoc(delimiter, quoted) => {
+                        redirections
+                            .push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
+                        i += 1;
+                    }
+                    Token::RedirHereString(content) => {
+                        redirections.push(Redirection::HereString(content.clone()));
+                        i += 1;
+                    }
+                    _ => break,
+                }
+            }
+
+            // Check if this group is part of a pipeline
+            if i < tokens.len() && tokens[i] == Token::Pipe {
+                // Find end of pipeline
+                let mut end = i;
+                let mut brace_depth = 0;
+                let mut paren_depth = 0;
+                let mut last_was_pipe = true; // Started with a pipe
+                while end < tokens.len() {
+                    match &tokens[end] {
+                        Token::Pipe => last_was_pipe = true,
+                        Token::LeftBrace => {
+                            brace_depth += 1;
+                            last_was_pipe = false;
+                        }
+                        Token::RightBrace => {
+                            if brace_depth > 0 {
+                                brace_depth -= 1;
+                            } else {
+                                break;
+                            }
+                            last_was_pipe = false;
+                        }
+                        Token::LeftParen => {
+                            paren_depth += 1;
+                            last_was_pipe = false;
+                        }
+                        Token::RightParen => {
+                            if paren_depth > 0 {
+                                paren_depth -= 1;
+                            } else {
+                                break;
+                            }
+                            last_was_pipe = false;
+                        }
+                        Token::Newline | Token::Semicolon => {
+                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
+                                break;
+                            }
+                        }
+                        Token::Word(_) => last_was_pipe = false,
+                        _ => {}
+                    }
+                    end += 1;
+                }
+
+                let pipeline_ast = parse_pipeline(&tokens[start..end])?;
+                commands.push(pipeline_ast);
+                i = end;
+                continue;
+            }
+
+            // If not part of a pipeline, apply redirections to the group itself
+            if !redirections.is_empty() {
+                group_ast = Ast::Pipeline(vec![ShellCommand {
+                    args: Vec::new(),
+                    redirections,
+                    compound: Some(Box::new(group_ast)),
+                }]);
+            }
+
+            // Handle operators after group (&&, ||, ;, newline)
+            if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
+                let operator = tokens[i].clone();
+                i += 1; // Skip the operator
+
+                // Skip any newlines after the operator
+                while i < tokens.len() && tokens[i] == Token::Newline {
+                    i += 1;
+                }
+
+                // Parse the right side recursively
+                let remaining_tokens = &tokens[i..];
+                let right_ast = parse_commands_sequentially(remaining_tokens)?;
+
+                // Create And or Or node
+                let combined_ast = match operator {
+                    Token::And => Ast::And {
+                        left: Box::new(group_ast),
+                        right: Box::new(right_ast),
+                    },
+                    Token::Or => Ast::Or {
+                        left: Box::new(group_ast),
+                        right: Box::new(right_ast),
+                    },
+                    _ => unreachable!(),
+                };
+
+                commands.push(combined_ast);
+                break; // We've consumed the rest of the tokens
+            }
+
+            commands.push(group_ast);
+
+            // Skip semicolon or newline after group
             if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
                 i += 1;
             }
@@ -701,28 +953,43 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
         } else {
             // For simple commands, stop at newline, semicolon, &&, or ||
             // But check if the next token after newline is a control flow keyword
+            let mut brace_depth = 0;
+            let mut paren_depth = 0;
+            let mut last_was_pipe = false;
             while i < tokens.len() {
-                if tokens[i] == Token::Newline
-                    || tokens[i] == Token::Semicolon
-                    || tokens[i] == Token::And
-                    || tokens[i] == Token::Or
-                {
-                    // Look ahead to see if the next non-newline token is else/elif/fi
-                    let mut j = i + 1;
-                    while j < tokens.len() && tokens[j] == Token::Newline {
-                        j += 1;
+                match &tokens[i] {
+                    Token::LeftBrace => {
+                        brace_depth += 1;
+                        last_was_pipe = false;
                     }
-                    // If we find else/elif/fi, this is likely part of an if statement that wasn't properly detected
-                    if j < tokens.len()
-                        && (tokens[j] == Token::Else
-                            || tokens[j] == Token::Elif
-                            || tokens[j] == Token::Fi)
-                    {
-                        // Skip this token and continue - it will be handled as a parse error
-                        i = j + 1;
-                        continue;
+                    Token::RightBrace => {
+                        if brace_depth > 0 {
+                            brace_depth -= 1;
+                        } else {
+                            break;
+                        }
+                        last_was_pipe = false;
                     }
-                    break;
+                    Token::LeftParen => {
+                        paren_depth += 1;
+                        last_was_pipe = false;
+                    }
+                    Token::RightParen => {
+                        if paren_depth > 0 {
+                            paren_depth -= 1;
+                        } else {
+                            break;
+                        }
+                        last_was_pipe = false;
+                    }
+                    Token::Pipe => last_was_pipe = true,
+                    Token::Newline | Token::Semicolon | Token::And | Token::Or => {
+                        if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
+                            break;
+                        }
+                    }
+                    Token::Word(_) => last_was_pipe = false,
+                    _ => {}
                 }
                 i += 1;
             }
@@ -806,6 +1073,135 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
     while i < tokens.len() {
         let token = &tokens[i];
         match token {
+            Token::LeftBrace => {
+                // Start of command group in pipeline
+                // Find matching RightBrace
+                let mut brace_depth = 1;
+                let mut j = i + 1;
+
+                while j < tokens.len() && brace_depth > 0 {
+                    match tokens[j] {
+                        Token::LeftBrace => brace_depth += 1,
+                        Token::RightBrace => brace_depth -= 1,
+                        _ => {}
+                    }
+                    j += 1;
+                }
+
+                if brace_depth != 0 {
+                    return Err("Unmatched brace in pipeline".to_string());
+                }
+
+                // Parse group body
+                let group_tokens = &tokens[i + 1..j - 1];
+
+                // Empty groups are valid and equivalent to 'true'
+                let body_ast = if group_tokens.is_empty() {
+                    create_empty_body_ast()
+                } else {
+                    parse_commands_sequentially(group_tokens)?
+                };
+
+                // Create ShellCommand with compound command group
+                current_cmd.compound = Some(Box::new(Ast::CommandGroup {
+                    body: Box::new(body_ast),
+                }));
+
+                i = j; // Move past closing brace
+
+                // Check for redirections after command group
+                while i < tokens.len() {
+                    match &tokens[i] {
+                        Token::RedirOut => {
+                            i += 1;
+                            if i < tokens.len() {
+                                if let Token::Word(file) = &tokens[i] {
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::Output(file.clone()));
+                                    i += 1;
+                                }
+                            }
+                        }
+                        Token::RedirIn => {
+                            i += 1;
+                            if i < tokens.len() {
+                                if let Token::Word(file) = &tokens[i] {
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::Input(file.clone()));
+                                    i += 1;
+                                }
+                            }
+                        }
+                        Token::RedirAppend => {
+                            i += 1;
+                            if i < tokens.len() {
+                                if let Token::Word(file) = &tokens[i] {
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::Append(file.clone()));
+                                    i += 1;
+                                }
+                            }
+                        }
+                        Token::RedirectFdOut(fd, file) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdOutput(*fd, file.clone()));
+                            i += 1;
+                        }
+                        Token::RedirectFdIn(fd, file) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdInput(*fd, file.clone()));
+                            i += 1;
+                        }
+                        Token::RedirectFdAppend(fd, file) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdAppend(*fd, file.clone()));
+                            i += 1;
+                        }
+                        Token::RedirectFdDup(from_fd, to_fd) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdDuplicate(*from_fd, *to_fd));
+                            i += 1;
+                        }
+                        Token::RedirectFdClose(fd) => {
+                            current_cmd.redirections.push(Redirection::FdClose(*fd));
+                            i += 1;
+                        }
+                        Token::RedirectFdInOut(fd, file) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdInputOutput(*fd, file.clone()));
+                            i += 1;
+                        }
+                        Token::RedirHereDoc(delimiter, quoted) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
+                            i += 1;
+                        }
+                        Token::RedirHereString(content) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::HereString(content.clone()));
+                            i += 1;
+                        }
+                        Token::Pipe => {
+                            // End of this pipeline stage
+                            break;
+                        }
+                        _ => break,
+                    }
+                }
+
+                // Stage will be pushed at next | or end of loop
+                continue;
+            }
             Token::LeftParen => {
                 // Start of subshell in pipeline
                 // Find matching RightParen
@@ -835,6 +1231,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     parse_commands_sequentially(subshell_tokens)?
                 };
 
+                // Create ShellCommand with compound subshell
                 // Create ShellCommand with compound subshell
                 current_cmd.compound = Some(Box::new(Ast::Subshell {
                     body: Box::new(body_ast),
@@ -932,10 +1329,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     }
                 }
 
-                // Push the command with subshell
-                commands.push(current_cmd.clone());
-                current_cmd = ShellCommand::default();
-
+                // Stage will be pushed at next | or end of loop
                 continue;
             }
             Token::Word(word) => {
@@ -1033,9 +1427,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 return Err("Unexpected ) in pipeline".to_string());
             }
             Token::Newline => {
-                // Newlines are handled at the sequence level, skip them in pipelines
-                i += 1;
-                continue;
+                // Ignore newlines in pipelines if they follow a pipe or if we are at the start of a stage
+                if current_cmd.args.is_empty() && current_cmd.compound.is_none() {
+                    // This newline is between commands or at the start, skip it
+                } else {
+                    break;
+                }
             }
             Token::Do
             | Token::Done
@@ -1055,7 +1452,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
         i += 1;
     }
 
-    if !current_cmd.args.is_empty() {
+    if !current_cmd.args.is_empty() || current_cmd.compound.is_some() {
         commands.push(current_cmd);
     }
 

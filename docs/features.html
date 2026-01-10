@@ -209,6 +209,23 @@ exec 5<>file.txt  # Open for read/write</code></pre>
 ((echo "nested"))  # Depth limit: 100</code></pre>
                             </div>
                         </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📦</div>
+                            <h3>Command Grouping</h3>
+                            <p>Group commands in the current shell context using braces for shared state and
+                                redirections</p>
+                            <div class="code-block">
+                                <pre><code># Group commands with shared state
+{ x=1; echo $x; }
+echo $x  # x is still 1 (unlike subshells)
+
+# Grouping with redirection
+{
+  echo "Start"
+  date
+} > output.log</code></pre>
+                            </div>
+                        </div>
                     </div>
                 </section>
 

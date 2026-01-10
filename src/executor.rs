@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write, pipe};
-use std::os::fd::{AsRawFd, FromRawFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
@@ -692,9 +692,29 @@ fn apply_input_redirection(
         // stdin redirection - apply to Command if present
         if let Some(cmd) = command {
             cmd.stdin(Stdio::from(file_handle));
+        } else {
+            // For builtins or command groups (command is None), redirect shell's stdin
+            shell_state.fd_table.borrow_mut().open_fd(
+                0,
+                &expanded_file,
+                true,  // read
+                false, // write
+                false, // append
+                false, // truncate
+            )?;
+
+            // Also perform OS-level dup2
+            let raw_fd = shell_state.fd_table.borrow().get_raw_fd(0);
+            if let Some(rfd) = raw_fd {
+                if rfd != 0 {
+                    unsafe {
+                        if libc::dup2(rfd, 0) < 0 {
+                            return Err(format!("Failed to dup2 fd {} to 0", rfd));
+                        }
+                    }
+                }
+            }
         }
-        // For builtins (command is None), the stdin is already handled by the shell's stdin
-        // The builtin will need to read from fd 0 which is already set up
     } else {
         // Custom fd - for external commands, we need to redirect the custom fd for reading
         // Open the file (we need to keep the handle alive for the command)
@@ -761,18 +781,30 @@ fn apply_output_redirection(
             .map_err(|e| format!("Cannot create {}: {}", expanded_file, e))?
     };
 
-    if fd == 1 {
-        // stdout redirection - apply to Command if present
-        if let Some(cmd) = command {
+    if let Some(cmd) = command {
+        if fd == 1 {
+            // stdout redirection - apply to Command if present
             cmd.stdout(Stdio::from(file_handle));
-        }
-    } else if fd == 2 {
-        // stderr redirection - apply to Command if present
-        if let Some(cmd) = command {
+        } else if fd == 2 {
+            // stderr redirection - apply to Command if present
             cmd.stderr(Stdio::from(file_handle));
+        } else {
+            // Custom fd - store in fd table (and pre_exec will handle it?)
+            // Actually, for external commands, custom FDs need to be inherited/set up.
+            // But we can update the shell's FD table temporarily if we want?
+            // Existing logic for custom FD WAS to update fd_table.
+            shell_state.fd_table.borrow_mut().open_fd(
+                fd,
+                &expanded_file,
+                false, // read
+                true,  // write
+                append,
+                !append, // truncate if not appending
+            )?;
         }
     } else {
-        // Custom fd - store in fd table
+        // Current process redirection (builtins, command groups)
+        // We MUST update the file descriptor table for ALL FDs including 1 and 2
         shell_state.fd_table.borrow_mut().open_fd(
             fd,
             &expanded_file,
@@ -781,6 +813,20 @@ fn apply_output_redirection(
             append,
             !append, // truncate if not appending
         )?;
+
+        // Also perform OS-level dup2 to ensure child processes inherit the redirection
+        // (This is critical for external commands running inside command groups)
+        let raw_fd = shell_state.fd_table.borrow().get_raw_fd(fd);
+        if let Some(rfd) = raw_fd {
+            // Avoid dup2-ing to itself if raw_fd happens to equal fd (unlikely but possible if we closed 1 then opened)
+            if rfd != fd {
+                unsafe {
+                    if libc::dup2(rfd, fd) < 0 {
+                        return Err(format!("Failed to dup2 fd {} to {}", rfd, fd));
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
@@ -1282,6 +1328,7 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             }
         }
         Ast::Subshell { body } => execute_subshell(*body, shell_state),
+        Ast::CommandGroup { body } => execute(*body, shell_state),
     }
 }
 
@@ -1554,25 +1601,23 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
 fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> i32 {
     let mut exit_code = 0;
-    let mut previous_stdout = None;
+    let mut previous_stdout: Option<File> = None;
 
     for (i, cmd) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
 
-        // Check if this is a compound command (subshell)
         if let Some(ref compound_ast) = cmd.compound {
             // Execute compound command (subshell) in pipeline
-            exit_code = execute_compound_in_pipeline(
+            let (com_exit_code, com_stdout) = execute_compound_in_pipeline(
                 compound_ast,
                 shell_state,
+                previous_stdout.take(),
                 i == 0,
                 is_last,
                 &cmd.redirections,
             );
-
-            // For Phase 2, compound commands in pipelines don't produce stdout for next stage
-            // This will be enhanced in Phase 3 with proper pipe handling
-            previous_stdout = None;
+            exit_code = com_exit_code;
+            previous_stdout = com_stdout;
             continue;
         }
 
@@ -1602,7 +1647,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             if !is_last {
                 // Create a safe pipe
                 let (reader, writer) = match pipe() {
-                    Ok(p) => p,
+                    Ok((r, w)) => (unsafe { File::from_raw_fd(r.into_raw_fd()) }, w),
                     Err(e) => {
                         if shell_state.colors_enabled {
                             eprintln!(
@@ -1622,7 +1667,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                     Some(Box::new(writer)),
                 );
                 // Use reader for next command's stdin
-                previous_stdout = Some(Stdio::from(reader));
+                previous_stdout = Some(reader);
             } else {
                 // Last command: check if we're capturing output
                 if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
@@ -1666,7 +1711,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
             // Set stdin from previous command's stdout
             if let Some(prev) = previous_stdout.take() {
-                command.stdin(prev);
+                command.stdin(Stdio::from(prev));
             } else if i > 0 {
                 // We are in a pipeline (not first command) but have no input pipe.
                 // This means the previous command didn't produce a pipe.
@@ -1707,7 +1752,10 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             match command.spawn() {
                 Ok(mut child) => {
                     if !is_last {
-                        previous_stdout = child.stdout.take().map(Stdio::from);
+                        previous_stdout = child
+                            .stdout
+                            .take()
+                            .map(|s| unsafe { File::from_raw_fd(s.into_raw_fd()) });
                     } else if shell_state.capture_output.is_some() {
                         // Last command and we're capturing - read its output
                         if let Some(mut stdout) = child.stdout.take() {
@@ -1869,6 +1917,34 @@ fn execute_compound_with_redirections(
     redirections: &[Redirection],
 ) -> i32 {
     match compound_ast {
+        Ast::CommandGroup { body } => {
+            // Save FDs before applying redirections
+            if let Err(e) = shell_state.fd_table.borrow_mut().save_all_fds() {
+                eprintln!("Error saving FDs: {}", e);
+                return 1;
+            }
+
+            // Apply redirections to current process
+            if let Err(e) = apply_redirections(redirections, shell_state, None) {
+                if shell_state.colors_enabled {
+                    eprintln!("{}{}\u{001b}[0m", shell_state.color_scheme.error, e);
+                } else {
+                    eprintln!("{}", e);
+                }
+                shell_state.fd_table.borrow_mut().restore_all_fds().ok();
+                return 1;
+            }
+
+            // Execute the group body
+            let exit_code = execute(*body.clone(), shell_state);
+
+            // Restore FDs
+            if let Err(e) = shell_state.fd_table.borrow_mut().restore_all_fds() {
+                eprintln!("Error restoring FDs: {}", e);
+            }
+
+            exit_code
+        }
         Ast::Subshell { body } => {
             // For subshells with redirections, we need to:
             // 1. Set up output capture if there are output redirections
@@ -1971,6 +2047,21 @@ fn execute_compound_with_redirections(
     }
 }
 
+/// Check if redirections include stdout redirections
+/// Returns true if any redirection affects stdout (FD 1)
+fn has_stdout_redirection(redirections: &[Redirection]) -> bool {
+    redirections.iter().any(|r| match r {
+        // Default output redirections affect stdout (FD 1)
+        Redirection::Output(_) | Redirection::Append(_) => true,
+        // Explicit FD 1 redirections
+        Redirection::FdOutput(1, _) | Redirection::FdAppend(1, _) => true,
+        // FD 1 duplication or closure
+        Redirection::FdDuplicate(1, _) | Redirection::FdClose(1) => true,
+        // All other redirections don't affect stdout
+        _ => false,
+    })
+}
+
 /// Execute a compound command (subshell) as part of a pipeline
 ///
 /// # Arguments
@@ -1984,61 +2075,136 @@ fn execute_compound_with_redirections(
 fn execute_compound_in_pipeline(
     compound_ast: &Ast,
     shell_state: &mut ShellState,
+    stdin: Option<File>,
     is_first: bool,
     is_last: bool,
-    _redirections: &[Redirection],
-) -> i32 {
+    redirections: &[Redirection],
+) -> (i32, Option<File>) {
     match compound_ast {
-        Ast::Subshell { body } => {
+        Ast::Subshell { body } | Ast::CommandGroup { body } => {
             // Clone state for subshell
             let mut subshell_state = shell_state.clone();
 
-            // If we are not the first command in pipeline, and since we don't receive input (broken pipe),
-            // we use stdin_override to force reading from /dev/null, without modifying process-global 0.
-            // We keep the file handle alive for the duration of the subshell execution.
-            let _null_file = if !is_first {
+            // Setup stdin from provided file if available
+            // We must keep the file alive for the duration of the subshell execution.
+            let mut _stdin_file = stdin;
+
+            if let Some(ref f) = _stdin_file {
+                let fd = f.as_raw_fd();
+                subshell_state.stdin_override = Some(fd);
+            } else if !is_first && subshell_state.stdin_override.is_none() {
+                // If we have no input from previous stage and no override, use /dev/null
                 if let Ok(f) = File::open("/dev/null") {
                     subshell_state.stdin_override = Some(f.as_raw_fd());
-                    Some(f)
-                } else {
-                    None
+                    _stdin_file = Some(f);
                 }
+            }
+
+            // Setup output capture if not last or if parent is capturing
+            // BUT skip capture if stdout is redirected (e.g., { pwd; } > out | wc -l)
+            let capture_buffer = if (!is_last || shell_state.capture_output.is_some())
+                && !has_stdout_redirection(redirections)
+            {
+                let buffer = Rc::new(RefCell::new(Vec::new()));
+                subshell_state.capture_output = Some(buffer.clone());
+                Some(buffer)
             } else {
                 None
             };
 
-            // Execute subshell with appropriate stdout capture
-            let exit_code = if !is_last || shell_state.capture_output.is_some() {
-                // Need to capture subshell output
-                let capture_buffer = Rc::new(RefCell::new(Vec::new()));
-                subshell_state.capture_output = Some(capture_buffer.clone());
-
-                // Execute subshell
-                let code = execute(*body.clone(), &mut subshell_state);
-
-                // Transfer captured output to parent's capture buffer
-                if let Some(ref parent_capture) = shell_state.capture_output {
-                    let captured = capture_buffer.borrow().clone();
-                    parent_capture.borrow_mut().extend_from_slice(&captured);
+            // Apply redirections (saving/restoring if it's a group)
+            let exit_code = if matches!(compound_ast, Ast::CommandGroup { .. }) {
+                // Save FDs before applying redirections
+                if let Err(e) = subshell_state.fd_table.borrow_mut().save_all_fds() {
+                    eprintln!("Error saving FDs: {}", e);
+                    return (1, None);
                 }
 
-                // Update parent's last_exit_code
-                shell_state.last_exit_code = code;
+                // If we have a pipe from previous stage, hook it up to FD 0 for builtins
+                if let Some(ref f) = _stdin_file {
+                    unsafe {
+                        libc::dup2(f.as_raw_fd(), 0);
+                    }
+                }
 
+                // Apply redirections to current process
+                if let Err(e) = apply_redirections(redirections, &mut subshell_state, None) {
+                    if subshell_state.colors_enabled {
+                        eprintln!("{}{}\u{001b}[0m", subshell_state.color_scheme.error, e);
+                    } else {
+                        eprintln!("{}", e);
+                    }
+                    subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
+                    return (1, None);
+                }
+
+                // Execute the body
+                let code = execute(*body.clone(), &mut subshell_state);
+
+                // Restore FDs
+                if let Err(e) = subshell_state.fd_table.borrow_mut().restore_all_fds() {
+                    eprintln!("Error restoring FDs: {}", e);
+                }
                 code
             } else {
-                // Last command, no capture needed
+                // Subshell handling (non-forking)
+                if let Err(e) = subshell_state.fd_table.borrow_mut().save_all_fds() {
+                    eprintln!("Error saving FDs: {}", e);
+                    return (1, None);
+                }
+
+                // If we have a pipe from previous stage, hook it up to FD 0
+                if let Some(ref f) = _stdin_file {
+                    unsafe {
+                        libc::dup2(f.as_raw_fd(), 0);
+                    }
+                }
+
+                if let Err(e) = apply_redirections(redirections, &mut subshell_state, None) {
+                    eprintln!("{}", e);
+                    subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
+                    return (1, None);
+                }
                 let code = execute(*body.clone(), &mut subshell_state);
-                shell_state.last_exit_code = code;
+                subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
                 code
             };
 
-            exit_code
+            // Prepare stdout for next stage if captured
+            let mut next_stdout = None;
+            if let Some(buffer) = capture_buffer {
+                let captured = buffer.borrow().clone();
+
+                // If not last, create a pipe and write captured output to it
+                if !is_last {
+                    use std::io::Write;
+                    let (reader, mut writer) = match pipe() {
+                        Ok((r, w)) => (r, w),
+                        Err(e) => {
+                            eprintln!("Error creating pipe for compound command: {}", e);
+                            return (exit_code, None);
+                        }
+                    };
+                    if let Err(e) = writer.write_all(&captured) {
+                        eprintln!("Error writing to pipe: {}", e);
+                    }
+                    drop(writer); // Close write end so reader sees EOF
+
+                    next_stdout = Some(unsafe { File::from_raw_fd(reader.into_raw_fd()) });
+                }
+
+                // If parent is capturing, also pass data up
+                if let Some(ref parent_capture) = shell_state.capture_output {
+                    parent_capture.borrow_mut().extend_from_slice(&captured);
+                }
+            }
+
+            shell_state.last_exit_code = exit_code;
+            (exit_code, next_stdout)
         }
         _ => {
-            // Other compound commands not yet supported
             eprintln!("Unsupported compound command in pipeline");
-            1
+            (1, None)
         }
     }
 }
