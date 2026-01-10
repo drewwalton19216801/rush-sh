@@ -53,7 +53,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.5.9</span>
+                    <span class="version">v0.6.0</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -162,6 +162,42 @@ EOF
 # Here-string (single-line)
 grep "pattern" <<< "search this text"
 wc -w <<< "count these words"</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">🔀</div>
+                            <h3>File Descriptor Operations</h3>
+                            <p>Complete file descriptor management with duplication, closing, and read/write operations</p>
+                            <div class="code-block">
+                                <pre><code># Duplicate file descriptors
+exec 3>&1  # Duplicate stdout to FD 3
+exec 4<&0  # Duplicate stdin to FD 4
+
+# Close file descriptors
+exec 3>&-  # Close FD 3
+exec 4<&-  # Close FD 4
+
+# Read/write operations
+exec 5<>file.txt  # Open for read/write</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="feature-card">
+                            <div class="feature-icon">🔄</div>
+                            <h3>Subshells</h3>
+                            <p>POSIX-compliant subshells with state isolation, exit code propagation, and trap inheritance</p>
+                            <div class="code-block">
+                                <pre><code># Execute in subshell
+(cd /tmp && ls)
+# Current directory unchanged
+
+# Subshell with variables
+(VAR=value; echo $VAR)
+# VAR not set in parent shell
+
+# Nested subshells
+((echo "nested"))  # Depth limit: 100</code></pre>
                             </div>
                         </div>
                     </div>
@@ -577,15 +613,19 @@ echo "Welcome to Rush!"</code></pre>
                         </div>
 
                         <div class="feature-card">
-                            <div class="feature-icon">📊</div>
-                            <h3>Performance</h3>
-                            <p>Optimized execution with in-context command substitution and efficient expansions</p>
+                            <div class="feature-icon">🛡️</div>
+                            <h3>Enhanced Trap System</h3>
+                            <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with overflow protection</p>
                             <div class="code-block">
-                                <pre><code># 10-50x faster for builtins
-echo "Fast: $(echo 'hello')"
+                                <pre><code># Set trap handlers
+trap 'echo "Interrupted"' INT
+trap 'cleanup' EXIT
 
-# Efficient brace expansion
-echo {1..1000} | wc -w</code></pre>
+# Display traps
+trap
+
+# Reset trap
+trap - INT</code></pre>
                             </div>
                         </div>
                     </div>

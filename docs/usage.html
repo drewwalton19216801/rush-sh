@@ -53,7 +53,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.5.9</span>
+                    <span class="version">v0.6.0</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -433,6 +433,69 @@ trap
 
 # Reset trap to default
 trap - INT</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <h3>Subshells</h3>
+                            <div class="code-block">
+                                <pre><code># Execute commands in subshell
+(cd /tmp && ls)
+# Current directory unchanged after subshell
+
+# Subshell with variable isolation
+(VAR=value; echo "Inside: $VAR")
+echo "Outside: $VAR"  # VAR not set
+
+# Nested subshells
+((echo "Level 2"))
+
+# Subshell with exit code
+(exit 42)
+echo "Exit code: $?"  # 42</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <h3>File Descriptor Operations</h3>
+                            <div class="code-block">
+                                <pre><code># Duplicate file descriptors
+exec 3>&1  # Save stdout to FD 3
+exec 4<&0  # Save stdin to FD 4
+
+# Redirect to specific FD
+echo "Error message" >&2  # Write to stderr
+
+# Close file descriptors
+exec 3>&-  # Close FD 3
+exec 4<&-  # Close FD 4
+
+# Open file for read/write
+exec 5<>file.txt
+echo "data" >&5
+exec 5>&-</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <h3>Here-documents</h3>
+                            <div class="code-block">
+                                <pre><code># Multi-line input with expansion
+cat << EOF
+User: $USER
+Home: $HOME
+Date: $(date)
+EOF
+
+# Here-string (single line)
+grep "pattern" <<< "search this text"
+wc -w <<< "count these words"
+
+# Here-document without expansion
+cat << 'EOF'
+Literal $USER
+No expansion: $(date)
+EOF</code></pre>
                             </div>
                         </div>
                     </div>

@@ -1,6 +1,17 @@
 # POSIX Compliance Progress for Rush Shell
 
+**Current Version**: 0.6.0
+**POSIX Compliance Level**: ~90%
+**Test Coverage**: 413+ test functions across all components
+
 This document outlines the current progress toward full POSIX sh (IEEE Std 1003.1-2008) compliance for the Rush shell implementation. Features are categorized by POSIX specification sections and marked as implemented (✅), partially implemented (⚠️), or not implemented (❌).
+
+## Recently Completed Features (v0.6.0)
+
+- ✅ **Subshell Support**: Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, and depth limit protection (max 100 levels) - 60+ test cases
+- ✅ **File Descriptor Operations**: Complete FD table management including duplication (N>&M, N<&M), closing (N>&-, N<&-), and read/write (N<>) - 30+ test cases
+- ✅ **Here-documents**: Full implementation of `<<` and `<<<` (here-strings) with proper expansion handling
+- ✅ **Enhanced Trap System**: Signal normalization, multiple handlers, trap display/reset, signal queue with overflow protection
 
 ## 1. Shell Command Language
 
@@ -59,8 +70,10 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ Append redirection (>>)
 - ✅ Here-document (<<)
 - ✅ Here-string (<<<)
-- ❌ File descriptor duplication (>&, <&)
-- ❌ Redirections to specific file descriptors (2>, etc.)
+- ✅ File descriptor duplication (N>&M, N<&M)
+- ✅ File descriptor closing (N>&-, N<&-)
+- ✅ Redirections to specific file descriptors (2>, 2>&1, etc.)
+- ✅ Read/write file descriptor operations (N<>)
 
 ### 1.8 Exit Status and Errors
 
@@ -85,7 +98,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 #### 2.3.1 Grouping
 
-- ❌ Subshell ((...))
+- ✅ Subshell ((...)) with state isolation, trap inheritance, and depth limit protection
 - ❌ Command grouping {...}
 
 #### 2.3.2 Conditional Constructs
@@ -208,27 +221,29 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### High Priority (Core POSIX Features)
 
-1. **Redirections**
-    - Here-documents (<<)
-    - File descriptor operations (2>, >&, etc.)
+1. **Missing Special Built-ins**
+    - `set` (options and positional parameters)
+    - `eval` (evaluate string as shell command)
+    - `exec` (replace shell with command)
+    - `readonly` (mark variables as read-only)
+    - `return` (return from function)
+    - `break` (exit from loop)
+    - `continue` (skip to next loop iteration)
+    - `:` (colon - null command)
+    - `times` (print accumulated times)
+    - `umask` (set file creation mask)
+    - `wait` (wait for background jobs)
 
-2. **Missing Built-ins**
-    - set (options and positional parameters)
-    - eval
-    - exec
-    - readonly, return, break, continue, etc.
-
-3. **Parameter Expansion**
-    - Positional parameters ($1, $2, ...) - **IMPLEMENTED**
-    - Parameter modifiers (${VAR:-default}, etc.) - **IMPLEMENTED**
-    - Indirect expansion (${!name}, ${!prefix*}) - **IMPLEMENTED** (bash extension)
-    - Special parameters ($*, $@, $#) - **IMPLEMENTED**
+2. **Command Grouping**
+    - Command grouping with braces `{...}` (currently only subshells `(...)` are supported)
 
 ### Medium Priority
 
-1. **Job Control** (optional)
-    - Background jobs (&)
-    - Job management (bg, fg, jobs, kill)
+1. **Job Control** (optional POSIX feature)
+    - Background jobs (`&`)
+    - Job management built-ins (`bg`, `fg`, `jobs`)
+    - Process control (`kill`, `wait`)
+    - Job status reporting
 
 ### Low Priority
 
@@ -250,19 +265,24 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ **Parameter expansion tests** (all modifiers, pattern matching, indirect expansion, edge cases)
 - ✅ **Brace expansion tests** (simple lists, ranges, nested braces, cartesian products)
 - ✅ **State management tests** (variables, environment, positional parameters)
+- ✅ **Subshell tests** (60+ test cases covering state isolation, trap inheritance, depth limits)
+- ✅ **File descriptor tests** (30+ test cases covering duplication, closing, read/write operations)
+- ✅ **Here-document tests** (expansion handling, delimiter processing, here-strings)
+- ✅ **Trap system tests** (signal normalization, multiple handlers, queue management)
 
 ### Test Statistics
 
-- **293+ individual test cases** across all components
+- **413+ test functions** across all components
 - **Comprehensive edge case coverage** for error conditions
 - **Feature-specific test suites** for complex functionality
 - **Integration test coverage** for end-to-end workflows
+- **Test synchronization** using mutexes for environment and directory state
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ Advanced redirection scenarios (file descriptors)
-- ❌ Missing built-in functionality (eval, exec, etc.)
-- ❌ Job control features
+- ❌ Command grouping with braces `{...}`
+- ❌ Missing built-in functionality (eval, exec, set, readonly, return, break, continue, etc.)
+- ❌ Job control features (bg, fg, jobs, &)
 
 ## Compliance Metrics
 
@@ -271,10 +291,10 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
-- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions implemented)
+- **Control Structures**: 90% ✅ (if/elif/else, case with glob patterns, for/while loops, functions, subshells implemented; command grouping `{...}` missing)
 - **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
-- **Redirections**: 75% ✅ (Basic I/O redirection, here-documents, and here-strings implemented; file descriptor operations missing)
+- **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)
 - **Job Control**: 0% ❌ (optional POSIX feature)
 - **Advanced Features**: 40% ⚠️ (Configuration, colors, completion implemented)
 

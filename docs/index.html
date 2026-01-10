@@ -53,7 +53,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.5.9</span>
+                    <span class="version">v0.6.0</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -100,7 +100,7 @@
                         <div class="hero-text">
                             <h1 class="hero-title">
                                 Rush Shell
-                                <span class="version-badge">v0.5.9</span>
+                                <span class="version-badge">v0.6.0</span>
                             </h1>
                             <p class="hero-subtitle">
                                 A comprehensive POSIX sh-compatible shell implementation written in Rust
@@ -119,8 +119,8 @@
                                     <div class="stat-label">Built-in Commands</div>
                                 </div>
                                 <div class="stat">
-                                    <div class="stat-value">323+</div>
-                                    <div class="stat-label">Test Cases</div>
+                                    <div class="stat-value">413+</div>
+                                    <div class="stat-label">Test Functions</div>
                                 </div>
                                 <div class="stat">
                                     <div class="stat-value">100%</div>
@@ -223,7 +223,7 @@
                         <div class="feature-card">
                             <div class="feature-icon">🧪</div>
                             <h3>Thoroughly Tested</h3>
-                            <p>323+ test cases covering all components with comprehensive edge case and error condition coverage</p>
+                            <p>413+ test functions covering all components with comprehensive edge case and error condition coverage</p>
                         </div>
                     </div>
                 </section>
@@ -235,32 +235,32 @@
                         <div class="update-item">
                             <div class="update-badge">🚀</div>
                             <div class="update-content">
-                                <h4>Complete Control Structures</h4>
-                                <p>Full implementation of POSIX control structures including for loops, while loops, and function definitions with local variable scoping</p>
+                                <h4>Subshell Support</h4>
+                                <p>Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, and depth limit protection (60+ test cases)</p>
                             </div>
                         </div>
 
                         <div class="update-item">
                             <div class="update-badge">⚡</div>
                             <div class="update-content">
-                                <h4>Advanced Arithmetic Expansion</h4>
-                                <p>Complete $((...)) arithmetic expression evaluator with proper operator precedence and variable integration</p>
+                                <h4>File Descriptor Operations</h4>
+                                <p>Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and read/write operations (30+ test cases)</p>
                             </div>
                         </div>
 
                         <div class="update-item">
                             <div class="update-badge">🎯</div>
                             <div class="update-content">
-                                <h4>Enhanced Built-in Commands</h4>
-                                <p>Comprehensive set of 18 built-in commands including directory stack management, alias support, and color theming</p>
+                                <h4>Here-documents & Here-strings</h4>
+                                <p>Full implementation of << and <<< with proper expansion handling for multi-line and single-line input redirection</p>
                             </div>
                         </div>
 
                         <div class="update-item">
                             <div class="update-badge">🔍</div>
                             <div class="update-content">
-                                <h4>Intelligent Tab Completion</h4>
-                                <p>Advanced completion system for commands, files, directories, and paths with nested directory traversal</p>
+                                <h4>Enhanced Trap System</h4>
+                                <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with overflow protection</p>
                             </div>
                         </div>
                     </div>
