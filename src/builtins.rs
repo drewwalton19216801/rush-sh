@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::os::unix::io::FromRawFd;
 
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
@@ -129,10 +130,10 @@ pub fn execute_builtin(
 
     // Handle redirections using FileDescriptorTable for proper POSIX compliance
     use crate::parser::Redirection;
-    
+
     // Clone redirections to avoid borrow checker issues
     let redirections = cmd.redirections.clone();
-    
+
     // First, expand all filenames in redirections (needs mutable borrow of shell_state)
     // Collect all filenames that need expansion
     let mut files_to_expand: Vec<String> = Vec::new();
@@ -152,7 +153,7 @@ pub fn execute_builtin(
             }
         }
     }
-    
+
     // Now expand all filenames (single mutable borrow)
     let mut expanded_files: Vec<String> = Vec::new();
     for f in &files_to_expand {
@@ -162,7 +163,7 @@ pub fn execute_builtin(
             expanded_files.push(crate::executor::expand_variables_in_string(f, shell_state));
         }
     }
-    
+
     // Pair redirections with their expanded filenames
     let mut expanded_redirections: Vec<(Redirection, Option<String>)> = Vec::new();
     for (i, redir) in redirections.iter().enumerate() {
@@ -173,7 +174,7 @@ pub fn execute_builtin(
         };
         expanded_redirections.push((redir.clone(), expanded_file));
     }
-    
+
     // Save all current file descriptors before applying redirections
     if let Err(e) = shell_state.fd_table.borrow_mut().save_all_fds() {
         print_error(&format!("Failed to save file descriptors: {}", e));
@@ -186,9 +187,7 @@ pub fn execute_builtin(
             Redirection::Input(_) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    0,
-                    file,
-                    true,  // read
+                    0, file, true,  // read
                     false, // write
                     false, // append
                     false, // truncate
@@ -197,9 +196,7 @@ pub fn execute_builtin(
             Redirection::Output(_) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    1,
-                    file,
-                    false, // read
+                    1, file, false, // read
                     true,  // write
                     false, // append
                     true,  // truncate
@@ -208,9 +205,7 @@ pub fn execute_builtin(
             Redirection::Append(_) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    1,
-                    file,
-                    false, // read
+                    1, file, false, // read
                     true,  // write
                     true,  // append
                     false, // truncate
@@ -219,9 +214,7 @@ pub fn execute_builtin(
             Redirection::FdInput(fd, _) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    *fd,
-                    file,
-                    true,  // read
+                    *fd, file, true,  // read
                     false, // write
                     false, // append
                     false, // truncate
@@ -230,9 +223,7 @@ pub fn execute_builtin(
             Redirection::FdOutput(fd, _) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    *fd,
-                    file,
-                    false, // read
+                    *fd, file, false, // read
                     true,  // write
                     false, // append
                     true,  // truncate
@@ -241,27 +232,21 @@ pub fn execute_builtin(
             Redirection::FdAppend(fd, _) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    *fd,
-                    file,
-                    false, // read
+                    *fd, file, false, // read
                     true,  // write
                     true,  // append
                     false, // truncate
                 )
             }
-            Redirection::FdDuplicate(target_fd, source_fd) => {
-                shell_state
-                    .fd_table
-                    .borrow_mut()
-                    .duplicate_fd(*source_fd, *target_fd)
-            }
+            Redirection::FdDuplicate(target_fd, source_fd) => shell_state
+                .fd_table
+                .borrow_mut()
+                .duplicate_fd(*source_fd, *target_fd),
             Redirection::FdClose(fd) => shell_state.fd_table.borrow_mut().close_fd(*fd),
             Redirection::FdInputOutput(fd, _) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
-                    *fd,
-                    file,
-                    true,  // read
+                    *fd, file, true,  // read
                     true,  // write
                     false, // append
                     false, // truncate
@@ -281,7 +266,25 @@ pub fn execute_builtin(
     }
 
     // Get output writer - use stdout by default
-    let mut output_writer: Box<dyn Write> = Box::new(ColoredWriter::new(io::stdout()));
+    // Get output writer - try to get FD 1 from fd_table to respect redirections
+    let mut output_writer: Box<dyn Write> = {
+        let raw_fd = shell_state.fd_table.borrow().get_raw_fd(1);
+        match raw_fd {
+            Some(fd) => {
+                // Duplicate the fd so we can take ownership in a File
+                // (using unsafe libc call similar to how state.rs handles it)
+                let dup_fd = unsafe { libc::dup(fd) };
+                if dup_fd >= 0 {
+                    let file = unsafe { std::fs::File::from_raw_fd(dup_fd) };
+                    Box::new(ColoredWriter::new(file))
+                } else {
+                    // Fallback to stdout if duplication fails
+                    Box::new(ColoredWriter::new(io::stdout()))
+                }
+            }
+            None => Box::new(ColoredWriter::new(io::stdout())),
+        }
+    };
 
     // Execute the builtin command
     let builtins = get_builtins();
