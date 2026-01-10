@@ -53,6 +53,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["dirs".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = DirsBuiltin;

@@ -77,6 +77,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["cd".to_string(), "/tmp".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = CdBuiltin;
@@ -92,6 +93,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["cd".to_string(), "/nonexistent".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = CdBuiltin;
@@ -106,6 +108,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["cd".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = CdBuiltin;

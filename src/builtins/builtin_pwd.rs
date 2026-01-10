@@ -65,6 +65,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["pwd".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = PwdBuiltin;

@@ -453,6 +453,8 @@ pub struct ShellState {
     pub collecting_heredoc: Option<(String, String, String)>, // (command_line, delimiter, collected_content)
     /// File descriptor table for managing open file descriptors
     pub fd_table: Rc<RefCell<FileDescriptorTable>>,
+    /// Current subshell nesting depth (for recursion limit)
+    pub subshell_depth: usize,
 }
 
 impl ShellState {
@@ -512,6 +514,7 @@ impl ShellState {
             pending_heredoc_content: None,
             collecting_heredoc: None,
             fd_table: Rc::new(RefCell::new(FileDescriptorTable::new())),
+            subshell_depth: 0,
         }
     }
 
@@ -928,6 +931,10 @@ impl Default for ShellState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    // Mutex to serialize tests that create temporary files
+    static FILE_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_shell_state_basic() {
@@ -1344,20 +1351,28 @@ mod tests {
 
     #[test]
     fn test_fd_table_save_all_and_restore_all() {
+        let _lock = FILE_LOCK.lock().unwrap();
+        
         let mut fd_table = FileDescriptorTable::new();
 
-        // Create temporary files
-        let temp_file1 = "/tmp/rush_test_fd_save1.txt";
-        let temp_file2 = "/tmp/rush_test_fd_save2.txt";
-        std::fs::write(temp_file1, "test content 1").unwrap();
-        std::fs::write(temp_file2, "test content 2").unwrap();
+        // Create unique temporary files
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file1 = format!("/tmp/rush_test_fd_save1_{}.txt", timestamp);
+        let temp_file2 = format!("/tmp/rush_test_fd_save2_{}.txt", timestamp);
+        
+        std::fs::write(&temp_file1, "test content 1").unwrap();
+        std::fs::write(&temp_file2, "test content 2").unwrap();
 
         // Open files on fd 3 and 4
         fd_table
-            .open_fd(3, temp_file1, true, false, false, false)
+            .open_fd(3, &temp_file1, true, false, false, false)
             .unwrap();
         fd_table
-            .open_fd(4, temp_file2, true, false, false, false)
+            .open_fd(4, &temp_file2, true, false, false, false)
             .unwrap();
 
         // Save all fds
@@ -1369,8 +1384,8 @@ mod tests {
         assert!(result.is_ok());
 
         // Clean up
-        let _ = std::fs::remove_file(temp_file1);
-        let _ = std::fs::remove_file(temp_file2);
+        let _ = std::fs::remove_file(&temp_file1);
+        let _ = std::fs::remove_file(&temp_file2);
     }
 
     #[test]

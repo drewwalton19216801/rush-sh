@@ -254,6 +254,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unknown".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_builtin(&cmd, &mut shell_state, None);

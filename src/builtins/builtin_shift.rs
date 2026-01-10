@@ -51,6 +51,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["shift".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec![
@@ -80,6 +81,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["shift".to_string(), "2".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec![
@@ -112,6 +114,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["shift".to_string(), "invalid".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = ShiftBuiltin;
@@ -127,6 +130,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["shift".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec!["arg1".to_string()]);

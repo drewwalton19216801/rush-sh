@@ -101,6 +101,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["pushd".to_string(), "/tmp".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = PushdBuiltin;

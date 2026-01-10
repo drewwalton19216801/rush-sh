@@ -205,6 +205,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-z".to_string(), "".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -218,6 +219,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-z".to_string(), "hello".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -231,6 +233,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-z".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -244,6 +247,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-n".to_string(), "".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -257,6 +261,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-n".to_string(), "hello".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -270,6 +275,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-n".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -287,6 +293,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-e".to_string(), temp_path.to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -307,6 +314,7 @@ mod tests {
                 "/non/existing/file".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -324,6 +332,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-f".to_string(), temp_path.to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -340,6 +349,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-f".to_string(), "/tmp".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -353,6 +363,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-d".to_string(), "/tmp".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -370,6 +381,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-d".to_string(), temp_path.to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -386,6 +398,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-x".to_string(), "arg".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -399,6 +412,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["test".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -417,6 +431,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -435,6 +450,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -453,6 +469,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -471,6 +488,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -489,6 +507,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -507,6 +526,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -525,6 +545,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -543,6 +564,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -561,6 +583,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -579,6 +602,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -597,6 +621,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -615,6 +640,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -633,6 +659,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -651,6 +678,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -669,6 +697,7 @@ mod tests {
                 "2".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -687,6 +716,7 @@ mod tests {
                 "abc".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -705,6 +735,7 @@ mod tests {
                 "3".to_string(),
             ],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();

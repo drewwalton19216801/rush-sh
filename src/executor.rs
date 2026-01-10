@@ -7,6 +7,9 @@ use std::rc::Rc;
 use super::parser::{Ast, Redirection, ShellCommand};
 use super::state::ShellState;
 
+/// Maximum allowed subshell nesting depth to prevent stack overflow
+const MAX_SUBSHELL_DEPTH: usize = 100;
+
 /// Execute a command and capture its output as a string
 /// This is used for command substitution $(...)
 fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
@@ -73,6 +76,7 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
                     let temp_cmd = ShellCommand {
                         args: expanded_args,
                         redirections: cmd.redirections.clone(),
+                        compound: None,
                     };
 
                     // Execute builtin with our writer
@@ -653,7 +657,13 @@ fn apply_redirections(
             }
             Redirection::HereDoc(delimiter, quoted_str) => {
                 let quoted = quoted_str == "true";
-                apply_heredoc_redirection(0, delimiter, quoted, shell_state, command.as_deref_mut())?;
+                apply_heredoc_redirection(
+                    0,
+                    delimiter,
+                    quoted,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::HereString(content) => {
                 apply_herestring_redirection(0, content, shell_state, command.as_deref_mut())?;
@@ -671,12 +681,11 @@ fn apply_input_redirection(
     command: Option<&mut Command>,
 ) -> Result<(), String> {
     let expanded_file = expand_variables_in_string(file, shell_state);
-    
+
     // Open file for reading
-    let file_handle = File::open(&expanded_file).map_err(|e| {
-        format!("Cannot open {}: {}", expanded_file, e)
-    })?;
-    
+    let file_handle =
+        File::open(&expanded_file).map_err(|e| format!("Cannot open {}: {}", expanded_file, e))?;
+
     if fd == 0 {
         // stdin redirection - apply to Command if present
         if let Some(cmd) = command {
@@ -693,7 +702,7 @@ fn apply_input_redirection(
             false, // truncate
         )?;
     }
-    
+
     Ok(())
 }
 
@@ -706,7 +715,7 @@ fn apply_output_redirection(
     command: Option<&mut Command>,
 ) -> Result<(), String> {
     let expanded_file = expand_variables_in_string(file, shell_state);
-    
+
     // Open file for writing or appending
     let file_handle = if append {
         OpenOptions::new()
@@ -718,7 +727,7 @@ fn apply_output_redirection(
         File::create(&expanded_file)
             .map_err(|e| format!("Cannot create {}: {}", expanded_file, e))?
     };
-    
+
     if fd == 1 {
         // stdout redirection - apply to Command if present
         if let Some(cmd) = command {
@@ -740,7 +749,7 @@ fn apply_output_redirection(
             !append, // truncate if not appending
         )?;
     }
-    
+
     Ok(())
 }
 
@@ -752,7 +761,10 @@ fn apply_fd_duplication(
     _command: Option<&mut Command>,
 ) -> Result<(), String> {
     // Duplicate source_fd to target_fd
-    shell_state.fd_table.borrow_mut().duplicate_fd(source_fd, target_fd)?;
+    shell_state
+        .fd_table
+        .borrow_mut()
+        .duplicate_fd(source_fd, target_fd)?;
     Ok(())
 }
 
@@ -775,7 +787,7 @@ fn apply_fd_input_output(
     _command: Option<&mut Command>,
 ) -> Result<(), String> {
     let expanded_file = expand_variables_in_string(file, shell_state);
-    
+
     // Open file for both reading and writing
     shell_state.fd_table.borrow_mut().open_fd(
         fd,
@@ -785,7 +797,7 @@ fn apply_fd_input_output(
         false, // append
         false, // truncate
     )?;
-    
+
     Ok(())
 }
 
@@ -798,28 +810,28 @@ fn apply_heredoc_redirection(
     command: Option<&mut Command>,
 ) -> Result<(), String> {
     let here_doc_content = collect_here_document_content(delimiter, shell_state);
-    
+
     // Expand variables and command substitutions ONLY if delimiter was not quoted
     let expanded_content = if quoted {
         here_doc_content
     } else {
         expand_variables_in_string(&here_doc_content, shell_state)
     };
-    
+
     // Create a pipe and write the content
-    let (reader, mut writer) = pipe()
-        .map_err(|e| format!("Failed to create pipe for here-document: {}", e))?;
-    
+    let (reader, mut writer) =
+        pipe().map_err(|e| format!("Failed to create pipe for here-document: {}", e))?;
+
     writeln!(writer, "{}", expanded_content)
         .map_err(|e| format!("Failed to write here-document content: {}", e))?;
-    
+
     // Apply to stdin if fd is 0
     if fd == 0 {
         if let Some(cmd) = command {
             cmd.stdin(Stdio::from(reader));
         }
     }
-    
+
     Ok(())
 }
 
@@ -831,21 +843,21 @@ fn apply_herestring_redirection(
     command: Option<&mut Command>,
 ) -> Result<(), String> {
     let expanded_content = expand_variables_in_string(content, shell_state);
-    
+
     // Create a pipe and write the content
-    let (reader, mut writer) = pipe()
-        .map_err(|e| format!("Failed to create pipe for here-string: {}", e))?;
-    
+    let (reader, mut writer) =
+        pipe().map_err(|e| format!("Failed to create pipe for here-string: {}", e))?;
+
     write!(writer, "{}", expanded_content)
         .map_err(|e| format!("Failed to write here-string content: {}", e))?;
-    
+
     // Apply to stdin if fd is 0
     if fd == 0 {
         if let Some(cmd) = command {
             cmd.stdin(Stdio::from(reader));
         }
     }
-    
+
     Ok(())
 }
 
@@ -1198,16 +1210,30 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 left_exit
             }
         }
+        Ast::Subshell { body } => execute_subshell(*body, shell_state),
     }
 }
 
 fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
+    // Check if this is a compound command (subshell)
+    if let Some(ref compound_ast) = cmd.compound {
+        // Execute compound command with redirections
+        return execute_compound_with_redirections(
+            compound_ast,
+            shell_state,
+            &cmd.redirections,
+        );
+    }
+    
     if cmd.args.is_empty() {
         // No command, but may have redirections - process them for side effects
         if !cmd.redirections.is_empty() {
             if let Err(e) = apply_redirections(&cmd.redirections, shell_state, None) {
                 if shell_state.colors_enabled {
-                    eprintln!("{}Redirection error: {}\x1b[0m", shell_state.color_scheme.error, e);
+                    eprintln!(
+                        "{}Redirection error: {}\x1b[0m",
+                        shell_state.color_scheme.error, e
+                    );
                 } else {
                     eprintln!("Redirection error: {}", e);
                 }
@@ -1243,6 +1269,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         let temp_cmd = ShellCommand {
             args: expanded_args,
             redirections: cmd.redirections.clone(),
+            compound: None,
         };
 
         // If we're capturing output, create a writer for it
@@ -1309,12 +1336,15 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     shell_state.set_var(var_name, var_value.to_string());
                 }
             }
-            
+
             // Process redirections even without a command
             if !cmd.redirections.is_empty() {
                 if let Err(e) = apply_redirections(&cmd.redirections, shell_state, None) {
                     if shell_state.colors_enabled {
-                        eprintln!("{}Redirection error: {}\x1b[0m", shell_state.color_scheme.error, e);
+                        eprintln!(
+                            "{}Redirection error: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
+                        );
                     } else {
                         eprintln!("Redirection error: {}", e);
                     }
@@ -1354,7 +1384,10 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         // Apply all redirections
         if let Err(e) = apply_redirections(&cmd.redirections, shell_state, Some(&mut command)) {
             if shell_state.colors_enabled {
-                eprintln!("{}Redirection error: {}\x1b[0m", shell_state.color_scheme.error, e);
+                eprintln!(
+                    "{}Redirection error: {}\x1b[0m",
+                    shell_state.color_scheme.error, e
+                );
             } else {
                 eprintln!("Redirection error: {}", e);
             }
@@ -1412,11 +1445,27 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
     let mut previous_stdout = None;
 
     for (i, cmd) in commands.iter().enumerate() {
+        let is_last = i == commands.len() - 1;
+        
+        // Check if this is a compound command (subshell)
+        if let Some(ref compound_ast) = cmd.compound {
+            // Execute compound command (subshell) in pipeline
+            exit_code = execute_compound_in_pipeline(
+                compound_ast,
+                shell_state,
+                is_last,
+                &cmd.redirections,
+            );
+            
+            // For Phase 2, compound commands in pipelines don't produce stdout for next stage
+            // This will be enhanced in Phase 3 with proper pipe handling
+            previous_stdout = None;
+            continue;
+        }
+        
         if cmd.args.is_empty() {
             continue;
         }
-
-        let is_last = i == commands.len() - 1;
 
         // First expand variables, then wildcards
         let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
@@ -1435,6 +1484,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             let temp_cmd = ShellCommand {
                 args: expanded_args,
                 redirections: cmd.redirections.clone(),
+                compound: None,
             };
             if !is_last {
                 // Create a safe pipe
@@ -1517,7 +1567,10 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             // Apply redirections for this command
             if let Err(e) = apply_redirections(&cmd.redirections, shell_state, Some(&mut command)) {
                 if shell_state.colors_enabled {
-                    eprintln!("{}Redirection error: {}\x1b[0m", shell_state.color_scheme.error, e);
+                    eprintln!(
+                        "{}Redirection error: {}\x1b[0m",
+                        shell_state.color_scheme.error, e
+                    );
                 } else {
                     eprintln!("Redirection error: {}", e);
                 }
@@ -1577,11 +1630,255 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
     exit_code
 }
 
+/// Execute a subshell with isolated state
+///
+/// # Arguments
+/// * `body` - The AST to execute in the subshell
+/// * `shell_state` - The parent shell state (will be cloned)
+///
+/// # Returns
+/// * Exit code from the subshell execution
+///
+/// # Behavior
+/// - Clones the shell state for isolation
+/// - Executes the body in the cloned state
+/// - Returns the exit code without modifying parent state
+/// - Preserves parent state completely (variables, functions, etc.)
+/// - Tracks subshell depth to prevent stack overflow
+/// - Handles exit and return commands properly (isolated from parent)
+fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
+    // Check depth limit to prevent stack overflow
+    if shell_state.subshell_depth >= MAX_SUBSHELL_DEPTH {
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}Subshell nesting limit ({}) exceeded\x1b[0m",
+                shell_state.color_scheme.error, MAX_SUBSHELL_DEPTH
+            );
+        } else {
+            eprintln!("Subshell nesting limit ({}) exceeded", MAX_SUBSHELL_DEPTH);
+        }
+        shell_state.last_exit_code = 1;
+        return 1;
+    }
+
+    // Save current directory for restoration
+    let original_dir = std::env::current_dir().ok();
+
+    // Clone the shell state for isolation
+    let mut subshell_state = shell_state.clone();
+    
+    // Increment subshell depth in the cloned state
+    subshell_state.subshell_depth = shell_state.subshell_depth + 1;
+    
+    // Clone trap handlers for isolation (subshells inherit but don't affect parent)
+    let parent_traps = shell_state.trap_handlers.lock().unwrap().clone();
+    subshell_state.trap_handlers = std::sync::Arc::new(std::sync::Mutex::new(parent_traps));
+
+    // Execute the body in the isolated state
+    let exit_code = execute(body, &mut subshell_state);
+    
+    // Handle exit in subshell: exit should only exit the subshell, not the parent
+    // The exit_requested flag is isolated to the subshell_state, so it won't affect parent
+    let final_exit_code = if subshell_state.exit_requested {
+        // Subshell called exit - use its exit code
+        subshell_state.exit_code
+    } else if subshell_state.is_returning() {
+        // Subshell called return - treat as exit from subshell
+        // Return in subshell should not propagate to parent function
+        subshell_state.get_return_value().unwrap_or(exit_code)
+    } else {
+        exit_code
+    };
+
+    // Restore original directory (in case subshell changed it)
+    if let Some(dir) = original_dir {
+        let _ = std::env::set_current_dir(dir);
+    }
+
+    // Update parent's last_exit_code to reflect subshell result
+    shell_state.last_exit_code = final_exit_code;
+
+    // Return the exit code
+    final_exit_code
+}
+
+/// Execute a compound command with redirections
+///
+/// # Arguments
+/// * `compound_ast` - The compound command AST
+/// * `shell_state` - The shell state
+/// * `redirections` - Redirections to apply
+///
+/// # Returns
+/// * Exit code from the compound command
+fn execute_compound_with_redirections(
+    compound_ast: &Ast,
+    shell_state: &mut ShellState,
+    redirections: &[Redirection],
+) -> i32 {
+    match compound_ast {
+        Ast::Subshell { body } => {
+            // For subshells with redirections, we need to:
+            // 1. Set up output capture if there are output redirections
+            // 2. Execute the subshell
+            // 3. Apply the redirections to the captured output
+            
+            // Check if we have output redirections
+            let has_output_redir = redirections.iter().any(|r| {
+                matches!(
+                    r,
+                    Redirection::Output(_)
+                        | Redirection::Append(_)
+                        | Redirection::FdOutput(_, _)
+                        | Redirection::FdAppend(_, _)
+                )
+            });
+            
+            if has_output_redir {
+                // Clone state for subshell
+                let mut subshell_state = shell_state.clone();
+                
+                // Set up output capture
+                let capture_buffer = Rc::new(RefCell::new(Vec::new()));
+                subshell_state.capture_output = Some(capture_buffer.clone());
+                
+                // Execute subshell
+                let exit_code = execute(*body.clone(), &mut subshell_state);
+                
+                // Get captured output
+                let output = capture_buffer.borrow().clone();
+                
+                // Apply redirections to output
+                for redir in redirections {
+                    match redir {
+                        Redirection::Output(file) => {
+                            let expanded_file = expand_variables_in_string(file, shell_state);
+                            if let Err(e) = std::fs::write(&expanded_file, &output) {
+                                if shell_state.colors_enabled {
+                                    eprintln!(
+                                        "{}Redirection error: {}\x1b[0m",
+                                        shell_state.color_scheme.error, e
+                                    );
+                                } else {
+                                    eprintln!("Redirection error: {}", e);
+                                }
+                                return 1;
+                            }
+                        }
+                        Redirection::Append(file) => {
+                            let expanded_file = expand_variables_in_string(file, shell_state);
+                            use std::fs::OpenOptions;
+                            let mut file_handle = match OpenOptions::new()
+                                .append(true)
+                                .create(true)
+                                .open(&expanded_file)
+                            {
+                                Ok(f) => f,
+                                Err(e) => {
+                                    if shell_state.colors_enabled {
+                                        eprintln!(
+                                            "{}Redirection error: {}\x1b[0m",
+                                            shell_state.color_scheme.error, e
+                                        );
+                                    } else {
+                                        eprintln!("Redirection error: {}", e);
+                                    }
+                                    return 1;
+                                }
+                            };
+                            if let Err(e) = file_handle.write_all(&output) {
+                                if shell_state.colors_enabled {
+                                    eprintln!(
+                                        "{}Redirection error: {}\x1b[0m",
+                                        shell_state.color_scheme.error, e
+                                    );
+                                } else {
+                                    eprintln!("Redirection error: {}", e);
+                                }
+                                return 1;
+                            }
+                        }
+                        _ => {
+                            // For Phase 2, only support basic output redirections
+                            // Other redirections are silently ignored for subshells
+                        }
+                    }
+                }
+                
+                shell_state.last_exit_code = exit_code;
+                exit_code
+            } else {
+                // No output redirections, execute normally
+                execute_subshell(*body.clone(), shell_state)
+            }
+        }
+        _ => {
+            eprintln!("Unsupported compound command type");
+            1
+        }
+    }
+}
+
+/// Execute a compound command (subshell) as part of a pipeline
+///
+/// # Arguments
+/// * `compound_ast` - The compound command AST (typically Subshell)
+/// * `shell_state` - The parent shell state
+/// * `is_last` - Whether this is the last command in the pipeline
+/// * `redirections` - Redirections to apply to the compound command
+///
+/// # Returns
+/// * Exit code from the compound command
+fn execute_compound_in_pipeline(
+    compound_ast: &Ast,
+    shell_state: &mut ShellState,
+    is_last: bool,
+    _redirections: &[Redirection],
+) -> i32 {
+    match compound_ast {
+        Ast::Subshell { body } => {
+            // Clone state for subshell
+            let mut subshell_state = shell_state.clone();
+            
+            // Handle stdout capture for next pipeline stage or command substitution
+            if !is_last || shell_state.capture_output.is_some() {
+                // Need to capture subshell output
+                let capture_buffer = Rc::new(RefCell::new(Vec::new()));
+                subshell_state.capture_output = Some(capture_buffer.clone());
+                
+                // Execute subshell
+                let exit_code = execute(*body.clone(), &mut subshell_state);
+                
+                // Transfer captured output to parent's capture buffer
+                if let Some(ref parent_capture) = shell_state.capture_output {
+                    let captured = capture_buffer.borrow().clone();
+                    parent_capture.borrow_mut().extend_from_slice(&captured);
+                }
+                
+                // Update parent's last_exit_code
+                shell_state.last_exit_code = exit_code;
+                
+                exit_code
+            } else {
+                // Last command, no capture needed
+                let exit_code = execute(*body.clone(), &mut subshell_state);
+                shell_state.last_exit_code = exit_code;
+                exit_code
+            }
+        }
+        _ => {
+            // Other compound commands not yet supported
+            eprintln!("Unsupported compound command in pipeline");
+            1
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex;
-    
+
     // Mutex to serialize tests that modify environment variables or create files
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
@@ -1590,6 +1887,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["true".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
@@ -1602,6 +1900,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["true".to_string()], // Assume true exists
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
@@ -1613,6 +1912,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["nonexistent_command".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
@@ -1625,10 +1925,12 @@ mod tests {
             ShellCommand {
                 args: vec!["printf".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
+                compound: None,
             },
             ShellCommand {
                 args: vec!["cat".to_string()], // cat reads from stdin
                 redirections: Vec::new(),
+                compound: None,
             },
         ];
         let mut shell_state = ShellState::new();
@@ -1649,6 +1951,7 @@ mod tests {
         let ast = Ast::Pipeline(vec![ShellCommand {
             args: vec!["true".to_string()],
             redirections: Vec::new(),
+            compound: None,
         }]);
         let mut shell_state = ShellState::new();
         let exit_code = execute(ast, &mut shell_state);
@@ -1662,6 +1965,7 @@ mod tests {
             body: Box::new(Ast::Pipeline(vec![ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
+                compound: None,
             }])),
         };
         let mut shell_state = ShellState::new();
@@ -1681,6 +1985,7 @@ mod tests {
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
+                compound: None,
             }]),
         );
 
@@ -1702,6 +2007,7 @@ mod tests {
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["echo".to_string(), "arg1".to_string()],
                 redirections: Vec::new(),
+                compound: None,
             }]),
         );
 
@@ -1736,6 +2042,7 @@ mod tests {
             body: Box::new(Ast::Pipeline(vec![ShellCommand {
                 args: vec!["printf".to_string(), "Hello from function".to_string()],
                 redirections: Vec::new(),
+                compound: None,
             }])),
         };
         let exit_code = execute(define_ast, &mut shell_state);
@@ -1772,6 +2079,7 @@ mod tests {
                 Ast::Pipeline(vec![ShellCommand {
                     args: vec!["printf".to_string(), "success".to_string()],
                     redirections: Vec::new(),
+                    compound: None,
                 }]),
             ])),
         };
@@ -1821,6 +2129,7 @@ mod tests {
                 Ast::Pipeline(vec![ShellCommand {
                     args: vec!["printf".to_string(), "outer_done".to_string()],
                     redirections: Vec::new(),
+                    compound: None,
                 }]),
             ])),
         };
@@ -1836,6 +2145,7 @@ mod tests {
                 Ast::Pipeline(vec![ShellCommand {
                     args: vec!["printf".to_string(), "inner_done".to_string()],
                     redirections: Vec::new(),
+                    compound: None,
                 }]),
             ])),
         };
@@ -1869,6 +2179,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["cat".to_string()],
             redirections: Vec::new(),
+            compound: None,
             // TODO: Update test for new redirection system
         };
 
@@ -1884,6 +2195,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["cat".to_string()],
             redirections: Vec::new(),
+            compound: None,
             // TODO: Update test for new redirection system
         };
 
@@ -1927,7 +2239,7 @@ mod tests {
     #[test]
     fn test_fd_output_redirection() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -1935,21 +2247,26 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_out_{}.txt", timestamp);
-        
+
         // Test: echo "error" 2>errors.txt
         let cmd = ShellCommand {
-            args: vec!["sh".to_string(), "-c".to_string(), "echo error >&2".to_string()],
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo error >&2".to_string(),
+            ],
             redirections: vec![Redirection::FdOutput(2, temp_file.clone())],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify file was created and contains the error message
         let content = std::fs::read_to_string(&temp_file).unwrap();
         assert_eq!(content.trim(), "error");
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -1957,7 +2274,7 @@ mod tests {
     #[test]
     fn test_fd_input_redirection() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file with content
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -1965,24 +2282,25 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_in_{}.txt", timestamp);
-        
+
         std::fs::write(&temp_file, "test input\n").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        
+
         // Test: cat 3<input.txt (reading from fd 3)
         // Note: This tests that fd 3 is opened for reading
         let cmd = ShellCommand {
             args: vec!["cat".to_string()],
+            compound: None,
             redirections: vec![
                 Redirection::FdInput(3, temp_file.clone()),
                 Redirection::Input(temp_file.clone()),
             ],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -1990,7 +2308,7 @@ mod tests {
     #[test]
     fn test_fd_append_redirection() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file with initial content
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -1998,25 +2316,30 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_append_{}.txt", timestamp);
-        
+
         std::fs::write(&temp_file, "first line\n").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        
+
         // Test: echo "more" 2>>errors.txt
         let cmd = ShellCommand {
-            args: vec!["sh".to_string(), "-c".to_string(), "echo second line >&2".to_string()],
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo second line >&2".to_string(),
+            ],
             redirections: vec![Redirection::FdAppend(2, temp_file.clone())],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify file contains both lines
         let content = std::fs::read_to_string(&temp_file).unwrap();
         assert!(content.contains("first line"));
         assert!(content.contains("second line"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2024,7 +2347,7 @@ mod tests {
     #[test]
     fn test_fd_duplication_stderr_to_stdout() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2032,26 +2355,29 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_dup_{}.txt", timestamp);
-        
+
         // Test: command 2>&1 >output.txt
         // Note: For external commands, fd duplication is handled by the shell
         // We test that the command executes successfully with the redirection
         let cmd = ShellCommand {
-            args: vec!["sh".to_string(), "-c".to_string(), "echo test; echo error >&2".to_string()],
-            redirections: vec![
-                Redirection::Output(temp_file.clone()),
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo test; echo error >&2".to_string(),
             ],
+            compound: None,
+            redirections: vec![Redirection::Output(temp_file.clone())],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify file was created and contains output
         assert!(std::path::Path::new(&temp_file).exists());
         let content = std::fs::read_to_string(&temp_file).unwrap();
         assert!(content.contains("test"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2059,17 +2385,18 @@ mod tests {
     #[test]
     fn test_fd_close() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Test: command 2>&- (closes stderr)
         let cmd = ShellCommand {
             args: vec!["sh".to_string(), "-c".to_string(), "echo test".to_string()],
             redirections: vec![Redirection::FdClose(2)],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify fd 2 is closed in the fd table
         assert!(shell_state.fd_table.borrow().is_closed(2));
     }
@@ -2077,7 +2404,7 @@ mod tests {
     #[test]
     fn test_fd_read_write() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2085,23 +2412,24 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_rw_{}.txt", timestamp);
-        
+
         std::fs::write(&temp_file, "initial content\n").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        
+
         // Test: 3<>file.txt (opens fd 3 for read/write)
         let cmd = ShellCommand {
             args: vec!["cat".to_string()],
+            compound: None,
             redirections: vec![
                 Redirection::FdInputOutput(3, temp_file.clone()),
                 Redirection::Input(temp_file.clone()),
             ],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2109,7 +2437,7 @@ mod tests {
     #[test]
     fn test_multiple_fd_redirections() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp files
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2118,31 +2446,35 @@ mod tests {
             .as_nanos();
         let out_file = format!("/tmp/rush_test_fd_multi_out_{}.txt", timestamp);
         let err_file = format!("/tmp/rush_test_fd_multi_err_{}.txt", timestamp);
-        
+
         // Test: command 2>err.txt 1>out.txt
         let cmd = ShellCommand {
-            args: vec!["sh".to_string(), "-c".to_string(),
-                      "echo stdout; echo stderr >&2".to_string()],
+            args: vec![
+                "sh".to_string(),
+                "-c".to_string(),
+                "echo stdout; echo stderr >&2".to_string(),
+            ],
             redirections: vec![
                 Redirection::FdOutput(2, err_file.clone()),
                 Redirection::Output(out_file.clone()),
             ],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify both files were created
         assert!(std::path::Path::new(&out_file).exists());
         assert!(std::path::Path::new(&err_file).exists());
-        
+
         // Verify content
         let out_content = std::fs::read_to_string(&out_file).unwrap();
         let err_content = std::fs::read_to_string(&err_file).unwrap();
         assert!(out_content.contains("stdout"));
         assert!(err_content.contains("stderr"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&out_file);
         let _ = std::fs::remove_file(&err_file);
@@ -2151,7 +2483,7 @@ mod tests {
     #[test]
     fn test_fd_swap_pattern() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp files
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2159,26 +2491,26 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_swap_{}.txt", timestamp);
-        
+
         // Test fd operations: open fd 3, then close it
         // This tests the fd table operations
         let cmd = ShellCommand {
-            args: vec!["sh".to_string(), "-c".to_string(),
-                      "echo test".to_string()],
+            args: vec!["sh".to_string(), "-c".to_string(), "echo test".to_string()],
             redirections: vec![
-                Redirection::FdOutput(3, temp_file.clone()),  // Open fd 3 for writing
-                Redirection::FdClose(3),                       // Close fd 3
-                Redirection::Output(temp_file.clone()),        // Write to stdout
+                Redirection::FdOutput(3, temp_file.clone()), // Open fd 3 for writing
+                Redirection::FdClose(3),                     // Close fd 3
+                Redirection::Output(temp_file.clone()),      // Write to stdout
             ],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify fd 3 is closed after the operations
         assert!(shell_state.fd_table.borrow().is_closed(3));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2186,7 +2518,7 @@ mod tests {
     #[test]
     fn test_fd_redirection_with_pipes() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2194,28 +2526,30 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_pipe_{}.txt", timestamp);
-        
+
         // Test: cmd1 | cmd2 >output.txt
         // This tests redirections in pipelines
         let commands = vec![
             ShellCommand {
                 args: vec!["echo".to_string(), "piped output".to_string()],
                 redirections: vec![],
+                compound: None,
             },
             ShellCommand {
                 args: vec!["cat".to_string()],
+                compound: None,
                 redirections: vec![Redirection::Output(temp_file.clone())],
             },
         ];
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_pipeline(&commands, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify output file contains the piped content
         let content = std::fs::read_to_string(&temp_file).unwrap();
         assert!(content.contains("piped output"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2223,7 +2557,7 @@ mod tests {
     #[test]
     fn test_fd_error_invalid_fd_number() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2231,19 +2565,20 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_invalid_{}.txt", timestamp);
-        
+
         // Test: Invalid fd number (>9)
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "test".to_string()],
+            compound: None,
             redirections: vec![Redirection::FdOutput(10, temp_file.clone())],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
-        
+
         // Should fail with error
         assert_eq!(exit_code, 1);
-        
+
         // Cleanup (file may not exist)
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2251,19 +2586,20 @@ mod tests {
     #[test]
     fn test_fd_error_duplicate_closed_fd() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Test: Attempting to duplicate a closed fd
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "test".to_string()],
+            compound: None,
             redirections: vec![
                 Redirection::FdClose(3),
-                Redirection::FdDuplicate(2, 3),  // Try to duplicate closed fd 3
+                Redirection::FdDuplicate(2, 3), // Try to duplicate closed fd 3
             ],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
-        
+
         // Should fail with error
         assert_eq!(exit_code, 1);
     }
@@ -2271,16 +2607,17 @@ mod tests {
     #[test]
     fn test_fd_error_file_permission() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Test: Attempting to write to a read-only location
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "test".to_string()],
             redirections: vec![Redirection::FdOutput(2, "/proc/version".to_string())],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
-        
+
         // Should fail with permission error
         assert_eq!(exit_code, 1);
     }
@@ -2288,7 +2625,7 @@ mod tests {
     #[test]
     fn test_fd_redirection_order() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp files
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2297,25 +2634,26 @@ mod tests {
             .as_nanos();
         let file1 = format!("/tmp/rush_test_fd_order1_{}.txt", timestamp);
         let file2 = format!("/tmp/rush_test_fd_order2_{}.txt", timestamp);
-        
+
         // Test: Redirections are processed left-to-right
         // 1>file1 1>file2 should write to file2
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "test".to_string()],
+            compound: None,
             redirections: vec![
                 Redirection::Output(file1.clone()),
                 Redirection::Output(file2.clone()),
             ],
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // file2 should have the output (last redirection wins)
         let content2 = std::fs::read_to_string(&file2).unwrap();
         assert!(content2.contains("test"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&file1);
         let _ = std::fs::remove_file(&file2);
@@ -2324,7 +2662,7 @@ mod tests {
     #[test]
     fn test_fd_builtin_with_redirection() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2332,21 +2670,22 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_builtin_{}.txt", timestamp);
-        
+
         // Test: Built-in command with fd redirection
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "builtin test".to_string()],
             redirections: vec![Redirection::Output(temp_file.clone())],
+            compound: None,
         };
-        
+
         let mut shell_state = ShellState::new();
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify output
         let content = std::fs::read_to_string(&temp_file).unwrap();
         assert!(content.contains("builtin test"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }
@@ -2354,7 +2693,7 @@ mod tests {
     #[test]
     fn test_fd_variable_expansion_in_filename() {
         let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        
+
         // Create unique temp file
         use std::time::{SystemTime, UNIX_EPOCH};
         let timestamp = SystemTime::now()
@@ -2362,24 +2701,25 @@ mod tests {
             .unwrap()
             .as_nanos();
         let temp_file = format!("/tmp/rush_test_fd_var_{}.txt", timestamp);
-        
+
         // Set variable for filename
         let mut shell_state = ShellState::new();
         shell_state.set_var("OUTFILE", temp_file.clone());
-        
+
         // Test: Variable expansion in redirection filename
         let cmd = ShellCommand {
             args: vec!["echo".to_string(), "variable test".to_string()],
+            compound: None,
             redirections: vec![Redirection::Output("$OUTFILE".to_string())],
         };
-        
+
         let exit_code = execute_single_command(&cmd, &mut shell_state);
         assert_eq!(exit_code, 0);
-        
+
         // Verify output
         let content = std::fs::read_to_string(&temp_file).unwrap();
         assert!(content.contains("variable test"));
-        
+
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
     }

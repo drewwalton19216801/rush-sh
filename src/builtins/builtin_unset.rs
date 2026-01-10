@@ -44,6 +44,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unset".to_string(), "TEST_VAR".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.set_var("TEST_VAR", "test_value".to_string());
@@ -63,6 +64,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["unset".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = UnsetBuiltin;

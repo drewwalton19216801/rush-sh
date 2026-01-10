@@ -104,6 +104,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["set_condensed".to_string(), "on".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = SetCondensedBuiltin;
@@ -118,6 +119,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["set_condensed".to_string(), "off".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = SetCondensedBuiltin;
@@ -132,6 +134,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["set_condensed".to_string(), "status".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = SetCondensedBuiltin;

@@ -82,6 +82,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["help".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         let builtin = HelpBuiltin;

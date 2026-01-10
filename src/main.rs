@@ -1289,4 +1289,1185 @@ mod tests {
             assert_eq!(queue.len(), 0);
         }
     }
+
+    // ========================================================================
+    // Subshell Tests (Phase 1)
+    // ========================================================================
+
+    #[test]
+    fn test_subshell_simple_execution() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo hello)
+        let tokens = lexer::lex("(echo hello)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_variable_isolation() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("VAR", "parent".to_string());
+        
+        // Parse and execute: (VAR=child)
+        let tokens = lexer::lex("(VAR=child)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent variable should be unchanged
+        assert_eq!(shell_state.get_var("VAR"), Some("parent".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_exit_code_propagation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (exit 42)
+        let tokens = lexer::lex("(exit 42)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 42);
+        assert_eq!(shell_state.last_exit_code, 42);
+    }
+
+    #[test]
+    fn test_subshell_directory_isolation() {
+        // Lock to prevent parallel tests from interfering
+        let _lock = DIR_CHANGE_LOCK.lock().unwrap();
+        
+        let mut shell_state = state::ShellState::new();
+        let original_dir = std::env::current_dir().unwrap();
+        
+        // Parse and execute: (cd /tmp)
+        let tokens = lexer::lex("(cd /tmp)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Current directory should be unchanged
+        let current_dir = std::env::current_dir().unwrap();
+        assert_eq!(current_dir, original_dir);
+    }
+
+    #[test]
+    fn test_subshell_multiple_commands() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("COUNT", "0".to_string());
+        
+        // Parse and execute: (COUNT=1; COUNT=2; COUNT=3)
+        let tokens = lexer::lex("(COUNT=1; COUNT=2; COUNT=3)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent variable should be unchanged
+        assert_eq!(shell_state.get_var("COUNT"), Some("0".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_nested() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("VAR", "outer".to_string());
+        
+        // Parse and execute: ((VAR=inner))
+        let tokens = lexer::lex("((VAR=inner))", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent variable should be unchanged
+        assert_eq!(shell_state.get_var("VAR"), Some("outer".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_inherits_variables() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("PARENT_VAR", "parent_value".to_string());
+        
+        // Subshell should be able to read parent variables
+        // We can't easily test this without output capture, but we can verify it doesn't error
+        let tokens = lexer::lex("(echo $PARENT_VAR)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_inherits_functions() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Define a function in parent
+        shell_state.define_function(
+            "test_func".to_string(),
+            parser::Ast::Pipeline(vec![parser::ShellCommand {
+                args: vec!["echo".to_string(), "from_function".to_string()],
+                redirections: Vec::new(),
+            compound: None,
+            }]),
+        );
+        
+        // Call function in subshell
+        let tokens = lexer::lex("(test_func)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_empty_error() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: ()
+        let tokens = lexer::lex("()", &shell_state).unwrap();
+        let result = parser::parse(tokens);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Empty subshell"));
+    }
+
+    #[test]
+    fn test_subshell_unmatched_paren() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: (echo hello
+        let tokens = lexer::lex("(echo hello", &shell_state).unwrap();
+        let result = parser::parse(tokens);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unmatched parenthesis"));
+    }
+
+    #[test]
+    fn test_subshell_with_and_operator() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("VAR", "parent".to_string());
+        
+        // Parse and execute: (VAR=child) && echo $VAR
+        let tokens = lexer::lex("(VAR=child) && echo $VAR", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent variable should be unchanged
+        assert_eq!(shell_state.get_var("VAR"), Some("parent".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_with_or_operator() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (false) || echo fallback
+        let tokens = lexer::lex("(false) || echo fallback", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_function_definition_not_confused() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: func() { echo hello; }
+        // This should be a function definition, not a subshell
+        let tokens = lexer::lex("func() { echo hello; }", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        
+        // Should be a function definition
+        match ast {
+            parser::Ast::FunctionDefinition { name, .. } => {
+                assert_eq!(name, "func");
+            }
+            _ => panic!("Expected FunctionDefinition, got {:?}", ast),
+        }
+    }
+
+    #[test]
+    fn test_subshell_parser_ast_structure() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: (echo hello)
+        let tokens = lexer::lex("(echo hello)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        
+        // Should be a Subshell variant
+        match ast {
+            parser::Ast::Subshell { body } => {
+                // Body should be a Pipeline
+                match *body {
+                    parser::Ast::Pipeline(cmds) => {
+                        assert_eq!(cmds.len(), 1);
+                        assert_eq!(cmds[0].args[0], "echo");
+                        assert_eq!(cmds[0].args[1], "hello");
+                    }
+                    _ => panic!("Expected Pipeline in subshell body"),
+                }
+            }
+            _ => panic!("Expected Subshell, got {:?}", ast),
+        }
+    }
+
+    #[test]
+    fn test_subshell_exported_variables() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_exported_var("EXPORTED_VAR", "exported_value".to_string());
+        
+        // Subshell should inherit exported variables
+        let tokens = lexer::lex("(EXPORTED_VAR=modified)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent's exported variable should be unchanged
+        assert_eq!(
+            shell_state.get_var("EXPORTED_VAR"),
+            Some("exported_value".to_string())
+        );
+        assert!(shell_state.exported.contains("EXPORTED_VAR"));
+    }
+
+    #[test]
+    fn test_subshell_with_sequence() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo first; echo second)
+        let tokens = lexer::lex("(echo first; echo second)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_false_exit_code() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (false)
+        let tokens = lexer::lex("(false)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 1);
+        assert_eq!(shell_state.last_exit_code, 1);
+    }
+
+    // ========================================================================
+    // Subshell Tests (Phase 2 - Advanced Features)
+    // ========================================================================
+
+    #[test]
+    fn test_subshell_in_pipeline_simple() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo hello) | cat
+        let tokens = lexer::lex("(echo hello) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_in_pipeline_multiple() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo a) | (cat) | (cat)
+        let tokens = lexer::lex("(echo a) | (cat) | (cat)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_with_output_redirection() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_subshell_redir_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo hello) > output.txt
+        let line = format!("(echo hello) > {}", temp_file);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Verify output file
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(content.contains("hello"));
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_subshell_with_append_redirection() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_subshell_append_{}.txt", timestamp);
+        
+        // Create initial file
+        std::fs::write(&temp_file, "first\n").unwrap();
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo second) >> output.txt
+        let line = format!("(echo second) >> {}", temp_file);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Verify output file contains both lines
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(content.contains("first"));
+        assert!(content.contains("second"));
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_subshell_in_pipeline_with_sequence() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo a; echo b) | cat
+        let tokens = lexer::lex("(echo a; echo b) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_parser_in_pipeline() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: (echo hello) | grep hello
+        let tokens = lexer::lex("(echo hello) | grep hello", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        
+        // Should be a Pipeline with 2 commands
+        match ast {
+            parser::Ast::Pipeline(cmds) => {
+                assert_eq!(cmds.len(), 2);
+                // First command should be a subshell
+                assert!(cmds[0].compound.is_some());
+                assert!(cmds[0].args.is_empty());
+                // Second command should be grep
+                assert_eq!(cmds[1].args[0], "grep");
+                assert!(cmds[1].compound.is_none());
+            }
+            _ => panic!("Expected Pipeline, got {:?}", ast),
+        }
+    }
+
+    #[test]
+    fn test_subshell_parser_with_redirection() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: (echo hello) > file.txt
+        let tokens = lexer::lex("(echo hello) > /tmp/test.txt", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        
+        // Should be a Pipeline with 1 command that has a subshell and redirection
+        match ast {
+            parser::Ast::Pipeline(cmds) => {
+                assert_eq!(cmds.len(), 1);
+                // Command should have a subshell
+                assert!(cmds[0].compound.is_some());
+                // Command should have a redirection
+                assert_eq!(cmds[0].redirections.len(), 1);
+            }
+            _ => panic!("Expected Pipeline, got {:?}", ast),
+        }
+    }
+
+    #[test]
+    fn test_subshell_complex_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo test) | (cat) | (cat)
+        let tokens = lexer::lex("(echo test) | (cat) | (cat)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_mixed_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: echo test | (cat) | cat
+        let tokens = lexer::lex("echo test | (cat) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_with_variable_in_redirection() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_subshell_var_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("OUTFILE", temp_file.clone());
+        
+        // Parse and execute: (echo test) > $OUTFILE
+        let tokens = lexer::lex("(echo test) > $OUTFILE", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Verify output file
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(content.contains("test"));
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_subshell_nested_with_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: ((echo nested)) | cat
+        let tokens = lexer::lex("((echo nested)) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_with_and_in_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (true) && echo yes | cat
+        let tokens = lexer::lex("(true) && echo yes | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_pipeline_exit_code() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (false) | cat
+        let tokens = lexer::lex("(false) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        // Exit code should be from the last command (cat), which succeeds
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_multiple_redirections() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file1 = format!("/tmp/rush_test_subshell_multi1_{}.txt", timestamp);
+        let temp_file2 = format!("/tmp/rush_test_subshell_multi2_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo first) > file1.txt
+        let line1 = format!("(echo first) > {}", temp_file1);
+        let tokens1 = lexer::lex(&line1, &shell_state).unwrap();
+        let ast1 = parser::parse(tokens1).unwrap();
+        let exit_code1 = executor::execute(ast1, &mut shell_state);
+        assert_eq!(exit_code1, 0);
+        
+        // Parse and execute: (echo second) > file2.txt
+        let line2 = format!("(echo second) > {}", temp_file2);
+        let tokens2 = lexer::lex(&line2, &shell_state).unwrap();
+        let ast2 = parser::parse(tokens2).unwrap();
+        let exit_code2 = executor::execute(ast2, &mut shell_state);
+        assert_eq!(exit_code2, 0);
+        
+        // Verify both files
+        let content1 = std::fs::read_to_string(&temp_file1).unwrap();
+        let content2 = std::fs::read_to_string(&temp_file2).unwrap();
+        assert!(content1.contains("first"));
+        assert!(content2.contains("second"));
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file1);
+        let _ = std::fs::remove_file(&temp_file2);
+    }
+
+    #[test]
+    fn test_subshell_in_if_condition() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: if (true); then echo yes; fi
+        let tokens = lexer::lex("if (true); then echo yes; fi", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_in_while_condition() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("COUNT", "0".to_string());
+        
+        // Parse and execute: while (false); do echo loop; done
+        // Should not execute the loop body
+        let tokens = lexer::lex("while (false); do echo loop; done", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_chained_with_operators() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (true) && (echo middle) && (echo end)
+        let tokens = lexer::lex("(true) && (echo middle) && (echo end)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_with_cd_in_pipeline() {
+        let _lock = DIR_CHANGE_LOCK.lock().unwrap();
+        
+        let mut shell_state = state::ShellState::new();
+        let original_dir = std::env::current_dir().unwrap();
+        
+        // Parse and execute: (cd /tmp; pwd) | cat
+        // The cd should not affect parent's directory
+        let tokens = lexer::lex("(cd /tmp; pwd) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent directory should be unchanged
+        let current_dir = std::env::current_dir().unwrap();
+        assert_eq!(current_dir, original_dir);
+    }
+
+    #[test]
+    fn test_subshell_parser_multiple_in_pipeline() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: (echo a) | (echo b) | (echo c)
+        let tokens = lexer::lex("(echo a) | (echo b) | (echo c)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        
+        // Should be a Pipeline with 3 commands, all subshells
+        match ast {
+            parser::Ast::Pipeline(cmds) => {
+                assert_eq!(cmds.len(), 3);
+                assert!(cmds[0].compound.is_some());
+                assert!(cmds[1].compound.is_some());
+                assert!(cmds[2].compound.is_some());
+            }
+            _ => panic!("Expected Pipeline, got {:?}", ast),
+        }
+    }
+
+    #[test]
+    fn test_subshell_with_multiple_redirections_on_one() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_subshell_multiredir_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (echo test; echo more) > output.txt
+        let line = format!("(echo test; echo more) > {}", temp_file);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Verify output file contains both lines
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(content.contains("test"));
+        assert!(content.contains("more"));
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_subshell_empty_in_pipeline_error() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: () | cat
+        let tokens = lexer::lex("() | cat", &shell_state).unwrap();
+        let result = parser::parse(tokens);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Empty subshell"));
+    }
+
+    #[test]
+    fn test_subshell_unmatched_in_pipeline_error() {
+        let shell_state = state::ShellState::new();
+        
+        // Parse: (echo hello | cat
+        let tokens = lexer::lex("(echo hello | cat", &shell_state).unwrap();
+        let result = parser::parse(tokens);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unmatched parenthesis"));
+    }
+
+    #[test]
+    fn test_subshell_with_variable_isolation_in_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("VAR", "parent".to_string());
+        
+        // Parse and execute: (VAR=child; echo $VAR) | cat
+        let tokens = lexer::lex("(VAR=child; echo $VAR) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent variable should be unchanged
+        assert_eq!(shell_state.get_var("VAR"), Some("parent".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_three_level_nesting() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("LEVEL", "0".to_string());
+        
+        // Parse and execute: (((LEVEL=3)))
+        let tokens = lexer::lex("(((LEVEL=3)))", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent LEVEL should still be "0"
+        assert_eq!(shell_state.get_var("LEVEL"), Some("0".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_with_function_call_in_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Define a function
+        shell_state.define_function(
+            "myfunc".to_string(),
+            parser::Ast::Pipeline(vec![parser::ShellCommand {
+                args: vec!["echo".to_string(), "from_func".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            }]),
+        );
+        
+        // Parse and execute: (myfunc) | cat
+        let tokens = lexer::lex("(myfunc) | cat", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_complex_with_and_or() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (true) && (echo yes) || (echo no)
+        let tokens = lexer::lex("(true) && (echo yes) || (echo no)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_in_for_loop_body() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: for i in a b c; do (echo $i); done
+        let tokens = lexer::lex("for i in a b c; do (echo $i); done", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_redirection_preserves_parent_state() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_subshell_preserve_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("VAR", "parent".to_string());
+        
+        // Parse and execute: (VAR=child; echo $VAR) > output.txt
+        let line = format!("(VAR=child; echo $VAR) > {}", temp_file);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        // Parent variable should be unchanged
+        assert_eq!(shell_state.get_var("VAR"), Some("parent".to_string()));
+        
+        // Verify output file contains "child"
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert!(content.contains("child"));
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    // ========================================================================
+    // Subshell Tests (Phase 3 - Edge Cases and Optimization)
+    // ========================================================================
+
+    #[test]
+    fn test_subshell_depth_limit_protection() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Create deeply nested subshells (101 levels - should exceed limit of 100)
+        let mut nested_command = "echo deep".to_string();
+        for _ in 0..101 {
+            nested_command = format!("({})", nested_command);
+        }
+        
+        // Parse and execute
+        let tokens = lexer::lex(&nested_command, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        // Should fail with exit code 1 due to depth limit
+        assert_eq!(exit_code, 1);
+        assert_eq!(shell_state.last_exit_code, 1);
+    }
+
+    #[test]
+    fn test_subshell_depth_limit_just_under() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Create 50 levels of nesting (well under the limit)
+        let mut nested_command = "echo safe".to_string();
+        for _ in 0..50 {
+            nested_command = format!("({})", nested_command);
+        }
+        
+        // Parse and execute
+        let tokens = lexer::lex(&nested_command, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        // Should succeed
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_subshell_exit_isolation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parse and execute: (exit 42); echo $?
+        // The exit should only exit the subshell, not the parent
+        let tokens1 = lexer::lex("(exit 42)", &shell_state).unwrap();
+        let ast1 = parser::parse(tokens1).unwrap();
+        let exit_code1 = executor::execute(ast1, &mut shell_state);
+        
+        assert_eq!(exit_code1, 42);
+        assert_eq!(shell_state.last_exit_code, 42);
+        
+        // Parent should not have exit_requested set
+        assert!(!shell_state.exit_requested);
+        
+        // Should be able to continue executing commands
+        let tokens2 = lexer::lex("echo continuing", &shell_state).unwrap();
+        let ast2 = parser::parse(tokens2).unwrap();
+        let exit_code2 = executor::execute(ast2, &mut shell_state);
+        
+        assert_eq!(exit_code2, 0);
+    }
+
+    #[test]
+    fn test_subshell_exit_with_different_codes() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Test various exit codes
+        for code in [0, 1, 5, 42, 127, 255] {
+            let line = format!("(exit {})", code);
+            let tokens = lexer::lex(&line, &shell_state).unwrap();
+            let ast = parser::parse(tokens).unwrap();
+            let exit_code = executor::execute(ast, &mut shell_state);
+            
+            assert_eq!(exit_code, code);
+            assert_eq!(shell_state.last_exit_code, code);
+            assert!(!shell_state.exit_requested);
+        }
+    }
+
+    #[test]
+    fn test_subshell_return_isolation_in_function() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Define a function with a subshell containing return
+        let func_body = parser::Ast::Sequence(vec![
+            parser::Ast::Subshell {
+                body: Box::new(parser::Ast::Return {
+                    value: Some("5".to_string()),
+                }),
+            },
+            parser::Ast::Pipeline(vec![parser::ShellCommand {
+                args: vec!["echo".to_string(), "after_subshell".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            }]),
+            parser::Ast::Return {
+                value: Some("10".to_string()),
+            },
+        ]);
+        
+        shell_state.define_function("test_func".to_string(), func_body);
+        
+        // Call the function
+        let tokens = lexer::lex("test_func", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        // Function should return 10, not 5 (subshell return is isolated)
+        assert_eq!(exit_code, 10);
+    }
+
+    #[test]
+    fn test_subshell_trap_inheritance() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set a trap in parent
+        shell_state.set_trap("USR1", "echo parent_trap".to_string());
+        
+        // Verify parent has the trap
+        assert_eq!(
+            shell_state.get_trap("USR1"),
+            Some("echo parent_trap".to_string())
+        );
+        
+        // Execute a subshell (traps should be inherited)
+        let tokens = lexer::lex("(echo in_subshell)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent trap should still be set
+        assert_eq!(
+            shell_state.get_trap("USR1"),
+            Some("echo parent_trap".to_string())
+        );
+    }
+
+    #[test]
+    fn test_subshell_trap_isolation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set a trap in parent
+        shell_state.set_trap("USR1", "echo parent_trap".to_string());
+        
+        // Execute a subshell that modifies the trap
+        // Note: We can't easily test trap modification in subshell without executing trap builtin
+        // But we can verify the parent trap is unchanged after subshell execution
+        let tokens = lexer::lex("(echo subshell)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent trap should be unchanged
+        assert_eq!(
+            shell_state.get_trap("USR1"),
+            Some("echo parent_trap".to_string())
+        );
+    }
+
+    #[test]
+    fn test_subshell_complex_variable_scoping() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set up initial variables
+        shell_state.set_var("LEVEL1", "parent".to_string());
+        shell_state.set_var("LEVEL2", "parent".to_string());
+        shell_state.set_var("LEVEL3", "parent".to_string());
+        
+        // Execute nested subshells with variable modifications
+        // (LEVEL1=sub1; (LEVEL2=sub2; (LEVEL3=sub3)))
+        let tokens = lexer::lex("(LEVEL1=sub1; (LEVEL2=sub2; (LEVEL3=sub3)))", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // All parent variables should be unchanged
+        assert_eq!(shell_state.get_var("LEVEL1"), Some("parent".to_string()));
+        assert_eq!(shell_state.get_var("LEVEL2"), Some("parent".to_string()));
+        assert_eq!(shell_state.get_var("LEVEL3"), Some("parent".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_variable_scoping_with_reads() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set parent variable
+        shell_state.set_var("VAR", "parent".to_string());
+        
+        // Subshell reads parent var, modifies it, then reads again
+        // The modification should only affect the subshell
+        let tokens = lexer::lex("(VAR=child)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("VAR"), Some("parent".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_error_propagation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Subshell with a failing command
+        let tokens = lexer::lex("(false)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 1);
+        assert_eq!(shell_state.last_exit_code, 1);
+    }
+
+    #[test]
+    fn test_subshell_multiple_levels_with_exit_codes() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Nested subshells with different exit codes
+        // ((exit 5))
+        let tokens = lexer::lex("((exit 5))", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 5);
+        assert_eq!(shell_state.last_exit_code, 5);
+        assert!(!shell_state.exit_requested);
+    }
+
+    #[test]
+    fn test_subshell_cd_isolation_multiple_levels() {
+        let _lock = DIR_CHANGE_LOCK.lock().unwrap();
+        
+        let mut shell_state = state::ShellState::new();
+        let original_dir = std::env::current_dir().unwrap();
+        
+        // Nested subshells with cd commands
+        // ((cd /tmp; cd /))
+        let tokens = lexer::lex("((cd /tmp; cd /))", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent directory should be unchanged
+        let current_dir = std::env::current_dir().unwrap();
+        assert_eq!(current_dir, original_dir);
+    }
+
+    #[test]
+    fn test_subshell_function_definition_isolation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Define a function in a subshell
+        let tokens = lexer::lex("(subfunc() { echo hello; })", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Function should not exist in parent
+        assert!(shell_state.get_function("subfunc").is_none());
+    }
+
+    #[test]
+    fn test_subshell_alias_isolation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set an alias in parent
+        shell_state.set_alias("ll", "ls -la".to_string());
+        
+        // Execute subshell (aliases should be inherited but modifications isolated)
+        let tokens = lexer::lex("(echo test)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent alias should still exist
+        assert_eq!(shell_state.get_alias("ll"), Some(&"ls -la".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_positional_params_isolation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set positional parameters in parent
+        shell_state.set_positional_params(vec![
+            "arg1".to_string(),
+            "arg2".to_string(),
+            "arg3".to_string(),
+        ]);
+        
+        // Execute subshell (positional params should be inherited)
+        let tokens = lexer::lex("(echo test)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent positional params should be unchanged
+        assert_eq!(shell_state.get_var("1"), Some("arg1".to_string()));
+        assert_eq!(shell_state.get_var("2"), Some("arg2".to_string()));
+        assert_eq!(shell_state.get_var("3"), Some("arg3".to_string()));
+        assert_eq!(shell_state.get_var("#"), Some("3".to_string()));
+    }
+
+    #[test]
+    fn test_subshell_depth_tracking() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Initial depth should be 0
+        assert_eq!(shell_state.subshell_depth, 0);
+        
+        // After executing a subshell, depth should still be 0 (parent unchanged)
+        let tokens = lexer::lex("(echo test)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.subshell_depth, 0);
+    }
+
+    #[test]
+    fn test_subshell_exit_and_continue() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Execute: (exit 1); echo $?; (exit 2); echo $?
+        let tokens1 = lexer::lex("(exit 1)", &shell_state).unwrap();
+        let ast1 = parser::parse(tokens1).unwrap();
+        let exit_code1 = executor::execute(ast1, &mut shell_state);
+        assert_eq!(exit_code1, 1);
+        assert_eq!(shell_state.last_exit_code, 1);
+        
+        let tokens2 = lexer::lex("(exit 2)", &shell_state).unwrap();
+        let ast2 = parser::parse(tokens2).unwrap();
+        let exit_code2 = executor::execute(ast2, &mut shell_state);
+        assert_eq!(exit_code2, 2);
+        assert_eq!(shell_state.last_exit_code, 2);
+        
+        // Parent should never have exit_requested set
+        assert!(!shell_state.exit_requested);
+    }
+
+    #[test]
+    fn test_subshell_with_exported_var_modification() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Set and export a variable
+        shell_state.set_exported_var("EXPORTED", "parent_value".to_string());
+        
+        // Modify in subshell
+        let tokens = lexer::lex("(EXPORTED=child_value)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 0);
+        
+        // Parent's exported variable should be unchanged
+        assert_eq!(
+            shell_state.get_var("EXPORTED"),
+            Some("parent_value".to_string())
+        );
+        assert!(shell_state.exported.contains("EXPORTED"));
+    }
+
+    #[test]
+    fn test_subshell_empty_body_error() {
+        let shell_state = state::ShellState::new();
+        
+        // Empty subshell should be caught by parser
+        let tokens = lexer::lex("()", &shell_state).unwrap();
+        let result = parser::parse(tokens);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Empty subshell"));
+    }
+
+    #[test]
+    fn test_subshell_with_sequence_and_exit() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Subshell with sequence where exit is in the middle
+        // (echo first; exit 42; echo second)
+        // The "echo second" should not execute
+        let tokens = lexer::lex("(echo first; exit 42; echo second)", &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let exit_code = executor::execute(ast, &mut shell_state);
+        
+        assert_eq!(exit_code, 42);
+        assert_eq!(shell_state.last_exit_code, 42);
+        assert!(!shell_state.exit_requested);
+    }
 }

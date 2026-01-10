@@ -72,6 +72,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["popd".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let builtin = PopdBuiltin;
         let mut output = Vec::new();

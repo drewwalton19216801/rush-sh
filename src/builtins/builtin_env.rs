@@ -67,6 +67,7 @@ mod tests {
         let cmd = ShellCommand {
             args: vec!["env".to_string()],
             redirections: Vec::new(),
+            compound: None,
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
