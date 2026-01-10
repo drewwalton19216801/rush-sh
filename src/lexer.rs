@@ -14,12 +14,12 @@ pub enum Token {
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
     RedirHereString(String),    // Here-string: <<<"content"
     // File descriptor redirections
-    RedirectFdIn(i32, String),      // N<file - redirect fd N from file
-    RedirectFdOut(i32, String),     // N>file - redirect fd N to file
-    RedirectFdAppend(i32, String),  // N>>file - append fd N to file
-    RedirectFdDup(i32, i32),        // N>&M or N<&M - duplicate fd M to fd N
-    RedirectFdClose(i32),           // N>&- or N<&- - close fd N
-    RedirectFdInOut(i32, String),   // N<>file - open fd N for read/write
+    RedirectFdIn(i32, String),     // N<file - redirect fd N from file
+    RedirectFdOut(i32, String),    // N>file - redirect fd N to file
+    RedirectFdAppend(i32, String), // N>>file - append fd N to file
+    RedirectFdDup(i32, i32),       // N>&M or N<&M - duplicate fd M to fd N
+    RedirectFdClose(i32),          // N>&- or N<&- - close fd N
+    RedirectFdInOut(i32, String),  // N<>file - open fd N for read/write
     If,
     Then,
     Else,
@@ -363,15 +363,28 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
     let mut current = String::new();
     let mut in_double_quote = false;
     let mut in_single_quote = false;
+    let mut just_closed_quote = false; // Track if we just closed a quote with empty content
 
     while let Some(&ch) = chars.peek() {
         match ch {
             ' ' | '\t' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                // Handle the case where we just closed an empty quoted string
+                if just_closed_quote && current.is_empty() {
+                    tokens.push(Token::Word("".to_string()));
+                    just_closed_quote = false;
+                } else {
+                    flush_current_token(&mut current, &mut tokens);
+                }
                 chars.next();
             }
             '\n' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                // Handle the case where we just closed an empty quoted string
+                if just_closed_quote && current.is_empty() {
+                    tokens.push(Token::Word("".to_string()));
+                    just_closed_quote = false;
+                } else {
+                    flush_current_token(&mut current, &mut tokens);
+                }
                 tokens.push(Token::Newline);
                 chars.next();
             }
@@ -384,17 +397,21 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     current.pop(); // Remove the backslash
                     current.push('"'); // Add the literal quote
                     chars.next(); // consume the quote
+                    just_closed_quote = false;
                 } else {
                     chars.next(); // consume the quote
                     if in_double_quote {
                         // End of double quote - the content stays in current
                         // We don't push it yet - it might be part of a larger word
                         // like in: alias ls="ls --color"
+                        // But we need to track if it was empty
+                        just_closed_quote = current.is_empty();
                         in_double_quote = false;
                     } else {
                         // Start of double quote - don't push current yet
                         // The quoted content will be appended to current
                         in_double_quote = true;
+                        just_closed_quote = false;
                     }
                 }
             }
@@ -428,15 +445,18 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     // End of single quote - the content stays in current
                     // We don't push it yet - it might be part of a larger word
                     // like in: trap 'echo "..."' EXIT
+                    just_closed_quote = current.is_empty();
                     in_single_quote = false;
                 } else if !in_double_quote {
                     // Start of single quote - don't push current yet
                     // The quoted content will be appended to current
                     in_single_quote = true;
+                    just_closed_quote = false;
                 }
                 chars.next();
             }
             '$' if !in_single_quote => {
+                just_closed_quote = false; // Reset flag when we add content
                 chars.next(); // consume $
                 if let Some(&'{') = chars.peek() {
                     // Handle parameter expansion ${VAR} by consuming the entire pattern
@@ -625,7 +645,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 // Check what follows the >
                 if let Some(&'&') = chars.peek() {
                     chars.next(); // consume &
-                    
+
                     // Collect the target fd or '-'
                     let mut target = String::new();
                     while let Some(&ch) = chars.peek() {
@@ -639,7 +659,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
 
                     if !target.is_empty() {
                         let source_fd = fd_num.unwrap_or(1); // Default to stdout
-                        
+
                         if target == "-" {
                             // Close fd: N>&-
                             tokens.push(Token::RedirectFdClose(source_fd));
@@ -653,23 +673,34 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         skip_whitespace(&mut chars);
                     } else {
                         // Invalid syntax: >& with nothing after
-                        return Err("Invalid redirection syntax: expected fd number or '-' after >&".to_string());
+                        return Err(
+                            "Invalid redirection syntax: expected fd number or '-' after >&"
+                                .to_string(),
+                        );
                     }
                 } else if let Some(&'>') = chars.peek() {
                     // Append redirection: >> or N>>
                     chars.next(); // consume second >
                     skip_whitespace(&mut chars);
-                    
+
                     // Collect the filename
                     let mut filename = String::new();
                     while let Some(&ch) = chars.peek() {
-                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                        if ch == ' '
+                            || ch == '\t'
+                            || ch == '\n'
+                            || ch == ';'
+                            || ch == '|'
+                            || ch == '&'
+                            || ch == '>'
+                            || ch == '<'
+                        {
                             break;
                         }
                         filename.push(ch);
                         chars.next();
                     }
-                    
+
                     if !filename.is_empty() {
                         if let Some(fd) = fd_num {
                             tokens.push(Token::RedirectFdAppend(fd, filename));
@@ -680,7 +711,9 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     } else {
                         // No filename provided
                         if fd_num.is_some() {
-                            return Err("Invalid redirection: expected filename after >>".to_string());
+                            return Err(
+                                "Invalid redirection: expected filename after >>".to_string()
+                            );
                         } else {
                             tokens.push(Token::RedirAppend);
                         }
@@ -688,17 +721,25 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else {
                     // Regular output redirection: > or N>
                     skip_whitespace(&mut chars);
-                    
+
                     // Collect the filename
                     let mut filename = String::new();
                     while let Some(&ch) = chars.peek() {
-                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                        if ch == ' '
+                            || ch == '\t'
+                            || ch == '\n'
+                            || ch == ';'
+                            || ch == '|'
+                            || ch == '&'
+                            || ch == '>'
+                            || ch == '<'
+                        {
                             break;
                         }
                         filename.push(ch);
                         chars.next();
                     }
-                    
+
                     if !filename.is_empty() {
                         if let Some(fd) = fd_num {
                             tokens.push(Token::RedirectFdOut(fd, filename));
@@ -709,7 +750,9 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     } else {
                         // No filename provided
                         if fd_num.is_some() {
-                            return Err("Invalid redirection: expected filename after >".to_string());
+                            return Err(
+                                "Invalid redirection: expected filename after >".to_string()
+                            );
                         } else {
                             tokens.push(Token::RedirOut);
                         }
@@ -744,7 +787,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 // Check what follows the <
                 if let Some(&'&') = chars.peek() {
                     chars.next(); // consume &
-                    
+
                     // Collect the target fd or '-'
                     let mut target = String::new();
                     while let Some(&ch) = chars.peek() {
@@ -758,7 +801,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
 
                     if !target.is_empty() {
                         let source_fd = fd_num.unwrap_or(0); // Default to stdin
-                        
+
                         if target == "-" {
                             // Close fd: N<&-
                             tokens.push(Token::RedirectFdClose(source_fd));
@@ -772,7 +815,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         skip_whitespace(&mut chars);
                     } else {
                         // Invalid syntax: <& with nothing after
-                        return Err("Invalid redirection syntax: expected fd number or '-' after <&".to_string());
+                        return Err(
+                            "Invalid redirection syntax: expected fd number or '-' after <&"
+                                .to_string(),
+                        );
                     }
                 } else if let Some(&'<') = chars.peek() {
                     // Here-document or here-string
@@ -854,17 +900,25 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     // Read/write redirection: N<>
                     chars.next(); // consume >
                     skip_whitespace(&mut chars);
-                    
+
                     // Collect the filename
                     let mut filename = String::new();
                     while let Some(&ch) = chars.peek() {
-                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                        if ch == ' '
+                            || ch == '\t'
+                            || ch == '\n'
+                            || ch == ';'
+                            || ch == '|'
+                            || ch == '&'
+                            || ch == '>'
+                            || ch == '<'
+                        {
                             break;
                         }
                         filename.push(ch);
                         chars.next();
                     }
-                    
+
                     if !filename.is_empty() {
                         let fd = fd_num.unwrap_or(0); // Default to stdin
                         tokens.push(Token::RedirectFdInOut(fd, filename));
@@ -874,17 +928,25 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 } else {
                     // Regular input redirection: < or N<
                     skip_whitespace(&mut chars);
-                    
+
                     // Collect the filename
                     let mut filename = String::new();
                     while let Some(&ch) = chars.peek() {
-                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                        if ch == ' '
+                            || ch == '\t'
+                            || ch == '\n'
+                            || ch == ';'
+                            || ch == '|'
+                            || ch == '&'
+                            || ch == '>'
+                            || ch == '<'
+                        {
                             break;
                         }
                         filename.push(ch);
                         chars.next();
                     }
-                    
+
                     if !filename.is_empty() {
                         if let Some(fd) = fd_num {
                             tokens.push(Token::RedirectFdIn(fd, filename));
@@ -895,7 +957,9 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     } else {
                         // No filename provided
                         if fd_num.is_some() {
-                            return Err("Invalid redirection: expected filename after <".to_string());
+                            return Err(
+                                "Invalid redirection: expected filename after <".to_string()
+                            );
                         } else {
                             tokens.push(Token::RedirIn);
                         }
@@ -992,7 +1056,13 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 current.push('`');
             }
             ';' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                // Handle the case where we just closed an empty quoted string
+                if just_closed_quote && current.is_empty() {
+                    tokens.push(Token::Word("".to_string()));
+                    just_closed_quote = false;
+                } else {
+                    flush_current_token(&mut current, &mut tokens);
+                }
                 chars.next();
                 if let Some(&next_ch) = chars.peek() {
                     if next_ch == ';' {
@@ -1011,13 +1081,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 // 2. We're not inside quotes (neither single nor double)
                 if ch == '~' && current.is_empty() && !in_single_quote && !in_double_quote {
                     chars.next(); // consume ~
-                    
+
                     // Check for ~+ (PWD), ~- (OLDPWD), or ~username
                     if let Some(&next_ch) = chars.peek() {
                         if next_ch == '+' {
                             // ~+ expands to $PWD
                             chars.next(); // consume +
-                            if let Some(pwd) = shell_state.get_var("PWD").or_else(|| env::var("PWD").ok()) {
+                            if let Some(pwd) =
+                                shell_state.get_var("PWD").or_else(|| env::var("PWD").ok())
+                            {
                                 current.push_str(&pwd);
                             } else if let Ok(pwd) = env::current_dir() {
                                 current.push_str(&pwd.to_string_lossy());
@@ -1027,12 +1099,19 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if next_ch == '-' {
                             // ~- expands to $OLDPWD
                             chars.next(); // consume -
-                            if let Some(oldpwd) = shell_state.get_var("OLDPWD").or_else(|| env::var("OLDPWD").ok()) {
+                            if let Some(oldpwd) = shell_state
+                                .get_var("OLDPWD")
+                                .or_else(|| env::var("OLDPWD").ok())
+                            {
                                 current.push_str(&oldpwd);
                             } else {
                                 current.push_str("~-");
                             }
-                        } else if next_ch == '/' || next_ch == ' ' || next_ch == '\t' || next_ch == '\n' {
+                        } else if next_ch == '/'
+                            || next_ch == ' '
+                            || next_ch == '\t'
+                            || next_ch == '\n'
+                        {
                             // ~ followed by separator - expand to HOME
                             if let Ok(home) = env::var("HOME") {
                                 current.push_str(&home);
@@ -1049,7 +1128,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 username.push(ch);
                                 chars.next();
                             }
-                            
+
                             if !username.is_empty() {
                                 // Try to get user's home directory
                                 // Special case for root user
@@ -1058,7 +1137,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                 } else {
                                     format!("/home/{}", username)
                                 };
-                                
+
                                 // Check if the directory exists
                                 if std::path::Path::new(&user_home).exists() {
                                     current.push_str(&user_home);
@@ -1085,13 +1164,20 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                     }
                 } else {
+                    just_closed_quote = false; // Reset flag when we add content
                     current.push(ch);
                     chars.next();
                 }
             }
         }
     }
-    flush_current_token(&mut current, &mut tokens);
+
+    // Handle the case where we just closed an empty quoted string at end of input
+    if just_closed_quote && current.is_empty() {
+        tokens.push(Token::Word("".to_string()));
+    } else {
+        flush_current_token(&mut current, &mut tokens);
+    }
 
     Ok(tokens)
 }
@@ -2234,10 +2320,7 @@ mod tests {
         let result = lex("echo ~", &shell_state).unwrap();
         assert_eq!(
             result,
-            vec![
-                Token::Word("echo".to_string()),
-                Token::Word(home)
-            ]
+            vec![Token::Word("echo".to_string()), Token::Word(home)]
         );
     }
 
@@ -2287,11 +2370,11 @@ mod tests {
     #[test]
     fn test_tilde_expansion_pwd() {
         let mut shell_state = ShellState::new();
-        
+
         // Set PWD variable
         let test_pwd = "/test/current/dir";
         shell_state.set_var("PWD", test_pwd.to_string());
-        
+
         let result = lex("echo ~+", &shell_state).unwrap();
         assert_eq!(
             result,
@@ -2305,11 +2388,11 @@ mod tests {
     #[test]
     fn test_tilde_expansion_oldpwd() {
         let mut shell_state = ShellState::new();
-        
+
         // Set OLDPWD variable
         let test_oldpwd = "/test/old/dir";
         shell_state.set_var("OLDPWD", test_oldpwd.to_string());
-        
+
         let result = lex("echo ~-", &shell_state).unwrap();
         assert_eq!(
             result,
@@ -2324,12 +2407,12 @@ mod tests {
     fn test_tilde_expansion_pwd_unset() {
         let _lock = ENV_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
-        
+
         // When PWD is not set, ~+ should expand to current directory
         let result = lex("echo ~+", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // The second token should be a valid path (either from env::current_dir or literal ~+)
         if let Token::Word(path) = &result[1] {
             // Should either be a path or the literal ~+
@@ -2343,15 +2426,15 @@ mod tests {
     fn test_tilde_expansion_oldpwd_unset() {
         // Lock to prevent parallel tests from interfering with environment variables
         let _lock = ENV_LOCK.lock().unwrap();
-        
+
         // Save and clear OLDPWD
         let original_oldpwd = env::var("OLDPWD").ok();
         unsafe {
             env::remove_var("OLDPWD");
         }
-        
+
         let shell_state = ShellState::new();
-        
+
         // When OLDPWD is not set, ~- should remain as literal
         let result = lex("echo ~-", &shell_state).unwrap();
         assert_eq!(
@@ -2361,7 +2444,7 @@ mod tests {
                 Token::Word("~-".to_string())
             ]
         );
-        
+
         // Restore OLDPWD
         unsafe {
             if let Some(oldpwd) = original_oldpwd {
@@ -2374,7 +2457,7 @@ mod tests {
     fn test_tilde_expansion_pwd_in_quotes() {
         let mut shell_state = ShellState::new();
         shell_state.set_var("PWD", "/test/dir".to_string());
-        
+
         // Single quotes should prevent expansion
         let result = lex("echo '~+'", &shell_state).unwrap();
         assert_eq!(
@@ -2384,7 +2467,7 @@ mod tests {
                 Token::Word("~+".to_string())
             ]
         );
-        
+
         // Double quotes should also prevent expansion
         let result = lex("echo \"~+\"", &shell_state).unwrap();
         assert_eq!(
@@ -2400,7 +2483,7 @@ mod tests {
     fn test_tilde_expansion_oldpwd_in_quotes() {
         let mut shell_state = ShellState::new();
         shell_state.set_var("OLDPWD", "/test/old".to_string());
-        
+
         // Single quotes should prevent expansion
         let result = lex("echo '~-'", &shell_state).unwrap();
         assert_eq!(
@@ -2410,7 +2493,7 @@ mod tests {
                 Token::Word("~-".to_string())
             ]
         );
-        
+
         // Double quotes should also prevent expansion
         let result = lex("echo \"~-\"", &shell_state).unwrap();
         assert_eq!(
@@ -2429,7 +2512,7 @@ mod tests {
         let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
         shell_state.set_var("PWD", "/current".to_string());
         shell_state.set_var("OLDPWD", "/previous".to_string());
-        
+
         let result = lex("echo ~ ~+ ~-", &shell_state).unwrap();
         assert_eq!(
             result,
@@ -2446,7 +2529,7 @@ mod tests {
     fn test_tilde_expansion_not_at_start() {
         let mut shell_state = ShellState::new();
         shell_state.set_var("PWD", "/test".to_string());
-        
+
         // Tilde should not expand when not at start of word
         let result = lex("echo prefix~+", &shell_state).unwrap();
         assert_eq!(
@@ -2461,12 +2544,12 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username() {
         let shell_state = ShellState::new();
-        
+
         // Test with root username (special case: /root instead of /home/root)
         let result = lex("echo ~root", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // The expansion should either be /root or literal ~root (if /root doesn't exist)
         if let Token::Word(path) = &result[1] {
             assert!(path == "/root" || path == "~root");
@@ -2478,12 +2561,12 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username_with_path() {
         let shell_state = ShellState::new();
-        
+
         // Test ~username/path expansion
         let result = lex("echo ~root/documents", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // Should expand to /root/documents or ~root/documents
         if let Token::Word(path) = &result[1] {
             assert!(path == "/root/documents" || path == "~root/documents");
@@ -2495,7 +2578,7 @@ mod tests {
     #[test]
     fn test_tilde_expansion_nonexistent_user() {
         let shell_state = ShellState::new();
-        
+
         // Test with a username that definitely doesn't exist
         let result = lex("echo ~nonexistentuser12345", &shell_state).unwrap();
         assert_eq!(
@@ -2510,7 +2593,7 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username_in_quotes() {
         let shell_state = ShellState::new();
-        
+
         // Single quotes should prevent expansion
         let result = lex("echo '~root'", &shell_state).unwrap();
         assert_eq!(
@@ -2520,7 +2603,7 @@ mod tests {
                 Token::Word("~root".to_string())
             ]
         );
-        
+
         // Double quotes should also prevent expansion
         let result = lex("echo \"~root\"", &shell_state).unwrap();
         assert_eq!(
@@ -2538,14 +2621,14 @@ mod tests {
         let mut shell_state = ShellState::new();
         let home = env::var("HOME").unwrap_or_else(|_| "/home/user".to_string());
         shell_state.set_var("PWD", "/current".to_string());
-        
+
         // Test mixing different tilde expansions
         let result = lex("echo ~ ~+ ~root", &shell_state).unwrap();
         assert_eq!(result.len(), 4);
         assert_eq!(result[0], Token::Word("echo".to_string()));
         assert_eq!(result[1], Token::Word(home));
         assert_eq!(result[2], Token::Word("/current".to_string()));
-        
+
         // The ~root expansion depends on whether /root exists
         if let Token::Word(path) = &result[3] {
             assert!(path == "/root" || path == "~root");
@@ -2557,12 +2640,12 @@ mod tests {
     #[test]
     fn test_tilde_expansion_username_with_special_chars() {
         let shell_state = ShellState::new();
-        
+
         // Test that special characters terminate username collection
         let result = lex("echo ~user@host", &shell_state).unwrap();
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], Token::Word("echo".to_string()));
-        
+
         // Should try to expand ~user and then append @host
         if let Token::Word(path) = &result[1] {
             // The path should contain @host at the end
@@ -2725,11 +2808,11 @@ mod tests {
     #[test]
     fn test_fd_numbers_0_through_9() {
         let shell_state = ShellState::new();
-        
+
         // Test fd 0
         let result = lex("cmd 0<file", &shell_state).unwrap();
         assert_eq!(result[1], Token::RedirectFdIn(0, "file".to_string()));
-        
+
         // Test fd 9
         let result = lex("cmd 9>file", &shell_state).unwrap();
         assert_eq!(result[1], Token::RedirectFdOut(9, "file".to_string()));
@@ -2895,7 +2978,11 @@ mod tests {
         let shell_state = ShellState::new();
         let result = lex("command 2>&", &shell_state);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("expected fd number or '-' after >&"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("expected fd number or '-' after >&")
+        );
     }
 
     #[test]
@@ -2903,7 +2990,11 @@ mod tests {
         let shell_state = ShellState::new();
         let result = lex("command 3<&", &shell_state);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("expected fd number or '-' after <&"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("expected fd number or '-' after <&")
+        );
     }
 
     #[test]
