@@ -143,7 +143,7 @@ impl FileDescriptorTable {
                 return Err(format!(
                     "File descriptor {} is not open or is closed",
                     source_fd
-                ))
+                ));
             }
         };
 
@@ -1360,7 +1360,6 @@ mod tests {
     #[test]
     fn test_fd_table_save_all_and_restore_all() {
         let _lock = FILE_LOCK.lock().unwrap();
-        
         let mut fd_table = FileDescriptorTable::new();
 
         // Create unique temporary files
@@ -1371,7 +1370,7 @@ mod tests {
             .as_nanos();
         let temp_file1 = format!("/tmp/rush_test_fd_save1_{}.txt", timestamp);
         let temp_file2 = format!("/tmp/rush_test_fd_save2_{}.txt", timestamp);
-        
+
         std::fs::write(&temp_file1, "test content 1").unwrap();
         std::fs::write(&temp_file2, "test content 2").unwrap();
 
