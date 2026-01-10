@@ -27,10 +27,8 @@ pub struct SignalEvent {
     /// Signal name (e.g., "INT", "TERM")
     pub signal_name: String,
     /// Signal number (e.g., 2, 15)
-    #[allow(dead_code)]
     pub signal_number: i32,
     /// When the signal was received
-    #[allow(dead_code)]
     pub timestamp: Instant,
 }
 
@@ -61,7 +59,6 @@ pub struct FileDescriptorTable {
     /// Map of fd number to file descriptor
     fds: HashMap<i32, FileDescriptor>,
     /// Saved file descriptors for restoration after command execution
-    #[allow(dead_code)]
     saved_fds: HashMap<i32, RawFd>,
 }
 
@@ -183,7 +180,6 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
-    #[allow(dead_code)]
     pub fn save_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
         if !(0..=9).contains(&fd_num) {
@@ -212,7 +208,6 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
-    #[allow(dead_code)]
     pub fn restore_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
         if !(0..=9).contains(&fd_num) {
@@ -243,7 +238,6 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
-    #[allow(dead_code)]
     pub fn save_all_fds(&mut self) -> Result<(), String> {
         // Save all fds that we're tracking
         let fd_nums: Vec<i32> = self.fds.keys().copied().collect();
@@ -258,7 +252,6 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
-    #[allow(dead_code)]
     pub fn restore_all_fds(&mut self) -> Result<(), String> {
         // Restore all saved fds
         let fd_nums: Vec<i32> = self.saved_fds.keys().copied().collect();
@@ -312,7 +305,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Some(RawFd)` if the fd is open
     /// * `None` if the fd is not open or is closed
-    fn get_raw_fd(&self, fd_num: i32) -> Option<RawFd> {
+    pub fn get_raw_fd(&self, fd_num: i32) -> Option<RawFd> {
         match self.fds.get(&fd_num) {
             Some(FileDescriptor::File(file)) => Some(file.as_raw_fd()),
             Some(FileDescriptor::Duplicate(raw_fd)) => Some(*raw_fd),
@@ -336,7 +329,6 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `true` if the fd is open
     /// * `false` if the fd is closed or not tracked
-    #[allow(dead_code)]
     pub fn is_open(&self, fd_num: i32) -> bool {
         matches!(
             self.fds.get(&fd_num),
@@ -352,13 +344,11 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `true` if the fd is explicitly closed
     /// * `false` otherwise
-    #[allow(dead_code)]
     pub fn is_closed(&self, fd_num: i32) -> bool {
         matches!(self.fds.get(&fd_num), Some(FileDescriptor::Closed))
     }
 
     /// Clear all file descriptors and saved state
-    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.fds.clear();
         self.saved_fds.clear();
@@ -914,6 +904,24 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
             if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name)
                 && !trap_cmd.is_empty()
             {
+                // Display signal information for debugging/tracking
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}Signal {} (signal {}) received at {:?}\x1b[0m",
+                        shell_state.color_scheme.builtin,
+                        signal_event.signal_name,
+                        signal_event.signal_number,
+                        signal_event.timestamp
+                    );
+                } else {
+                    eprintln!(
+                        "Signal {} (signal {}) received at {:?}",
+                        signal_event.signal_name,
+                        signal_event.signal_number,
+                        signal_event.timestamp
+                    );
+                }
+
                 // Execute the trap handler
                 // Note: This preserves the exit code as per POSIX requirements
                 crate::executor::execute_trap_handler(&trap_cmd, shell_state);

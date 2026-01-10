@@ -257,6 +257,8 @@
                                     <li><strong>Variable Detection:</strong> Identifies variable patterns for deferred expansion</li>
                                     <li><strong>Alias Expansion:</strong> Expands command aliases before parsing</li>
                                     <li><strong>Command Substitution:</strong> Preserves $(...) and `...` syntax for runtime expansion</li>
+                                    <li><strong>Here-document Tokenization:</strong> Recognizes << and <<< operators for here-documents and here-strings</li>
+                                    <li><strong>FD Redirection Parsing:</strong> Handles file descriptor redirection operators (N>&M, N<&M, N>&-, N<&-)</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -281,6 +283,8 @@
                                     <li><strong>Control Structures:</strong> Handles if/elif/else, case, for, while, functions</li>
                                     <li><strong>Pipeline Construction:</strong> Creates pipeline structures for command chaining</li>
                                     <li><strong>Redirection Parsing:</strong> Processes I/O redirection operators</li>
+                                    <li><strong>Subshell Parsing:</strong> Parses subshell expressions with proper nesting</li>
+                                    <li><strong>FD Redirection AST Nodes:</strong> Constructs AST nodes for file descriptor operations</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -306,6 +310,9 @@
                                     <li><strong>Pipeline Management:</strong> Coordinates data flow between pipeline stages</li>
                                     <li><strong>Redirection Handling:</strong> Manages file descriptors and I/O redirection</li>
                                     <li><strong>Error Propagation:</strong> Handles exit codes and error conditions</li>
+                                    <li><strong>Subshell Execution:</strong> Executes subshells with state isolation and trap inheritance</li>
+                                    <li><strong>FD Table Management:</strong> Manages file descriptor duplication, closing, and read/write operations</li>
+                                    <li><strong>Here-document Processing:</strong> Handles here-document and here-string expansion and execution</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -331,6 +338,8 @@
                                     <li><strong>Function Context:</strong> Function call stack and local variable scoping</li>
                                     <li><strong>Directory Stack:</strong> pushd/popd/dirs functionality</li>
                                     <li><strong>Alias Management:</strong> Command alias storage and expansion</li>
+                                    <li><strong>FD Table:</strong> File descriptor table with save/restore capabilities for subshells</li>
+                                    <li><strong>Trap Management:</strong> Signal trap handlers with inheritance and queue management</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -569,7 +578,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
                         <div class="principle-card">
                             <div class="principle-icon">🧪</div>
                             <h3>Comprehensive Testing</h3>
-                            <p>323+ test cases ensuring reliability and correctness across all components</p>
+                            <p>413+ test functions ensuring reliability and correctness across all components</p>
                             <ul>
                                 <li>Unit tests for individual components</li>
                                 <li>Integration tests for end-to-end workflows</li>
@@ -628,8 +637,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
                         </div>
 
                         <div class="dependency-item">
-                            <div class="dep-name">nix</div>
-                            <div class="dep-description">Unix system interactions and terminal detection</div>
+                            <div class="dep-name">signal-hook</div>
+                            <div class="dep-description">Robust signal handling (SIGINT, SIGTERM)</div>
                         </div>
 
                         <div class="dependency-item">
@@ -643,13 +652,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
                         </div>
 
                         <div class="dependency-item">
-                            <div class="dep-name">signal-hook</div>
-                            <div class="dep-description">Robust signal handling (SIGINT, SIGTERM)</div>
-                        </div>
-
-                        <div class="dependency-item">
-                            <div class="dep-name">libc</div>
-                            <div class="dep-description">Low-level C library bindings and process management</div>
+                            <div class="dep-name">lazy_static</div>
+                            <div class="dep-description">Global state management in tab completion</div>
                         </div>
                     </div>
                 </section>

@@ -1,6 +1,8 @@
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write, pipe};
+use std::os::fd::RawFd;
+use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
 
@@ -760,6 +762,20 @@ fn apply_fd_duplication(
     shell_state: &mut ShellState,
     _command: Option<&mut Command>,
 ) -> Result<(), String> {
+    // Check if source_fd is explicitly closed before attempting duplication
+    if shell_state.fd_table.borrow().is_closed(source_fd) {
+        let error_msg = format!("File descriptor {} is closed", source_fd);
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}Redirection error: {}\x1b[0m",
+                shell_state.color_scheme.error, error_msg
+            );
+        } else {
+            eprintln!("Redirection error: {}", error_msg);
+        }
+        return Err(error_msg);
+    }
+    
     // Duplicate source_fd to target_fd
     shell_state
         .fd_table
@@ -859,6 +875,59 @@ fn apply_herestring_redirection(
     }
 
     Ok(())
+}
+
+/// Apply custom file descriptors (3-9) from fd table to external command
+///
+/// This function iterates through file descriptors 3-9 and applies any open
+/// file descriptors to the external command. For custom file descriptors,
+/// we need to use the dup2 syscall to duplicate them in the child process.
+///
+/// # Arguments
+/// * `command` - The Command to apply fds to
+/// * `shell_state` - The shell state containing the fd table
+///
+/// # TODO: Future Enhancement
+/// The `get_stdio()` method from FileDescriptorTable could be used here to convert
+/// file descriptors to Stdio handles for more idiomatic Rust integration with Command.
+/// However, this would require architectural changes to how we handle fd inheritance:
+/// - Currently using pre_exec with dup2 for direct fd manipulation
+/// - get_stdio() creates new Stdio handles by duplicating fds
+/// - Would need to refactor Command setup to use stdin/stdout/stderr methods
+/// - Consider for Phase 3 when implementing more advanced fd features
+fn apply_custom_fds_to_command(command: &mut Command, shell_state: &mut ShellState) {
+    // Collect the open custom file descriptors (3-9)
+    let custom_fds: Vec<(i32, RawFd)> = {
+        let fd_table = shell_state.fd_table.borrow();
+        let mut fds = Vec::new();
+        
+        for fd_num in 3..=9 {
+            if fd_table.is_open(fd_num) {
+                // Get the raw file descriptor for this fd
+                if let Some(raw_fd) = fd_table.get_raw_fd(fd_num) {
+                    fds.push((fd_num, raw_fd));
+                }
+            }
+        }
+        
+        fds
+    };
+    
+    // If we have custom fds to apply, use pre_exec to set them in the child
+    if !custom_fds.is_empty() {
+        unsafe {
+            command.pre_exec(move || {
+                for (target_fd, source_fd) in &custom_fds {
+                    // Use dup2 to duplicate the source fd to the target fd
+                    let result = libc::dup2(*source_fd, *target_fd);
+                    if result < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                }
+                Ok(())
+            });
+        }
+    }
 }
 
 /// Execute a trap handler command
@@ -1394,6 +1463,10 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             return 1;
         }
 
+        // Apply custom file descriptors (3-9) from fd table to external command
+        // This uses the get_stdio() method from FileDescriptorTable
+        apply_custom_fds_to_command(&mut command, shell_state);
+
         // Spawn and execute the command
         match command.spawn() {
             Ok(mut child) => {
@@ -1646,6 +1719,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 /// - Preserves parent state completely (variables, functions, etc.)
 /// - Tracks subshell depth to prevent stack overflow
 /// - Handles exit and return commands properly (isolated from parent)
+/// - Cleans up file descriptors to prevent resource leaks
 fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
     // Check depth limit to prevent stack overflow
     if shell_state.subshell_depth >= MAX_SUBSHELL_DEPTH {
@@ -1689,6 +1763,10 @@ fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
     } else {
         exit_code
     };
+
+    // Clean up the subshell's file descriptor table to prevent resource leaks
+    // This ensures any file descriptors opened in the subshell are properly released
+    subshell_state.fd_table.borrow_mut().clear();
 
     // Restore original directory (in case subshell changed it)
     if let Some(dir) = original_dir {

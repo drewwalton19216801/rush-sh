@@ -53,7 +53,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.5.9</span>
+                    <span class="version">v0.6.0</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -119,8 +119,8 @@
                                 <div class="stat-label">Built-in Commands</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-number">323+</div>
-                                <div class="stat-label">Test Cases</div>
+                                <div class="stat-number">413+</div>
+                                <div class="stat-label">Test Functions</div>
                             </div>
                         </div>
                     </div>
@@ -313,13 +313,17 @@
                                 <span class="status-icon">✅</span>
                                 <span class="item-text">Here-string (<<<)</span>
                             </div>
-                            <div class="compliance-item missing">
-                                <span class="status-icon">❌</span>
-                                <span class="item-text">File descriptor duplication (>&, <&)</span>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
+                                <span class="item-text">File descriptor duplication (N>&M, N<&M)</span>
                             </div>
-                            <div class="compliance-item missing">
-                                <span class="status-icon">❌</span>
-                                <span class="item-text">Redirections to specific file descriptors (2>, etc.)</span>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
+                                <span class="item-text">File descriptor closing (N>&-, N<&-)</span>
+                            </div>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
+                                <span class="item-text">File descriptor read/write (N<>)</span>
                             </div>
                         </div>
                     </div>
@@ -384,8 +388,8 @@
 
                         <h4>2.3.1 Grouping</h4>
                         <div class="compliance-grid">
-                            <div class="compliance-item missing">
-                                <span class="status-icon">❌</span>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
                                 <span class="item-text">Subshell ((...))</span>
                             </div>
                             <div class="compliance-item missing">
@@ -567,12 +571,6 @@
                         <div class="priority-section high">
                             <h3>High Priority (Core POSIX Features)</h3>
                             <ol>
-                                <li><strong>Redirections</strong>
-                                    <ul>
-                                        <li>Here-documents (<<)</li>
-                                        <li>File descriptor operations (2>, >&, etc.)</li>
-                                    </ul>
-                                </li>
                                 <li><strong>Missing Built-ins</strong>
                                     <ul>
                                         <li>set (options and positional parameters)</li>
@@ -581,11 +579,9 @@
                                         <li>readonly, return, break, continue, etc.</li>
                                     </ul>
                                 </li>
-                                <li><strong>Parameter Expansion</strong>
+                                <li><strong>Command Grouping</strong>
                                     <ul>
-                                        <li>Positional parameters ($1, $2, ...) - ✅ IMPLEMENTED</li>
-                                        <li>Parameter modifiers (${VAR:-default}, etc.) - ✅ IMPLEMENTED</li>
-                                        <li>Special parameters ($*, $@, $#) - ✅ IMPLEMENTED</li>
+                                        <li>Brace grouping {...} for command groups</li>
                                     </ul>
                                 </li>
                             </ol>
@@ -625,8 +621,8 @@
                     <div class="testing-overview">
                         <div class="testing-stats">
                             <div class="test-stat">
-                                <div class="test-number">323+</div>
-                                <div class="test-label">Individual Test Cases</div>
+                                <div class="test-number">413+</div>
+                                <div class="test-label">Test Functions</div>
                             </div>
                             <div class="test-stat">
                                 <div class="test-number">100%</div>
@@ -681,11 +677,33 @@
                         </div>
 
                         <div class="test-gaps">
+                            <h3>Recently Implemented Features</h3>
+                            <div class="compliance-grid">
+                                <div class="compliance-item implemented">
+                                    <span class="status-icon">✅</span>
+                                    <span class="item-text">Subshells (60+ test cases)</span>
+                                </div>
+                                <div class="compliance-item implemented">
+                                    <span class="status-icon">✅</span>
+                                    <span class="item-text">File descriptor operations (30+ test cases)</span>
+                                </div>
+                                <div class="compliance-item implemented">
+                                    <span class="status-icon">✅</span>
+                                    <span class="item-text">Here-documents and here-strings</span>
+                                </div>
+                                <div class="compliance-item implemented">
+                                    <span class="status-icon">✅</span>
+                                    <span class="item-text">Enhanced trap system with signal queue</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="test-gaps">
                             <h3>Areas Without Tests (Unimplemented Features)</h3>
                             <div class="compliance-grid">
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
-                                    <span class="item-text">Advanced redirection scenarios (file descriptors)</span>
+                                    <span class="item-text">Command grouping {...}</span>
                                 </div>
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
@@ -726,7 +744,7 @@
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Redirections</span>
-                                    <span class="percentage implemented">75%</span>
+                                    <span class="percentage implemented">95%</span>
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Job Control</span>

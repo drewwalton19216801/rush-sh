@@ -1,12 +1,12 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.5.9** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.6.0** - A comprehensive POSIX sh-compatible shell implementation
 
 [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust. It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports basic shell features like command execution, pipes, redirections, environment variables, and built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 20 built-in commands.
 
 ## Table of Contents
 
@@ -40,6 +40,12 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 ## Features
 
 - **Command Execution**: Execute external commands and built-in commands.
+- **Subshells**: Full POSIX-compliant subshell support with `(command)` syntax
+  - State isolation with proper variable scoping
+  - Exit code propagation from subshell to parent
+  - Trap inheritance for signal handlers
+  - Depth limit protection (max 100 levels)
+  - 60+ comprehensive test cases
 - **Pipes**: Chain commands using the `|` operator.
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections, here-documents (`<<`), and here-strings (`<<<`).
 - **File Descriptor Operations**: Full POSIX-compliant file descriptor management
@@ -136,12 +142,16 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
   - **Directory Traversal**: Support for nested paths (`src/`, `../`, `/usr/bin/`)
   - **Home Directory Expansion**: Completion for `~/` and `~/Documents/` paths
   - **Multi-Match Cycling**: Subsequent tab presses cycle through available completions when multiple matches exist
-- **Real-Time Signal Handling**: Traps execute immediately when signals are received during interactive sessions and script execution
+- **Real-Time Signal Handling**: Enhanced trap system with signal normalization, multiple handlers, trap display/reset, and signal queue with overflow protection. Traps execute immediately when signals are received during interactive sessions and script execution.
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
 ## What's New
 
 ### 🚀 Major Feature Additions
+
+**Subshell Support** - Full POSIX-compliant subshell implementation with state isolation, exit code propagation, trap inheritance, and depth limit protection (max 100 levels). Includes 60+ comprehensive test cases covering all aspects of subshell behavior.
+
+**File Descriptor Operations** - Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and read/write (N<>) operations. Includes 30+ test cases for comprehensive coverage.
 
 **Complete Control Structures** - Full implementation of POSIX control structures including `for` loops, `while` loops, and function definitions with local variable scoping, return statements, and recursion support.
 
@@ -156,6 +166,78 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
 ## Detailed Feature Updates
+
+### Subshell Support
+
+Rush provides full POSIX-compliant subshell support, enabling command execution in isolated environments:
+
+- **Syntax**: Execute commands in subshells using `(command)` syntax
+- **State Isolation**: Subshells inherit parent state but modifications don't affect the parent
+- **Exit Code Propagation**: Subshell exit codes are properly returned to the parent shell
+- **Trap Inheritance**: Signal handlers (traps) are inherited from parent to subshell
+- **Depth Protection**: Maximum subshell nesting depth of 100 levels prevents stack overflow
+- **Variable Scoping**: Variables set in subshells don't leak to parent environment
+- **FD Management**: File descriptor table is properly saved and restored
+
+**Basic Usage:**
+
+```bash
+# Execute command in subshell
+(cd /tmp && ls)
+pwd  # Still in original directory
+
+# Subshell with variable isolation
+VAR=parent
+(VAR=child; echo "In subshell: $VAR")
+echo "In parent: $VAR"  # Still shows "parent"
+
+# Exit code propagation
+(exit 42)
+echo "Subshell exit code: $?"  # Shows 42
+
+# Trap inheritance
+trap 'echo "Signal received"' INT
+(sleep 10)  # Ctrl+C will trigger inherited trap
+```
+
+**Advanced Usage:**
+
+```bash
+# Complex command isolation
+(
+    cd /tmp
+    export TEMP_VAR=value
+    echo "Working in: $(pwd)"
+)
+# Original directory and environment preserved
+
+# Pipeline with subshells
+(echo "data" | grep "pattern") | wc -l
+
+# Nested subshells (up to 100 levels)
+(echo "Level 1"; (echo "Level 2"; (echo "Level 3")))
+
+# Subshell with redirections
+(echo "output" > file.txt; cat file.txt) 2>errors.log
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Full compatibility with POSIX subshell specifications
+- **Performance**: Efficient state management with minimal overhead
+- **Safety**: Depth limit protection prevents infinite recursion
+- **Integration**: Works seamlessly with all shell features (pipes, redirections, traps)
+- **Test Coverage**: 60+ comprehensive test cases covering all subshell behaviors
+
+**Implementation Details:**
+
+- Subshells create isolated execution contexts with copied state
+- File descriptor table is saved before subshell and restored after
+- Trap handlers are inherited but can be modified independently
+- Exit codes are properly propagated through nested subshells
+- Maximum depth of 100 levels prevents stack overflow attacks
+
+For practical examples, see the example scripts that demonstrate subshell usage in various scenarios.
 
 ### Environment Variable Support
 
@@ -1890,6 +1972,12 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - All arguments: `echo "All args: $*"`
   - Shift parameters: `shift; echo "New first: $1"`
   - Custom shift: `shift 2; echo "After shift 2: $*"`
+- Subshells:
+  - Basic subshell: `(cd /tmp && ls); pwd  # Still in original directory`
+  - Variable isolation: `VAR=parent; (VAR=child; echo $VAR); echo $VAR  # Shows parent`
+  - Exit code: `(exit 42); echo $?  # Shows 42`
+  - Nested subshells: `(echo "Level 1"; (echo "Level 2"))`
+  - With redirections: `(echo "output" > file.txt; cat file.txt) 2>errors.log`
 - Use control structures:
   - If statement: `if true; then echo yes; else echo no; fi`
   - If-elif-else statement: `if false; then echo no; elif true; then echo yes; else echo maybe; fi`
@@ -2004,7 +2092,7 @@ Rush consists of the following components:
 
 ### Comprehensive Test Suite
 
-Rush includes an extensive test suite with **288+ test cases** ensuring reliability and correctness:
+Rush includes an extensive test suite with **413+ test functions** ensuring reliability and correctness:
 
 - **Unit Tests**: Individual component testing for lexer, parser, arithmetic engine, and parameter expansion
 - **Integration Tests**: End-to-end command execution, pipelines, redirections, and control structures
@@ -2166,7 +2254,9 @@ This benchmark suite provides a foundation for maintaining optimal shell perform
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (all 18 built-in commands including cd, pwd, env, exit, help, source, export, unset, shift, pushd, popd, dirs, alias, unalias, test, [, set_colors, set_color_scheme, declare)
+- Built-in command functionality (all 20 built-in commands including cd, pwd, env, exit, help, source, export, unset, shift, pushd, popd, dirs, alias, unalias, test, [, set_colors, set_color_scheme, set_condensed, declare, trap)
+- **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
+- **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
 - Control structures (if-elif-else statements, case statements with glob patterns, for loops, while loops)
 - **Functions** (definition, calls, local variables, return statements, recursion, introspection)
@@ -2174,12 +2264,13 @@ The test suite provides extensive coverage of:
 - **Arithmetic expansion** (`$((...))` syntax, operator precedence, variable integration, error handling)
 - **Positional parameters** (`$1`, `$2`, `$*`, `$@`, `$#`, `shift` command)
 - **Parameter expansion with modifiers** (`${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, etc.)
+- **Here-documents and here-strings** (`<<` and `<<<` with proper expansion handling)
 - Environment variable support (assignment, expansion, export, special variables)
 - Variable scoping and inheritance
 - Tab-completion for commands, files, and directories
 - Path traversal and directory completion
 - Error conditions and edge cases
-- Signal handling integration
+- Signal handling integration with trap system
 
 ## Contributing
 

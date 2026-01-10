@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.5.8. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
+**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.6.0. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
 
 ### Project Goals
 
@@ -15,10 +15,17 @@
 ### Current Status
 
 - **Compliance Level**: ~90% POSIX compliant
-- **Test Coverage**: 325+ individual test cases across all components
+- **Test Coverage**: 413+ test functions across all components
 - **Built-in Commands**: 20 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
+
+### Recently Implemented Features
+
+- **Subshell Support**: Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, depth limit protection (max 100 levels), and 60+ test cases
+- **File Descriptor Operations**: Complete FD table management, duplication (N>&M, N<&M), closing (N>&-, N<&-), read/write (N<>), with 30+ test cases
+- **Here-documents**: Full implementation of `<<` and `<<<` (here-strings) with proper expansion handling
+- **Enhanced Trap System**: Signal normalization, multiple handlers, trap display/reset, signal queue with overflow protection
 
 ## Architecture Overview
 
@@ -49,6 +56,8 @@ src/
 - **Variable Detection**: Identifies variable patterns for deferred expansion
 - **Alias Expansion**: Expands command aliases before parsing
 - **Command Substitution**: Preserves `$(...)` and `` `...` `` syntax for runtime expansion
+- **Here-document Tokenization**: Recognizes `<<` and `<<<` operators for here-documents and here-strings
+- **FD Redirection Parsing**: Handles file descriptor redirection operators (N>&M, N<&M, N>&-, N<&-)
 
 #### **Parser** (`src/parser.rs`)
 
@@ -56,6 +65,8 @@ src/
 - **Control Structures**: Handles if/elif/else, case, for, while, functions
 - **Pipeline Construction**: Creates pipeline structures for command chaining
 - **Redirection Parsing**: Processes I/O redirection operators
+- **Subshell Parsing**: Parses subshell expressions with proper nesting
+- **FD Redirection AST Nodes**: Constructs AST nodes for file descriptor operations
 
 #### **Executor** (`src/executor.rs`)
 
@@ -64,6 +75,9 @@ src/
 - **Pipeline Management**: Coordinates data flow between pipeline stages
 - **Redirection Handling**: Manages file descriptors and I/O redirection
 - **Error Propagation**: Handles exit codes and error conditions
+- **Subshell Execution**: Executes subshells with state isolation and trap inheritance
+- **FD Table Management**: Manages file descriptor duplication, closing, and read/write operations
+- **Here-document Processing**: Handles here-document and here-string expansion and execution
 
 #### **State Management** (`src/state.rs`)
 
@@ -72,6 +86,8 @@ src/
 - **Function Context**: Function call stack and local variable scoping
 - **Directory Stack**: pushd/popd/dirs functionality
 - **Alias Management**: Command alias storage and expansion
+- **FD Table**: File descriptor table with save/restore capabilities for subshells
+- **Trap Management**: Signal trap handlers with inheritance and queue management
 
 #### **Expansion Engines**
 
@@ -83,7 +99,7 @@ src/
 
 ### Testing Philosophy
 
-The project maintains **comprehensive test coverage** with 325+ individual test cases:
+The project maintains **comprehensive test coverage** with 413+ test functions:
 
 ```rust
 // Example test structure
@@ -417,9 +433,8 @@ impl ShellState {
 
 ### High Priority (Core POSIX Features)
 
-1. **Redirections**: Here-documents (`<<`), file descriptor operations (`2>&1`)
-2. **Missing Built-ins**: `set`, `eval`, `exec`, `readonly`
-3. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
+1. **Missing Built-ins**: `set`, `eval`, `exec`, `readonly`
+2. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
 
 ### Medium Priority
 
