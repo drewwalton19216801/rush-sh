@@ -7,6 +7,9 @@ use std::rc::Rc;
 use super::parser::{Ast, Redirection, ShellCommand};
 use super::state::ShellState;
 
+/// Maximum allowed subshell nesting depth to prevent stack overflow
+const MAX_SUBSHELL_DEPTH: usize = 100;
+
 /// Execute a command and capture its output as a string
 /// This is used for command substitution $(...)
 fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
@@ -1641,15 +1644,51 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 /// - Executes the body in the cloned state
 /// - Returns the exit code without modifying parent state
 /// - Preserves parent state completely (variables, functions, etc.)
+/// - Tracks subshell depth to prevent stack overflow
+/// - Handles exit and return commands properly (isolated from parent)
 fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
+    // Check depth limit to prevent stack overflow
+    if shell_state.subshell_depth >= MAX_SUBSHELL_DEPTH {
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}Subshell nesting limit ({}) exceeded\x1b[0m",
+                shell_state.color_scheme.error, MAX_SUBSHELL_DEPTH
+            );
+        } else {
+            eprintln!("Subshell nesting limit ({}) exceeded", MAX_SUBSHELL_DEPTH);
+        }
+        shell_state.last_exit_code = 1;
+        return 1;
+    }
+
     // Save current directory for restoration
     let original_dir = std::env::current_dir().ok();
 
     // Clone the shell state for isolation
     let mut subshell_state = shell_state.clone();
+    
+    // Increment subshell depth in the cloned state
+    subshell_state.subshell_depth = shell_state.subshell_depth + 1;
+    
+    // Clone trap handlers for isolation (subshells inherit but don't affect parent)
+    let parent_traps = shell_state.trap_handlers.lock().unwrap().clone();
+    subshell_state.trap_handlers = std::sync::Arc::new(std::sync::Mutex::new(parent_traps));
 
     // Execute the body in the isolated state
     let exit_code = execute(body, &mut subshell_state);
+    
+    // Handle exit in subshell: exit should only exit the subshell, not the parent
+    // The exit_requested flag is isolated to the subshell_state, so it won't affect parent
+    let final_exit_code = if subshell_state.exit_requested {
+        // Subshell called exit - use its exit code
+        subshell_state.exit_code
+    } else if subshell_state.is_returning() {
+        // Subshell called return - treat as exit from subshell
+        // Return in subshell should not propagate to parent function
+        subshell_state.get_return_value().unwrap_or(exit_code)
+    } else {
+        exit_code
+    };
 
     // Restore original directory (in case subshell changed it)
     if let Some(dir) = original_dir {
@@ -1657,10 +1696,10 @@ fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
     }
 
     // Update parent's last_exit_code to reflect subshell result
-    shell_state.last_exit_code = exit_code;
+    shell_state.last_exit_code = final_exit_code;
 
     // Return the exit code
-    exit_code
+    final_exit_code
 }
 
 /// Execute a compound command with redirections
