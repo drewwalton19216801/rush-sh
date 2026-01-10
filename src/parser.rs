@@ -51,15 +51,38 @@ pub enum Ast {
     },
 }
 
+/// Represents a single redirection operation
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Redirection {
+    /// Input from file: < file or N< file
+    Input(String),
+    /// Output to file: > file or N> file
+    Output(String),
+    /// Append to file: >> file or N>> file
+    Append(String),
+    /// Input from file with explicit fd: N< file
+    FdInput(i32, String),
+    /// Output to file with explicit fd: N> file
+    FdOutput(i32, String),
+    /// Append to file with explicit fd: N>> file
+    FdAppend(i32, String),
+    /// Duplicate file descriptor: N>&M or N<&M
+    FdDuplicate(i32, i32),
+    /// Close file descriptor: N>&- or N<&-
+    FdClose(i32),
+    /// Open file for read/write: N<> file
+    FdInputOutput(i32, String),
+    /// Here-document: << EOF ... EOF
+    HereDoc(String, String),
+    /// Here-string: <<< "string"
+    HereString(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ShellCommand {
     pub args: Vec<String>,
-    pub input: Option<String>,
-    pub output: Option<String>,
-    pub append: Option<String>,
-    pub here_doc_delimiter: Option<String>, // For here-document redirection
-    pub here_doc_quoted: bool, // True if heredoc delimiter was quoted (disables expansion)
-    pub here_string_content: Option<String>, // For here-string redirection
+    /// All redirections in order of appearance (for POSIX left-to-right processing)
+    pub redirections: Vec<Redirection>,
 }
 
 /// Helper function to validate if a string is a valid variable name.
@@ -77,12 +100,7 @@ fn is_valid_variable_name(name: &str) -> bool {
 fn create_empty_body_ast() -> Ast {
     Ast::Pipeline(vec![ShellCommand {
         args: vec!["true".to_string()],
-        input: None,
-        output: None,
-        append: None,
-        here_doc_delimiter: None,
-        here_doc_quoted: false,
-        here_string_content: None,
+        redirections: Vec::new(),
     }])
 }
 
@@ -626,12 +644,13 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     current_cmd = ShellCommand::default();
                 }
             }
+            // Basic redirections (backward compatible)
             Token::RedirIn => {
                 i += 1;
                 if i < tokens.len()
                     && let Token::Word(ref file) = tokens[i]
                 {
-                    current_cmd.input = Some(file.clone());
+                    current_cmd.redirections.push(Redirection::Input(file.clone()));
                 }
             }
             Token::RedirOut => {
@@ -639,7 +658,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 if i < tokens.len()
                     && let Token::Word(ref file) = tokens[i]
                 {
-                    current_cmd.output = Some(file.clone());
+                    current_cmd.redirections.push(Redirection::Output(file.clone()));
                 }
             }
             Token::RedirAppend => {
@@ -647,15 +666,34 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 if i < tokens.len()
                     && let Token::Word(ref file) = tokens[i]
                 {
-                    current_cmd.append = Some(file.clone());
+                    current_cmd.redirections.push(Redirection::Append(file.clone()));
                 }
             }
             Token::RedirHereDoc(delimiter, quoted) => {
-                current_cmd.here_doc_delimiter = Some(delimiter.clone());
-                current_cmd.here_doc_quoted = *quoted;
+                // Store delimiter and quoted flag - content will be read by executor
+                current_cmd.redirections.push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
             }
             Token::RedirHereString(content) => {
-                current_cmd.here_string_content = Some(content.clone());
+                current_cmd.redirections.push(Redirection::HereString(content.clone()));
+            }
+            // File descriptor redirections
+            Token::RedirectFdIn(fd, file) => {
+                current_cmd.redirections.push(Redirection::FdInput(*fd, file.clone()));
+            }
+            Token::RedirectFdOut(fd, file) => {
+                current_cmd.redirections.push(Redirection::FdOutput(*fd, file.clone()));
+            }
+            Token::RedirectFdAppend(fd, file) => {
+                current_cmd.redirections.push(Redirection::FdAppend(*fd, file.clone()));
+            }
+            Token::RedirectFdDup(from_fd, to_fd) => {
+                current_cmd.redirections.push(Redirection::FdDuplicate(*from_fd, *to_fd));
+            }
+            Token::RedirectFdClose(fd) => {
+                current_cmd.redirections.push(Redirection::FdClose(*fd));
+            }
+            Token::RedirectFdInOut(fd, file) => {
+                current_cmd.redirections.push(Redirection::FdInputOutput(*fd, file.clone()));
             }
             Token::RightParen => {
                 // Check if this looks like a function call pattern: Word LeftParen ... RightParen
@@ -1321,12 +1359,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["ls".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: Vec::new(),
             }])
         );
     }
@@ -1342,12 +1375,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["ls".to_string(), "-la".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: Vec::new(),
             }])
         );
     }
@@ -1366,21 +1394,11 @@ mod tests {
             Ast::Pipeline(vec![
                 ShellCommand {
                     args: vec!["ls".to_string()],
-                    input: None,
-                    output: None,
-                    append: None,
-                    here_doc_delimiter: None,
-                    here_doc_quoted: false,
-                    here_string_content: None,
+                    redirections: Vec::new(),
                 },
                 ShellCommand {
                     args: vec!["grep".to_string(), "txt".to_string()],
-                    input: None,
-                    output: None,
-                    append: None,
-                    here_doc_delimiter: None,
-                    here_doc_quoted: false,
-                    here_string_content: None,
+                    redirections: Vec::new(),
                 }
             ])
         );
@@ -1398,12 +1416,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
-                input: Some("input.txt".to_string()),
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: vec![Redirection::Input("input.txt".to_string())],
             }])
         );
     }
@@ -1421,12 +1434,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["printf".to_string(), "hello".to_string()],
-                input: None,
-                output: Some("output.txt".to_string()),
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: vec![Redirection::Output("output.txt".to_string())],
             }])
         );
     }
@@ -1444,12 +1452,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["printf".to_string(), "hello".to_string()],
-                input: None,
-                output: None,
-                append: Some("output.txt".to_string()),
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: vec![Redirection::Append("output.txt".to_string())],
             }])
         );
     }
@@ -1474,30 +1477,15 @@ mod tests {
             Ast::Pipeline(vec![
                 ShellCommand {
                     args: vec!["cat".to_string()],
-                    input: Some("input.txt".to_string()),
-                    output: None,
-                    append: None,
-                    here_doc_delimiter: None,
-                    here_doc_quoted: false,
-                    here_string_content: None,
+                    redirections: vec![Redirection::Input("input.txt".to_string())],
                 },
                 ShellCommand {
                     args: vec!["grep".to_string(), "pattern".to_string()],
-                    input: None,
-                    output: None,
-                    append: None,
-                    here_doc_delimiter: None,
-                    here_doc_quoted: false,
-                    here_string_content: None,
+                    redirections: Vec::new(),
                 },
                 ShellCommand {
                     args: vec!["sort".to_string()],
-                    input: None,
-                    output: Some("output.txt".to_string()),
-                    append: None,
-                    here_doc_delimiter: None,
-                    here_doc_quoted: false,
-                    here_string_content: None,
+                    redirections: vec![Redirection::Output("output.txt".to_string())],
                 }
             ])
         );
@@ -1528,12 +1516,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: Vec::new(),
             }])
         );
     }
@@ -1552,12 +1535,10 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
-                input: Some("file1.txt".to_string()),
-                output: Some("file2.txt".to_string()),
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: vec![
+                    Redirection::Input("file1.txt".to_string()),
+                    Redirection::Output("file2.txt".to_string()),
+                ],
             }])
         );
     }
@@ -1802,12 +1783,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: Some("EOF".to_string()),
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: vec![Redirection::HereDoc("EOF".to_string(), "false".to_string())],
             }])
         );
     }
@@ -1823,12 +1799,7 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["grep".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: Some("pattern".to_string()),
+                redirections: vec![Redirection::HereString("pattern".to_string())],
             }])
         );
     }
@@ -1848,13 +1819,253 @@ mod tests {
             result,
             Ast::Pipeline(vec![ShellCommand {
                 args: vec!["cat".to_string()],
-                input: Some("file.txt".to_string()),
-                output: Some("output.txt".to_string()),
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: Some("fallback".to_string()),
+                redirections: vec![
+                    Redirection::Input("file.txt".to_string()),
+                    Redirection::HereString("fallback".to_string()),
+                    Redirection::Output("output.txt".to_string()),
+                ],
             }])
         );
+    }
+
+    // ===== File Descriptor Redirection Tests =====
+
+    #[test]
+    fn test_parse_fd_input_redirection() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdIn(3, "input.txt".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![Redirection::FdInput(3, "input.txt".to_string())],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_output_redirection() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdOut(2, "errors.log".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![Redirection::FdOutput(2, "errors.log".to_string())],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_append_redirection() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdAppend(2, "errors.log".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![Redirection::FdAppend(2, "errors.log".to_string())],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_duplicate() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdDup(2, 1),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![Redirection::FdDuplicate(2, 1)],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_close() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdClose(2),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![Redirection::FdClose(2)],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_input_output() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdInOut(3, "file.txt".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![Redirection::FdInputOutput(3, "file.txt".to_string())],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_multiple_fd_redirections() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdOut(2, "err.log".to_string()),
+            Token::RedirectFdIn(3, "input.txt".to_string()),
+            Token::RedirectFdAppend(4, "append.log".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![
+                    Redirection::FdOutput(2, "err.log".to_string()),
+                    Redirection::FdInput(3, "input.txt".to_string()),
+                    Redirection::FdAppend(4, "append.log".to_string()),
+                ],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_swap_pattern() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdDup(3, 1),
+            Token::RedirectFdDup(1, 2),
+            Token::RedirectFdDup(2, 3),
+            Token::RedirectFdClose(3),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![
+                    Redirection::FdDuplicate(3, 1),
+                    Redirection::FdDuplicate(1, 2),
+                    Redirection::FdDuplicate(2, 3),
+                    Redirection::FdClose(3),
+                ],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_mixed_basic_and_fd_redirections() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirOut,
+            Token::Word("output.txt".to_string()),
+            Token::RedirectFdDup(2, 1),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![
+                    Redirection::Output("output.txt".to_string()),
+                    Redirection::FdDuplicate(2, 1),
+                ],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_redirection_ordering() {
+        // Test that redirections are preserved in left-to-right order
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdOut(2, "first.log".to_string()),
+            Token::RedirOut,
+            Token::Word("second.txt".to_string()),
+            Token::RedirectFdDup(2, 1),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["command".to_string()],
+                redirections: vec![
+                    Redirection::FdOutput(2, "first.log".to_string()),
+                    Redirection::Output("second.txt".to_string()),
+                    Redirection::FdDuplicate(2, 1),
+                ],
+            }])
+        );
+    }
+
+    #[test]
+    fn test_parse_fd_redirection_with_pipe() {
+        let tokens = vec![
+            Token::Word("command".to_string()),
+            Token::RedirectFdDup(2, 1),
+            Token::Pipe,
+            Token::Word("grep".to_string()),
+            Token::Word("error".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![
+                ShellCommand {
+                    args: vec!["command".to_string()],
+                    redirections: vec![Redirection::FdDuplicate(2, 1)],
+                },
+                ShellCommand {
+                    args: vec!["grep".to_string(), "error".to_string()],
+                    redirections: Vec::new(),
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn test_parse_all_fd_numbers() {
+        // Test fd 0
+        let tokens = vec![
+            Token::Word("cmd".to_string()),
+            Token::RedirectFdIn(0, "file".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::Pipeline(cmds) = result {
+            assert_eq!(cmds[0].redirections[0], Redirection::FdInput(0, "file".to_string()));
+        } else {
+            panic!("Expected Pipeline");
+        }
+
+        // Test fd 9
+        let tokens = vec![
+            Token::Word("cmd".to_string()),
+            Token::RedirectFdOut(9, "file".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        if let Ast::Pipeline(cmds) = result {
+            assert_eq!(cmds[0].redirections[0], Redirection::FdOutput(9, "file".to_string()));
+        } else {
+            panic!("Expected Pipeline");
+        }
     }
 }
