@@ -489,6 +489,94 @@ fn line_contains_heredoc(line: &str, shell_state: &state::ShellState) -> Option<
     }
 }
 
+/// Check if a line contains a specific keyword as a distinct token
+/// This handles comments and ensures the keyword is not part of another word
+fn contains_keyword(line: &str, keyword: &str) -> bool {
+    let mut chars = line.chars().peekable();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+    let mut current_word = String::new();
+
+    while let Some(ch) = chars.next() {
+        if escaped {
+            escaped = false;
+            // Escaped characters are treated as part of the word
+            current_word.push(ch);
+            continue;
+        }
+
+        if in_single_quote {
+            if ch == '\'' {
+                in_single_quote = false;
+            } else {
+                current_word.push(ch);
+            }
+            continue;
+        }
+
+        if in_double_quote {
+            if ch == '"' {
+                in_double_quote = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else {
+                current_word.push(ch);
+            }
+            continue;
+        }
+
+        match ch {
+            '#' => return current_word == keyword, // Comment starts, check if the last word was the keyword
+            '\'' => {
+                in_single_quote = true;
+                current_word.push(ch);
+            }
+            '"' => {
+                in_double_quote = true;
+                current_word.push(ch);
+            }
+            '\\' => escaped = true,
+            ' ' | '\t' | '\n' | ';' | '|' | '&' | '(' | ')' | '{' | '}' => {
+                if current_word == keyword {
+                    return true;
+                }
+                current_word.clear();
+            }
+            _ => current_word.push(ch),
+        }
+    }
+
+    // Check last word
+    current_word == keyword
+}
+
+/// Check if a line starts with a specific keyword
+fn starts_with_keyword(line: &str, keyword: &str) -> bool {
+    let mut chars = line.chars().peekable();
+    let mut current_word = String::new();
+
+    // Skip leading whitespace
+    while let Some(&ch) = chars.peek() {
+        if ch == ' ' || ch == '\t' {
+            chars.next();
+        } else {
+            break;
+        }
+    }
+
+    while let Some(ch) = chars.next() {
+        match ch {
+            ' ' | '\t' | '\n' | ';' | '|' | '&' | '(' | ')' | '{' | '}' => {
+                return current_word == keyword;
+            }
+            _ => current_word.push(ch),
+        }
+    }
+
+    current_word == keyword
+}
+
 fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut current_block = String::new();
     let mut in_if_block = false;
@@ -500,6 +588,10 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
     let mut for_depth = 0;
     let mut in_while_block = false;
     let mut while_depth = 0;
+
+    // Track quote state across lines to handle multiline strings correctly
+    let mut in_double_quote = false;
+    let mut in_single_quote = false;
 
     let lines: Vec<&str> = content.lines().collect();
     let mut i = 0;
@@ -526,39 +618,84 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
             continue;
         }
 
-        // Skip pure comment lines
+        // Update quote state based on this line
+        // We need to scan the line to update state, but be careful with comments
+        let mut chars = line.chars().peekable();
+        let mut escaped = false;
+
+        while let Some(ch) = chars.next() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+
+            if in_single_quote {
+                if ch == '\'' {
+                    in_single_quote = false;
+                }
+                continue;
+            }
+
+            if in_double_quote {
+                if ch == '"' {
+                    in_double_quote = false;
+                } else if ch == '\\' {
+                    escaped = true;
+                }
+                continue;
+            }
+
+            match ch {
+                '#' => break, // Comment starts, ignore rest of line for state tracking
+                '\'' => in_single_quote = true,
+                '"' => in_double_quote = true,
+                '\\' => escaped = true,
+                _ => {}
+            }
+        }
+
+        // Skip pure comment lines if we are NOT in a quote
+        // If we represent a continuation of a string usage, we must preserve it
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with("#") {
+        if !in_double_quote && !in_single_quote && (trimmed.is_empty() || trimmed.starts_with("#"))
+        {
             i += 1;
             continue;
         }
 
+        // Check for keywords only if we are NOT in a quote block
+        let keywords_active = !in_double_quote && !in_single_quote;
+
         // Check for multi-line construct keywords (only when not in a function)
-        if !in_function_block {
-            if trimmed.starts_with("if ") || trimmed == "if" {
+        if keywords_active && !in_function_block {
+            if starts_with_keyword(line, "if") {
                 in_if_block = true;
                 if_depth += 1;
-            } else if trimmed.starts_with("case ") || trimmed == "case" {
+            } else if starts_with_keyword(line, "case") {
                 in_case_block = true;
-            } else if trimmed.starts_with("for ") || trimmed == "for" {
+            } else if starts_with_keyword(line, "for") {
                 in_for_block = true;
                 for_depth += 1;
-            } else if trimmed.starts_with("while ") || trimmed == "while" {
+            } else if starts_with_keyword(line, "while") {
                 in_while_block = true;
                 while_depth += 1;
             }
         }
 
         // Check for function definition
-        if trimmed.contains("() {") || (trimmed.ends_with("()") && !in_function_block) {
+        if keywords_active
+            && (line.contains("() {") || (trimmed.ends_with("()") && !in_function_block))
+        {
             in_function_block = true;
             // Count opening braces on this line
-            brace_depth += trimmed.matches('{').count() as i32;
-            brace_depth -= trimmed.matches('}').count() as i32;
+            brace_depth += line.matches('{').count() as i32;
+            brace_depth -= line.matches('}').count() as i32;
         } else if in_function_block {
             // Track braces inside function
-            brace_depth += trimmed.matches('{').count() as i32;
-            brace_depth -= trimmed.matches('}').count() as i32;
+            // Note: Simplistic brace counting, ideally should respect quotes/comments too
+            // But for now, we trust the user writes valid shell code inside functions
+            brace_depth += line.matches('{').count() as i32;
+            brace_depth -= line.matches('}').count() as i32;
         }
 
         // Add line to current block
@@ -568,20 +705,11 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
         current_block.push_str(line);
 
         // Check for end of multi-line constructs
-        if in_function_block && brace_depth == 0 {
-            // Function is complete
-            in_function_block = false;
-            execute_line(&current_block, shell_state);
-            current_block.clear();
-
-            // Check if exit was requested
-            if shell_state.exit_requested {
-                break;
-            }
-        } else if in_if_block && trimmed == "fi" {
-            if_depth -= 1;
-            if if_depth == 0 {
-                in_if_block = false;
+        // Only check if we are NOT in a quote
+        if keywords_active {
+            if in_function_block && brace_depth == 0 {
+                // Function is complete
+                in_function_block = false;
                 execute_line(&current_block, shell_state);
                 current_block.clear();
 
@@ -589,75 +717,87 @@ fn execute_script(content: &str, shell_state: &mut state::ShellState) {
                 if shell_state.exit_requested {
                     break;
                 }
-            }
-        } else if in_for_block && trimmed == "done" {
-            for_depth -= 1;
-            if for_depth == 0 {
-                in_for_block = false;
-                execute_line(&current_block, shell_state);
-                current_block.clear();
+            } else if in_if_block && contains_keyword(line, "fi") {
+                if_depth -= 1;
+                if if_depth == 0 {
+                    in_if_block = false;
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
 
-                // Check if exit was requested
-                if shell_state.exit_requested {
-                    break;
-                }
-            }
-        } else if in_while_block && trimmed == "done" {
-            while_depth -= 1;
-            if while_depth == 0 {
-                in_while_block = false;
-                execute_line(&current_block, shell_state);
-                current_block.clear();
-
-                // Check if exit was requested
-                if shell_state.exit_requested {
-                    break;
-                }
-            }
-        } else if in_case_block && trimmed == "esac" {
-            in_case_block = false;
-            execute_line(&current_block, shell_state);
-            current_block.clear();
-
-            // Check if exit was requested
-            if shell_state.exit_requested {
-                break;
-            }
-        } else if !in_if_block
-            && !in_case_block
-            && !in_function_block
-            && !in_for_block
-            && !in_while_block
-        {
-            // Check if this line contains a here-document using proper lexer detection
-            if let Some(delimiter) = line_contains_heredoc(&current_block, shell_state) {
-                // Collect here-document content from subsequent lines
-                i += 1;
-                let mut heredoc_content = String::new();
-                while i < lines.len() {
-                    let content_line = lines[i];
-                    if content_line.trim() == delimiter.trim() {
-                        // Found the delimiter, stop collecting
+                    // Check if exit was requested
+                    if shell_state.exit_requested {
                         break;
                     }
-                    if !heredoc_content.is_empty() {
-                        heredoc_content.push('\n');
+                }
+            } else if in_for_block && contains_keyword(line, "done") {
+                for_depth -= 1;
+                if for_depth == 0 {
+                    in_for_block = false;
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
+
+                    // Check if exit was requested
+                    if shell_state.exit_requested {
+                        break;
                     }
-                    heredoc_content.push_str(content_line);
+                }
+            } else if in_while_block && contains_keyword(line, "done") {
+                while_depth -= 1;
+                if while_depth == 0 {
+                    in_while_block = false;
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
+
+                    // Check if exit was requested
+                    if shell_state.exit_requested {
+                        break;
+                    }
+                }
+            } else if in_case_block && contains_keyword(line, "esac") {
+                in_case_block = false;
+                execute_line(&current_block, shell_state);
+                current_block.clear();
+
+                // Check if exit was requested
+                if shell_state.exit_requested {
+                    break;
+                }
+            } else if !in_if_block
+                && !in_case_block
+                && !in_function_block
+                && !in_for_block
+                && !in_while_block
+            {
+                // Check if this line contains a here-document using proper lexer detection
+                if let Some(delimiter) = line_contains_heredoc(&current_block, shell_state) {
+                    // Collect here-document content from subsequent lines
                     i += 1;
+                    let mut heredoc_content = String::new();
+                    while i < lines.len() {
+                        let content_line = lines[i];
+                        if content_line.trim() == delimiter.trim() {
+                            // Found the delimiter, stop collecting
+                            break;
+                        }
+                        if !heredoc_content.is_empty() {
+                            heredoc_content.push('\n');
+                        }
+                        heredoc_content.push_str(content_line);
+                        i += 1;
+                    }
+
+                    // Store the here-document content in shell state for the executor to use
+                    shell_state.pending_heredoc_content = Some(heredoc_content);
                 }
 
-                // Store the here-document content in shell state for the executor to use
-                shell_state.pending_heredoc_content = Some(heredoc_content);
-            }
+                // Execute single-line commands immediately
+                execute_line(&current_block, shell_state);
+                current_block.clear();
 
-            // Execute single-line commands immediately
-            execute_line(&current_block, shell_state);
-            current_block.clear();
-
-            // Check if exit was requested after executing the line
-            if shell_state.exit_requested {
-                break;
+                // Check if exit was requested after executing the line
+                if shell_state.exit_requested {
+                    break;
+                }
             }
         }
 
