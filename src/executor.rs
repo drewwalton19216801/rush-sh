@@ -2047,6 +2047,21 @@ fn execute_compound_with_redirections(
     }
 }
 
+/// Check if redirections include stdout redirections
+/// Returns true if any redirection affects stdout (FD 1)
+fn has_stdout_redirection(redirections: &[Redirection]) -> bool {
+    redirections.iter().any(|r| match r {
+        // Default output redirections affect stdout (FD 1)
+        Redirection::Output(_) | Redirection::Append(_) => true,
+        // Explicit FD 1 redirections
+        Redirection::FdOutput(1, _) | Redirection::FdAppend(1, _) => true,
+        // FD 1 duplication or closure
+        Redirection::FdDuplicate(1, _) | Redirection::FdClose(1) => true,
+        // All other redirections don't affect stdout
+        _ => false,
+    })
+}
+
 /// Execute a compound command (subshell) as part of a pipeline
 ///
 /// # Arguments
@@ -2086,7 +2101,10 @@ fn execute_compound_in_pipeline(
             }
 
             // Setup output capture if not last or if parent is capturing
-            let capture_buffer = if !is_last || shell_state.capture_output.is_some() {
+            // BUT skip capture if stdout is redirected (e.g., { pwd; } > out | wc -l)
+            let capture_buffer = if (!is_last || shell_state.capture_output.is_some())
+                && !has_stdout_redirection(redirections)
+            {
                 let buffer = Rc::new(RefCell::new(Vec::new()));
                 subshell_state.capture_output = Some(buffer.clone());
                 Some(buffer)

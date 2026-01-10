@@ -2135,6 +2135,78 @@ mod tests {
     }
 
     #[test]
+    fn test_compound_group_pipeline_with_redirection_suppression() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let mut shell_state = state::ShellState::new();
+
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_out = format!("/tmp/rush_test_group_suppress_out_{}.txt", timestamp);
+        let temp_pipe = format!("/tmp/rush_test_group_suppress_pipe_{}.txt", timestamp);
+
+        // { echo hello; } > temp_out | cat > temp_pipe
+        let line = format!("{{ echo hello; }} > {} | cat > {}", temp_out, temp_pipe);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let _ = executor::execute(ast, &mut shell_state);
+
+        // Verify temp_out has "hello"
+        let out_content = std::fs::read_to_string(&temp_out).unwrap();
+        assert!(out_content.contains("hello"));
+
+        // Verify temp_pipe is empty
+        let pipe_content = std::fs::read_to_string(&temp_pipe).unwrap();
+        assert!(
+            pipe_content.is_empty(),
+            "Pipe should be empty but contains: '{}'",
+            pipe_content
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_out);
+        let _ = std::fs::remove_file(&temp_pipe);
+    }
+
+    #[test]
+    fn test_subshell_pipeline_with_redirection_suppression() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let mut shell_state = state::ShellState::new();
+
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_out = format!("/tmp/rush_test_sub_suppress_out_{}.txt", timestamp);
+        let temp_pipe = format!("/tmp/rush_test_sub_suppress_pipe_{}.txt", timestamp);
+
+        // (echo hello) > temp_out | cat > temp_pipe
+        let line = format!("(echo hello) > {} | cat > {}", temp_out, temp_pipe);
+        let tokens = lexer::lex(&line, &shell_state).unwrap();
+        let ast = parser::parse(tokens).unwrap();
+        let _ = executor::execute(ast, &mut shell_state);
+
+        // Verify temp_out has "hello"
+        let out_content = std::fs::read_to_string(&temp_out).unwrap();
+        assert!(out_content.contains("hello"));
+
+        // Verify temp_pipe is empty
+        let pipe_content = std::fs::read_to_string(&temp_pipe).unwrap();
+        assert!(
+            pipe_content.is_empty(),
+            "Pipe should be empty but contains: '{}'",
+            pipe_content
+        );
+
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_out);
+        let _ = std::fs::remove_file(&temp_pipe);
+    }
+
+    #[test]
     fn test_subshell_three_level_nesting() {
         let mut shell_state = state::ShellState::new();
         shell_state.set_var("LEVEL", "0".to_string());
