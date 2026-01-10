@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write, pipe};
-use std::os::fd::{AsRawFd, FromRawFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
@@ -1601,7 +1601,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
 fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> i32 {
     let mut exit_code = 0;
-    let mut previous_stdout = None;
+    let mut previous_stdout: Option<File> = None;
 
     for (i, cmd) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
@@ -1611,6 +1611,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             let (com_exit_code, com_stdout) = execute_compound_in_pipeline(
                 compound_ast,
                 shell_state,
+                previous_stdout.take(),
                 i == 0,
                 is_last,
                 &cmd.redirections,
@@ -1646,7 +1647,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             if !is_last {
                 // Create a safe pipe
                 let (reader, writer) = match pipe() {
-                    Ok(p) => p,
+                    Ok((r, w)) => (unsafe { File::from_raw_fd(r.into_raw_fd()) }, w),
                     Err(e) => {
                         if shell_state.colors_enabled {
                             eprintln!(
@@ -1666,7 +1667,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
                     Some(Box::new(writer)),
                 );
                 // Use reader for next command's stdin
-                previous_stdout = Some(Stdio::from(reader));
+                previous_stdout = Some(reader);
             } else {
                 // Last command: check if we're capturing output
                 if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
@@ -1710,7 +1711,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
             // Set stdin from previous command's stdout
             if let Some(prev) = previous_stdout.take() {
-                command.stdin(prev);
+                command.stdin(Stdio::from(prev));
             } else if i > 0 {
                 // We are in a pipeline (not first command) but have no input pipe.
                 // This means the previous command didn't produce a pipe.
@@ -1751,7 +1752,10 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
             match command.spawn() {
                 Ok(mut child) => {
                     if !is_last {
-                        previous_stdout = child.stdout.take().map(Stdio::from);
+                        previous_stdout = child
+                            .stdout
+                            .take()
+                            .map(|s| unsafe { File::from_raw_fd(s.into_raw_fd()) });
                     } else if shell_state.capture_output.is_some() {
                         // Last command and we're capturing - read its output
                         if let Some(mut stdout) = child.stdout.take() {
@@ -2056,34 +2060,30 @@ fn execute_compound_with_redirections(
 fn execute_compound_in_pipeline(
     compound_ast: &Ast,
     shell_state: &mut ShellState,
+    stdin: Option<File>,
     is_first: bool,
     is_last: bool,
     redirections: &[Redirection],
-) -> (i32, Option<Stdio>) {
+) -> (i32, Option<File>) {
     match compound_ast {
         Ast::Subshell { body } | Ast::CommandGroup { body } => {
             // Clone state for subshell
             let mut subshell_state = shell_state.clone();
 
-            // Setup stdin from stdin_override if provided (for nested pipelines)
-            // But we already handle stdin in execute_pipeline for the command.
-            // However, compound commands are executed differently.
+            // Setup stdin from provided file if available
+            // We must keep the file alive for the duration of the subshell execution.
+            let mut _stdin_file = stdin;
 
-            // If we are not the first command in pipeline, use stdin_override
-            // Note: We don't have the parent's pipe reader here yet because it's passed via previous_stdout.
-            // This is a current limitation: compound commands in pipelines (other than first)
-            // don't easily inherit the previous stage's pipe without process-global stdin redirection.
-
-            let _null_file = if !is_first && subshell_state.stdin_override.is_none() {
+            if let Some(ref f) = _stdin_file {
+                let fd = f.as_raw_fd();
+                subshell_state.stdin_override = Some(fd);
+            } else if !is_first && subshell_state.stdin_override.is_none() {
+                // If we have no input from previous stage and no override, use /dev/null
                 if let Ok(f) = File::open("/dev/null") {
                     subshell_state.stdin_override = Some(f.as_raw_fd());
-                    Some(f)
-                } else {
-                    None
+                    _stdin_file = Some(f);
                 }
-            } else {
-                None
-            };
+            }
 
             // Setup output capture if not last or if parent is capturing
             let capture_buffer = if !is_last || shell_state.capture_output.is_some() {
@@ -2100,6 +2100,13 @@ fn execute_compound_in_pipeline(
                 if let Err(e) = subshell_state.fd_table.borrow_mut().save_all_fds() {
                     eprintln!("Error saving FDs: {}", e);
                     return (1, None);
+                }
+
+                // If we have a pipe from previous stage, hook it up to FD 0 for builtins
+                if let Some(ref f) = _stdin_file {
+                    unsafe {
+                        libc::dup2(f.as_raw_fd(), 0);
+                    }
                 }
 
                 // Apply redirections to current process
@@ -2122,15 +2129,19 @@ fn execute_compound_in_pipeline(
                 }
                 code
             } else {
-                // Subshell handling (needs state-based redirection if no fork)
-                // For now, subshells with redirections in pipelines are handled similarly
-                // but without process-global FD manipulation to avoid side effects.
-                // Actually, subshells SHOULD be isolated.
-                // But Rush doesn't fork. So we use the same save/restore trick.
+                // Subshell handling (non-forking)
                 if let Err(e) = subshell_state.fd_table.borrow_mut().save_all_fds() {
                     eprintln!("Error saving FDs: {}", e);
                     return (1, None);
                 }
+
+                // If we have a pipe from previous stage, hook it up to FD 0
+                if let Some(ref f) = _stdin_file {
+                    unsafe {
+                        libc::dup2(f.as_raw_fd(), 0);
+                    }
+                }
+
                 if let Err(e) = apply_redirections(redirections, &mut subshell_state, None) {
                     eprintln!("{}", e);
                     subshell_state.fd_table.borrow_mut().restore_all_fds().ok();
@@ -2150,7 +2161,7 @@ fn execute_compound_in_pipeline(
                 if !is_last {
                     use std::io::Write;
                     let (reader, mut writer) = match pipe() {
-                        Ok(p) => p,
+                        Ok((r, w)) => (r, w),
                         Err(e) => {
                             eprintln!("Error creating pipe for compound command: {}", e);
                             return (exit_code, None);
@@ -2160,7 +2171,8 @@ fn execute_compound_in_pipeline(
                         eprintln!("Error writing to pipe: {}", e);
                     }
                     drop(writer); // Close write end so reader sees EOF
-                    next_stdout = Some(Stdio::from(reader));
+
+                    next_stdout = Some(unsafe { File::from_raw_fd(reader.into_raw_fd()) });
                 }
 
                 // If parent is capturing, also pass data up

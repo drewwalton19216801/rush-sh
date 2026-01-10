@@ -563,21 +563,53 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
             }
 
-            // If redirections found, wrap subshell in a pipeline with redirections
+            // Check if this subshell is part of a pipeline
+            if i < tokens.len() && tokens[i] == Token::Pipe {
+                // This subshell is part of a pipeline - find end of pipeline
+                let mut end = i;
+                let mut brace_depth = 0;
+                let mut paren_depth = 0;
+                while end < tokens.len() {
+                    match &tokens[end] {
+                        Token::LeftBrace => brace_depth += 1,
+                        Token::RightBrace => {
+                            if brace_depth > 0 {
+                                brace_depth -= 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        Token::LeftParen => paren_depth += 1,
+                        Token::RightParen => {
+                            if paren_depth > 0 {
+                                paren_depth -= 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        Token::Newline | Token::Semicolon => {
+                            if brace_depth == 0 && paren_depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+
+                let pipeline_ast = parse_pipeline(&tokens[start..end])?;
+                commands.push(pipeline_ast);
+                i = end;
+                continue;
+            }
+
+            // If not part of a pipeline, apply redirections to the subshell itself
             if !redirections.is_empty() {
                 subshell_ast = Ast::Pipeline(vec![ShellCommand {
                     args: Vec::new(),
                     redirections,
                     compound: Some(Box::new(subshell_ast)),
                 }]);
-            }
-
-            // Check if this is part of a pipeline
-            if i < tokens.len() && tokens[i] == Token::Pipe {
-                // This subshell is part of a pipeline - parse the entire line as a pipeline
-                let pipeline_ast = parse_pipeline(&tokens[start..])?;
-                commands.push(pipeline_ast);
-                break; // We've consumed the rest of the tokens
             }
 
             // Handle operators after subshell (&&, ||, ;, newline)
@@ -609,9 +641,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
                 commands.push(combined_ast);
                 break; // We've consumed the rest of the tokens
-            } else {
-                commands.push(subshell_ast);
             }
+
+            commands.push(subshell_ast);
 
             // Skip semicolon or newline after subshell
             if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
@@ -724,30 +756,53 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
             }
 
-            // If redirections found, wrap command group in a pipeline with redirections
+            // Check if this group is part of a pipeline
+            if i < tokens.len() && tokens[i] == Token::Pipe {
+                // This group is part of a pipeline - find end of pipeline
+                let mut end = i;
+                let mut brace_depth = 0;
+                let mut paren_depth = 0;
+                while end < tokens.len() {
+                    match &tokens[end] {
+                        Token::LeftBrace => brace_depth += 1,
+                        Token::RightBrace => {
+                            if brace_depth > 0 {
+                                brace_depth -= 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        Token::LeftParen => paren_depth += 1,
+                        Token::RightParen => {
+                            if paren_depth > 0 {
+                                paren_depth -= 1;
+                            } else {
+                                break;
+                            }
+                        }
+                        Token::Newline | Token::Semicolon => {
+                            if brace_depth == 0 && paren_depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    end += 1;
+                }
+
+                let pipeline_ast = parse_pipeline(&tokens[start..end])?;
+                commands.push(pipeline_ast);
+                i = end;
+                continue;
+            }
+
+            // If not part of a pipeline, apply redirections to the group itself
             if !redirections.is_empty() {
                 group_ast = Ast::Pipeline(vec![ShellCommand {
                     args: Vec::new(),
                     redirections,
                     compound: Some(Box::new(group_ast)),
                 }]);
-            }
-
-            // Check if this is part of a pipeline
-            if i < tokens.len() && tokens[i] == Token::Pipe {
-                // This group is part of a pipeline - find end of line
-                let mut end = i;
-                while end < tokens.len()
-                    && tokens[end] != Token::Newline
-                    && tokens[end] != Token::Semicolon
-                {
-                    end += 1;
-                }
-
-                let pipeline_ast = parse_pipeline(&tokens[start..end])?;
-                commands.push(pipeline_ast);
-                i = end; // Move to the end of the line
-                continue;
             }
 
             // Handle operators after group (&&, ||, ;, newline)
@@ -779,9 +834,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
                 commands.push(combined_ast);
                 break; // We've consumed the rest of the tokens
-            } else {
-                commands.push(group_ast);
             }
+
+            commands.push(group_ast);
 
             // Skip semicolon or newline after group
             if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
@@ -876,28 +931,32 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
         } else {
             // For simple commands, stop at newline, semicolon, &&, or ||
             // But check if the next token after newline is a control flow keyword
+            let mut brace_depth = 0;
+            let mut paren_depth = 0;
             while i < tokens.len() {
-                if tokens[i] == Token::Newline
-                    || tokens[i] == Token::Semicolon
-                    || tokens[i] == Token::And
-                    || tokens[i] == Token::Or
-                {
-                    // Look ahead to see if the next non-newline token is else/elif/fi
-                    let mut j = i + 1;
-                    while j < tokens.len() && tokens[j] == Token::Newline {
-                        j += 1;
+                match &tokens[i] {
+                    Token::LeftBrace => brace_depth += 1,
+                    Token::RightBrace => {
+                        if brace_depth > 0 {
+                            brace_depth -= 1;
+                        } else {
+                            break;
+                        }
                     }
-                    // If we find else/elif/fi, this is likely part of an if statement that wasn't properly detected
-                    if j < tokens.len()
-                        && (tokens[j] == Token::Else
-                            || tokens[j] == Token::Elif
-                            || tokens[j] == Token::Fi)
-                    {
-                        // Skip this token and continue - it will be handled as a parse error
-                        i = j + 1;
-                        continue;
+                    Token::LeftParen => paren_depth += 1,
+                    Token::RightParen => {
+                        if paren_depth > 0 {
+                            paren_depth -= 1;
+                        } else {
+                            break;
+                        }
                     }
-                    break;
+                    Token::Newline | Token::Semicolon | Token::And | Token::Or => {
+                        if brace_depth == 0 && paren_depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
                 }
                 i += 1;
             }
