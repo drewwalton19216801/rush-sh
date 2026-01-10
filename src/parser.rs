@@ -459,7 +459,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             // This is a subshell - find the matching RightParen
             let mut paren_depth = 1;
             let mut j = i + 1;
-            
+
             while j < tokens.len() && paren_depth > 0 {
                 match tokens[j] {
                     Token::LeftParen => paren_depth += 1,
@@ -468,27 +468,28 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
                 j += 1;
             }
-            
+
             if paren_depth != 0 {
                 return Err("Unmatched parenthesis in subshell".to_string());
             }
-            
+
             // Extract subshell body (tokens between parens)
             let subshell_tokens = &tokens[i + 1..j - 1];
-            
-            if subshell_tokens.is_empty() {
-                return Err("Empty subshell".to_string());
-            }
-            
+
             // Parse the subshell body recursively
-            let body_ast = parse_commands_sequentially(subshell_tokens)?;
-            
+            // Empty subshells are valid and equivalent to 'true'
+            let body_ast = if subshell_tokens.is_empty() {
+                create_empty_body_ast()
+            } else {
+                parse_commands_sequentially(subshell_tokens)?
+            };
+
             let mut subshell_ast = Ast::Subshell {
                 body: Box::new(body_ast),
             };
-            
+
             i = j; // Move past the closing paren
-            
+
             // Check for redirections after subshell
             let mut redirections = Vec::new();
             while i < tokens.len() {
@@ -545,7 +546,8 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                         i += 1;
                     }
                     Token::RedirHereDoc(delimiter, quoted) => {
-                        redirections.push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
+                        redirections
+                            .push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
                         i += 1;
                     }
                     Token::RedirHereString(content) => {
@@ -555,7 +557,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     _ => break,
                 }
             }
-            
+
             // If redirections found, wrap subshell in a pipeline with redirections
             if !redirections.is_empty() {
                 subshell_ast = Ast::Pipeline(vec![ShellCommand {
@@ -564,7 +566,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     compound: Some(Box::new(subshell_ast)),
                 }]);
             }
-            
+
             // Check if this is part of a pipeline
             if i < tokens.len() && tokens[i] == Token::Pipe {
                 // This subshell is part of a pipeline - parse the entire line as a pipeline
@@ -572,7 +574,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 commands.push(pipeline_ast);
                 break; // We've consumed the rest of the tokens
             }
-            
+
             // Handle operators after subshell (&&, ||, ;, newline)
             if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
                 let operator = tokens[i].clone();
@@ -605,7 +607,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             } else {
                 commands.push(subshell_ast);
             }
-            
+
             // Skip semicolon or newline after subshell
             if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
                 i += 1;
@@ -809,7 +811,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 // Find matching RightParen
                 let mut paren_depth = 1;
                 let mut j = i + 1;
-                
+
                 while j < tokens.len() && paren_depth > 0 {
                     match tokens[j] {
                         Token::LeftParen => paren_depth += 1,
@@ -818,26 +820,28 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     }
                     j += 1;
                 }
-                
+
                 if paren_depth != 0 {
                     return Err("Unmatched parenthesis in pipeline".to_string());
                 }
-                
+
                 // Parse subshell body
                 let subshell_tokens = &tokens[i + 1..j - 1];
-                if subshell_tokens.is_empty() {
-                    return Err("Empty subshell in pipeline".to_string());
-                }
-                
-                let body_ast = parse_commands_sequentially(subshell_tokens)?;
-                
+
+                // Empty subshells are valid and equivalent to 'true'
+                let body_ast = if subshell_tokens.is_empty() {
+                    create_empty_body_ast()
+                } else {
+                    parse_commands_sequentially(subshell_tokens)?
+                };
+
                 // Create ShellCommand with compound subshell
                 current_cmd.compound = Some(Box::new(Ast::Subshell {
                     body: Box::new(body_ast),
                 }));
-                
+
                 i = j; // Move past closing paren
-                
+
                 // Check for redirections after subshell
                 while i < tokens.len() {
                     match &tokens[i] {
@@ -845,7 +849,9 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                             i += 1;
                             if i < tokens.len() {
                                 if let Token::Word(file) = &tokens[i] {
-                                    current_cmd.redirections.push(Redirection::Output(file.clone()));
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::Output(file.clone()));
                                     i += 1;
                                 }
                             }
@@ -854,7 +860,9 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                             i += 1;
                             if i < tokens.len() {
                                 if let Token::Word(file) = &tokens[i] {
-                                    current_cmd.redirections.push(Redirection::Input(file.clone()));
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::Input(file.clone()));
                                     i += 1;
                                 }
                             }
@@ -863,25 +871,35 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                             i += 1;
                             if i < tokens.len() {
                                 if let Token::Word(file) = &tokens[i] {
-                                    current_cmd.redirections.push(Redirection::Append(file.clone()));
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::Append(file.clone()));
                                     i += 1;
                                 }
                             }
                         }
                         Token::RedirectFdOut(fd, file) => {
-                            current_cmd.redirections.push(Redirection::FdOutput(*fd, file.clone()));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdOutput(*fd, file.clone()));
                             i += 1;
                         }
                         Token::RedirectFdIn(fd, file) => {
-                            current_cmd.redirections.push(Redirection::FdInput(*fd, file.clone()));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdInput(*fd, file.clone()));
                             i += 1;
                         }
                         Token::RedirectFdAppend(fd, file) => {
-                            current_cmd.redirections.push(Redirection::FdAppend(*fd, file.clone()));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdAppend(*fd, file.clone()));
                             i += 1;
                         }
                         Token::RedirectFdDup(from_fd, to_fd) => {
-                            current_cmd.redirections.push(Redirection::FdDuplicate(*from_fd, *to_fd));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdDuplicate(*from_fd, *to_fd));
                             i += 1;
                         }
                         Token::RedirectFdClose(fd) => {
@@ -889,15 +907,21 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                             i += 1;
                         }
                         Token::RedirectFdInOut(fd, file) => {
-                            current_cmd.redirections.push(Redirection::FdInputOutput(*fd, file.clone()));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdInputOutput(*fd, file.clone()));
                             i += 1;
                         }
                         Token::RedirHereDoc(delimiter, quoted) => {
-                            current_cmd.redirections.push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::HereDoc(delimiter.clone(), quoted.to_string()));
                             i += 1;
                         }
                         Token::RedirHereString(content) => {
-                            current_cmd.redirections.push(Redirection::HereString(content.clone()));
+                            current_cmd
+                                .redirections
+                                .push(Redirection::HereString(content.clone()));
                             i += 1;
                         }
                         Token::Pipe => {
@@ -907,11 +931,11 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                         _ => break,
                     }
                 }
-                
+
                 // Push the command with subshell
                 commands.push(current_cmd.clone());
                 current_cmd = ShellCommand::default();
-                
+
                 continue;
             }
             Token::Word(word) => {
