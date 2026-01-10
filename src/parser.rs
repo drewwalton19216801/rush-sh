@@ -362,6 +362,19 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         }
     }
 
+    // Check if it's a local assignment (local VAR) with no initial value
+    if tokens.len() == 2
+        && let (Token::Local, Token::Word(var)) = (&tokens[0], &tokens[1])
+    {
+        // Basic validation: variable name should start with letter or underscore
+        if is_valid_variable_name(var) && !var.contains('=') {
+            return Ok(Ast::LocalAssignment {
+                var: var.clone(),
+                value: String::new(),
+            });
+        }
+    }
+
     // Check if it's an assignment (single token with =)
     if tokens.len() == 1
         && let Token::Word(ref word) = tokens[0]
@@ -1334,6 +1347,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             }
             Token::Word(word) => {
                 current_cmd.args.push(word.clone());
+            }
+            Token::Local => {
+                current_cmd.args.push("local".to_string());
+            }
+            Token::Return => {
+                current_cmd.args.push("return".to_string());
             }
             Token::Pipe => {
                 if !current_cmd.args.is_empty() || current_cmd.compound.is_some() {

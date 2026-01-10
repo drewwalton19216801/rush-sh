@@ -1,8 +1,6 @@
 use std::fs;
 use std::io::Write;
 
-use crate::executor;
-use crate::lexer;
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
@@ -35,36 +33,8 @@ impl super::Builtin for SourceBuiltin {
 
         match fs::read_to_string(script_file) {
             Ok(content) => {
-                let mut exit_code = 0;
-                for line in content.lines() {
-                    let line = line.trim();
-                    // Skip shebang lines and empty lines
-                    if line.is_empty() || line.starts_with("#!") {
-                        continue;
-                    }
-                    // Skip comment lines
-                    if line.starts_with("#") {
-                        continue;
-                    }
-                    // Execute the line using the same logic as main.rs
-                    // Now using the parent shell state to share variables with sourced scripts
-                    match lexer::lex(line, &*shell_state) {
-                        Ok(tokens) => match crate::parser::parse(tokens) {
-                            Ok(ast) => {
-                                exit_code = executor::execute(ast, shell_state);
-                            }
-                            Err(e) => {
-                                let _ = writeln!(output_writer, "Parse error: {}", e);
-                                return 1;
-                            }
-                        },
-                        Err(e) => {
-                            let _ = writeln!(output_writer, "Lex error: {}", e);
-                            return 1;
-                        }
-                    }
-                }
-                exit_code
+                crate::script_engine::execute_script(&content, shell_state, None);
+                shell_state.last_exit_code
             }
             Err(e) => {
                 let _ = writeln!(output_writer, "source: {}: {}", script_file, e);
