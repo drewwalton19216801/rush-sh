@@ -328,6 +328,8 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
                 var: clean_var.to_string(),
                 value: value.clone(),
             });
+        } else {
+            return Err(format!("Invalid variable name: {}", clean_var));
         }
     }
 
@@ -359,19 +361,24 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         // Basic validation: variable name should start with letter or underscore
         if is_valid_variable_name(&var) {
             return Ok(Ast::LocalAssignment { var, value });
+        } else {
+            return Err(format!("Invalid variable name: {}", var));
         }
     }
 
     // Check if it's a local assignment (local VAR) with no initial value
     if tokens.len() == 2
         && let (Token::Local, Token::Word(var)) = (&tokens[0], &tokens[1])
+        && !var.contains('=')
     {
         // Basic validation: variable name should start with letter or underscore
-        if is_valid_variable_name(var) && !var.contains('=') {
+        if is_valid_variable_name(var) {
             return Ok(Ast::LocalAssignment {
                 var: var.clone(),
                 value: String::new(),
             });
+        } else {
+            return Err(format!("Invalid variable name: {}", var));
         }
     }
 
