@@ -49,6 +49,11 @@ pub enum Ast {
         left: Box<Ast>,
         right: Box<Ast>,
     },
+    /// Subshell execution: (commands)
+    /// Commands execute in an isolated copy of the shell state
+    Subshell {
+        body: Box<Ast>,
+    },
 }
 
 /// Represents a single redirection operation
@@ -443,6 +448,82 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
         // Find the end of this command
         let start = i;
+
+        // Check for subshell: LeftParen at start of command
+        // Must check BEFORE function definition to avoid ambiguity
+        if tokens[i] == Token::LeftParen {
+            // This is a subshell - find the matching RightParen
+            let mut paren_depth = 1;
+            let mut j = i + 1;
+            
+            while j < tokens.len() && paren_depth > 0 {
+                match tokens[j] {
+                    Token::LeftParen => paren_depth += 1,
+                    Token::RightParen => paren_depth -= 1,
+                    _ => {}
+                }
+                j += 1;
+            }
+            
+            if paren_depth != 0 {
+                return Err("Unmatched parenthesis in subshell".to_string());
+            }
+            
+            // Extract subshell body (tokens between parens)
+            let subshell_tokens = &tokens[i + 1..j - 1];
+            
+            if subshell_tokens.is_empty() {
+                return Err("Empty subshell".to_string());
+            }
+            
+            // Parse the subshell body recursively
+            let body_ast = parse_commands_sequentially(subshell_tokens)?;
+            
+            let subshell_ast = Ast::Subshell {
+                body: Box::new(body_ast),
+            };
+            
+            i = j; // Move past the closing paren
+            
+            // Handle operators after subshell (&&, ||, ;, newline)
+            if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
+                let operator = tokens[i].clone();
+                i += 1; // Skip the operator
+
+                // Skip any newlines after the operator
+                while i < tokens.len() && tokens[i] == Token::Newline {
+                    i += 1;
+                }
+
+                // Parse the right side recursively
+                let remaining_tokens = &tokens[i..];
+                let right_ast = parse_commands_sequentially(remaining_tokens)?;
+
+                // Create And or Or node
+                let combined_ast = match operator {
+                    Token::And => Ast::And {
+                        left: Box::new(subshell_ast),
+                        right: Box::new(right_ast),
+                    },
+                    Token::Or => Ast::Or {
+                        left: Box::new(subshell_ast),
+                        right: Box::new(right_ast),
+                    },
+                    _ => unreachable!(),
+                };
+
+                commands.push(combined_ast);
+                break; // We've consumed the rest of the tokens
+            } else {
+                commands.push(subshell_ast);
+            }
+            
+            // Skip semicolon or newline after subshell
+            if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                i += 1;
+            }
+            continue;
+        }
 
         // Special handling for compound commands
         if tokens[i] == Token::If {
