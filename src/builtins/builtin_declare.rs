@@ -259,6 +259,9 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
                 format_ast_body(right, 0).trim()
             )
         }
+        Ast::Subshell { body } => {
+            format!("({})", format_ast_body(body, 0).trim())
+        }
     }
 }
 
