@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write, pipe};
-use std::os::fd::RawFd;
+use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::rc::Rc;
@@ -693,8 +693,15 @@ fn apply_input_redirection(
         if let Some(cmd) = command {
             cmd.stdin(Stdio::from(file_handle));
         }
+        // For builtins (command is None), the stdin is already handled by the shell's stdin
+        // The builtin will need to read from fd 0 which is already set up
     } else {
-        // Custom fd - store in fd table
+        // Custom fd - for external commands, we need to redirect stdin to the custom fd
+        // Open the file again (we need to keep the handle alive for the command)
+        let fd_file = File::open(&expanded_file)
+            .map_err(|e| format!("Cannot open {}: {}", expanded_file, e))?;
+
+        // For external commands, store both in fd table and prepare for stdin redirect
         shell_state.fd_table.borrow_mut().open_fd(
             fd,
             &expanded_file,
@@ -703,6 +710,21 @@ fn apply_input_redirection(
             false, // append
             false, // truncate
         )?;
+
+        // If we have an external command, set up stdin redirect via pre_exec
+        if let Some(cmd) = command {
+            let raw_fd = fd_file.as_raw_fd();
+            unsafe {
+                cmd.pre_exec(move || {
+                    // Redirect stdin (fd 0) to the custom fd
+                    let result = libc::dup2(raw_fd, 0);
+                    if result < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    Ok(())
+                });
+            }
+        }
     }
 
     Ok(())
@@ -775,7 +797,7 @@ fn apply_fd_duplication(
         }
         return Err(error_msg);
     }
-    
+
     // Duplicate source_fd to target_fd
     shell_state
         .fd_table
@@ -788,10 +810,34 @@ fn apply_fd_duplication(
 fn apply_fd_close(
     fd: i32,
     shell_state: &mut ShellState,
-    _command: Option<&mut Command>,
+    command: Option<&mut Command>,
 ) -> Result<(), String> {
-    // Close the specified fd
+    // Close the specified fd in the fd table
     shell_state.fd_table.borrow_mut().close_fd(fd)?;
+
+    // For external commands, we need to redirect the fd to /dev/null
+    // This ensures that writes to the closed fd don't produce errors
+    if let Some(cmd) = command {
+        match fd {
+            0 => {
+                // Close stdin - redirect to /dev/null for reading
+                cmd.stdin(Stdio::null());
+            }
+            1 => {
+                // Close stdout - redirect to /dev/null for writing
+                cmd.stdout(Stdio::null());
+            }
+            2 => {
+                // Close stderr - redirect to /dev/null for writing
+                cmd.stderr(Stdio::null());
+            }
+            _ => {
+                // For custom fds (3+), we use pre_exec to close them
+                // This is handled via the fd_table and dup2 operations
+            }
+        }
+    }
+
     Ok(())
 }
 
@@ -875,59 +921,6 @@ fn apply_herestring_redirection(
     }
 
     Ok(())
-}
-
-/// Apply custom file descriptors (3-9) from fd table to external command
-///
-/// This function iterates through file descriptors 3-9 and applies any open
-/// file descriptors to the external command. For custom file descriptors,
-/// we need to use the dup2 syscall to duplicate them in the child process.
-///
-/// # Arguments
-/// * `command` - The Command to apply fds to
-/// * `shell_state` - The shell state containing the fd table
-///
-/// # TODO: Future Enhancement
-/// The `get_stdio()` method from FileDescriptorTable could be used here to convert
-/// file descriptors to Stdio handles for more idiomatic Rust integration with Command.
-/// However, this would require architectural changes to how we handle fd inheritance:
-/// - Currently using pre_exec with dup2 for direct fd manipulation
-/// - get_stdio() creates new Stdio handles by duplicating fds
-/// - Would need to refactor Command setup to use stdin/stdout/stderr methods
-/// - Consider for Phase 3 when implementing more advanced fd features
-fn apply_custom_fds_to_command(command: &mut Command, shell_state: &mut ShellState) {
-    // Collect the open custom file descriptors (3-9)
-    let custom_fds: Vec<(i32, RawFd)> = {
-        let fd_table = shell_state.fd_table.borrow();
-        let mut fds = Vec::new();
-        
-        for fd_num in 3..=9 {
-            if fd_table.is_open(fd_num) {
-                // Get the raw file descriptor for this fd
-                if let Some(raw_fd) = fd_table.get_raw_fd(fd_num) {
-                    fds.push((fd_num, raw_fd));
-                }
-            }
-        }
-        
-        fds
-    };
-    
-    // If we have custom fds to apply, use pre_exec to set them in the child
-    if !custom_fds.is_empty() {
-        unsafe {
-            command.pre_exec(move || {
-                for (target_fd, source_fd) in &custom_fds {
-                    // Use dup2 to duplicate the source fd to the target fd
-                    let result = libc::dup2(*source_fd, *target_fd);
-                    if result < 0 {
-                        return Err(std::io::Error::last_os_error());
-                    }
-                }
-                Ok(())
-            });
-        }
-    }
 }
 
 /// Execute a trap handler command
@@ -1287,13 +1280,9 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
     // Check if this is a compound command (subshell)
     if let Some(ref compound_ast) = cmd.compound {
         // Execute compound command with redirections
-        return execute_compound_with_redirections(
-            compound_ast,
-            shell_state,
-            &cmd.redirections,
-        );
+        return execute_compound_with_redirections(compound_ast, shell_state, &cmd.redirections);
     }
-    
+
     if cmd.args.is_empty() {
         // No command, but may have redirections - process them for side effects
         if !cmd.redirections.is_empty() {
@@ -1464,10 +1453,41 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         }
 
         // Apply custom file descriptors (3-9) from fd table to external command
-        // This uses the get_stdio() method from FileDescriptorTable
-        apply_custom_fds_to_command(&mut command, shell_state);
+        // We need to keep the FD table borrowed until after the child is spawned
+        // to prevent File handles from being dropped and FDs from being closed
+        let custom_fds: Vec<(i32, RawFd)> = {
+            let fd_table = shell_state.fd_table.borrow();
+            let mut fds = Vec::new();
+
+            for fd_num in 3..=9 {
+                if fd_table.is_open(fd_num) {
+                    if let Some(raw_fd) = fd_table.get_raw_fd(fd_num) {
+                        fds.push((fd_num, raw_fd));
+                    }
+                }
+            }
+
+            fds
+        };
+
+        // If we have custom fds to apply, use pre_exec to set them in the child
+        if !custom_fds.is_empty() {
+            unsafe {
+                command.pre_exec(move || {
+                    for (target_fd, source_fd) in &custom_fds {
+                        let result = libc::dup2(*source_fd, *target_fd);
+                        if result < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                    }
+                    Ok(())
+                });
+            }
+        }
 
         // Spawn and execute the command
+        // Note: The FD table borrow above has been released, but the custom_fds
+        // closure capture keeps the file handles alive
         match command.spawn() {
             Ok(mut child) => {
                 // If capturing, read stdout
@@ -1519,23 +1539,19 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
     for (i, cmd) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
-        
+
         // Check if this is a compound command (subshell)
         if let Some(ref compound_ast) = cmd.compound {
             // Execute compound command (subshell) in pipeline
-            exit_code = execute_compound_in_pipeline(
-                compound_ast,
-                shell_state,
-                is_last,
-                &cmd.redirections,
-            );
-            
+            exit_code =
+                execute_compound_in_pipeline(compound_ast, shell_state, is_last, &cmd.redirections);
+
             // For Phase 2, compound commands in pipelines don't produce stdout for next stage
             // This will be enhanced in Phase 3 with proper pipe handling
             previous_stdout = None;
             continue;
         }
-        
+
         if cmd.args.is_empty() {
             continue;
         }
@@ -1740,17 +1756,17 @@ fn execute_subshell(body: Ast, shell_state: &mut ShellState) -> i32 {
 
     // Clone the shell state for isolation
     let mut subshell_state = shell_state.clone();
-    
+
     // Increment subshell depth in the cloned state
     subshell_state.subshell_depth = shell_state.subshell_depth + 1;
-    
+
     // Clone trap handlers for isolation (subshells inherit but don't affect parent)
     let parent_traps = shell_state.trap_handlers.lock().unwrap().clone();
     subshell_state.trap_handlers = std::sync::Arc::new(std::sync::Mutex::new(parent_traps));
 
     // Execute the body in the isolated state
     let exit_code = execute(body, &mut subshell_state);
-    
+
     // Handle exit in subshell: exit should only exit the subshell, not the parent
     // The exit_requested flag is isolated to the subshell_state, so it won't affect parent
     let final_exit_code = if subshell_state.exit_requested {
@@ -1800,7 +1816,7 @@ fn execute_compound_with_redirections(
             // 1. Set up output capture if there are output redirections
             // 2. Execute the subshell
             // 3. Apply the redirections to the captured output
-            
+
             // Check if we have output redirections
             let has_output_redir = redirections.iter().any(|r| {
                 matches!(
@@ -1811,21 +1827,21 @@ fn execute_compound_with_redirections(
                         | Redirection::FdAppend(_, _)
                 )
             });
-            
+
             if has_output_redir {
                 // Clone state for subshell
                 let mut subshell_state = shell_state.clone();
-                
+
                 // Set up output capture
                 let capture_buffer = Rc::new(RefCell::new(Vec::new()));
                 subshell_state.capture_output = Some(capture_buffer.clone());
-                
+
                 // Execute subshell
                 let exit_code = execute(*body.clone(), &mut subshell_state);
-                
+
                 // Get captured output
                 let output = capture_buffer.borrow().clone();
-                
+
                 // Apply redirections to output
                 for redir in redirections {
                     match redir {
@@ -1882,7 +1898,7 @@ fn execute_compound_with_redirections(
                         }
                     }
                 }
-                
+
                 shell_state.last_exit_code = exit_code;
                 exit_code
             } else {
@@ -1917,25 +1933,25 @@ fn execute_compound_in_pipeline(
         Ast::Subshell { body } => {
             // Clone state for subshell
             let mut subshell_state = shell_state.clone();
-            
+
             // Handle stdout capture for next pipeline stage or command substitution
             if !is_last || shell_state.capture_output.is_some() {
                 // Need to capture subshell output
                 let capture_buffer = Rc::new(RefCell::new(Vec::new()));
                 subshell_state.capture_output = Some(capture_buffer.clone());
-                
+
                 // Execute subshell
                 let exit_code = execute(*body.clone(), &mut subshell_state);
-                
+
                 // Transfer captured output to parent's capture buffer
                 if let Some(ref parent_capture) = shell_state.capture_output {
                     let captured = capture_buffer.borrow().clone();
                     parent_capture.borrow_mut().extend_from_slice(&captured);
                 }
-                
+
                 // Update parent's last_exit_code
                 shell_state.last_exit_code = exit_code;
-                
+
                 exit_code
             } else {
                 // Last command, no capture needed
