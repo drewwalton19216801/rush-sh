@@ -565,33 +565,44 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
             // Check if this subshell is part of a pipeline
             if i < tokens.len() && tokens[i] == Token::Pipe {
-                // This subshell is part of a pipeline - find end of pipeline
+                // Find end of pipeline
                 let mut end = i;
                 let mut brace_depth = 0;
                 let mut paren_depth = 0;
+                let mut last_was_pipe = true; // Started with a pipe
                 while end < tokens.len() {
                     match &tokens[end] {
-                        Token::LeftBrace => brace_depth += 1,
+                        Token::Pipe => last_was_pipe = true,
+                        Token::LeftBrace => {
+                            brace_depth += 1;
+                            last_was_pipe = false;
+                        }
                         Token::RightBrace => {
                             if brace_depth > 0 {
                                 brace_depth -= 1;
                             } else {
                                 break;
                             }
+                            last_was_pipe = false;
                         }
-                        Token::LeftParen => paren_depth += 1,
+                        Token::LeftParen => {
+                            paren_depth += 1;
+                            last_was_pipe = false;
+                        }
                         Token::RightParen => {
                             if paren_depth > 0 {
                                 paren_depth -= 1;
                             } else {
                                 break;
                             }
+                            last_was_pipe = false;
                         }
                         Token::Newline | Token::Semicolon => {
-                            if brace_depth == 0 && paren_depth == 0 {
+                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
                                 break;
                             }
                         }
+                        Token::Word(_) => last_was_pipe = false,
                         _ => {}
                     }
                     end += 1;
@@ -758,33 +769,44 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
             // Check if this group is part of a pipeline
             if i < tokens.len() && tokens[i] == Token::Pipe {
-                // This group is part of a pipeline - find end of pipeline
+                // Find end of pipeline
                 let mut end = i;
                 let mut brace_depth = 0;
                 let mut paren_depth = 0;
+                let mut last_was_pipe = true; // Started with a pipe
                 while end < tokens.len() {
                     match &tokens[end] {
-                        Token::LeftBrace => brace_depth += 1,
+                        Token::Pipe => last_was_pipe = true,
+                        Token::LeftBrace => {
+                            brace_depth += 1;
+                            last_was_pipe = false;
+                        }
                         Token::RightBrace => {
                             if brace_depth > 0 {
                                 brace_depth -= 1;
                             } else {
                                 break;
                             }
+                            last_was_pipe = false;
                         }
-                        Token::LeftParen => paren_depth += 1,
+                        Token::LeftParen => {
+                            paren_depth += 1;
+                            last_was_pipe = false;
+                        }
                         Token::RightParen => {
                             if paren_depth > 0 {
                                 paren_depth -= 1;
                             } else {
                                 break;
                             }
+                            last_was_pipe = false;
                         }
                         Token::Newline | Token::Semicolon => {
-                            if brace_depth == 0 && paren_depth == 0 {
+                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
                                 break;
                             }
                         }
+                        Token::Word(_) => last_was_pipe = false,
                         _ => {}
                     }
                     end += 1;
@@ -933,29 +955,40 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             // But check if the next token after newline is a control flow keyword
             let mut brace_depth = 0;
             let mut paren_depth = 0;
+            let mut last_was_pipe = false;
             while i < tokens.len() {
                 match &tokens[i] {
-                    Token::LeftBrace => brace_depth += 1,
+                    Token::LeftBrace => {
+                        brace_depth += 1;
+                        last_was_pipe = false;
+                    }
                     Token::RightBrace => {
                         if brace_depth > 0 {
                             brace_depth -= 1;
                         } else {
                             break;
                         }
+                        last_was_pipe = false;
                     }
-                    Token::LeftParen => paren_depth += 1,
+                    Token::LeftParen => {
+                        paren_depth += 1;
+                        last_was_pipe = false;
+                    }
                     Token::RightParen => {
                         if paren_depth > 0 {
                             paren_depth -= 1;
                         } else {
                             break;
                         }
+                        last_was_pipe = false;
                     }
+                    Token::Pipe => last_was_pipe = true,
                     Token::Newline | Token::Semicolon | Token::And | Token::Or => {
-                        if brace_depth == 0 && paren_depth == 0 {
+                        if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
                             break;
                         }
                     }
+                    Token::Word(_) => last_was_pipe = false,
                     _ => {}
                 }
                 i += 1;
@@ -1394,8 +1427,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 return Err("Unexpected ) in pipeline".to_string());
             }
             Token::Newline => {
-                // Newlines separate commands, so they should end the pipeline
-                break;
+                // Ignore newlines in pipelines if they follow a pipe or if we are at the start of a stage
+                if current_cmd.args.is_empty() && current_cmd.compound.is_none() {
+                    // This newline is between commands or at the start, skip it
+                } else {
+                    break;
+                }
             }
             Token::Do
             | Token::Done
