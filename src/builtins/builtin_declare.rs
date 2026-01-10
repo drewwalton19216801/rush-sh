@@ -262,6 +262,9 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
         Ast::Subshell { body } => {
             format!("({})", format_ast_body(body, 0).trim())
         }
+        Ast::CommandGroup { body } => {
+            format!("{{ {}; }}", format_ast_body(body, 0).trim())
+        }
     }
 }
 
@@ -311,7 +314,7 @@ mod tests {
             Ast::Pipeline(vec![crate::parser::ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
-            compound: None,
+                compound: None,
             }]),
         );
 
@@ -343,7 +346,7 @@ mod tests {
             Ast::Pipeline(vec![crate::parser::ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
                 redirections: Vec::new(),
-            compound: None,
+                compound: None,
             }]),
         );
 

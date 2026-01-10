@@ -1282,6 +1282,7 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             }
         }
         Ast::Subshell { body } => execute_subshell(*body, shell_state),
+        Ast::CommandGroup { body } => execute(*body, shell_state),
     }
 }
 
@@ -1869,6 +1870,34 @@ fn execute_compound_with_redirections(
     redirections: &[Redirection],
 ) -> i32 {
     match compound_ast {
+        Ast::CommandGroup { body } => {
+            // Save FDs before applying redirections
+            if let Err(e) = shell_state.fd_table.borrow_mut().save_all_fds() {
+                eprintln!("Error saving FDs: {}", e);
+                return 1;
+            }
+
+            // Apply redirections to current process
+            if let Err(e) = apply_redirections(redirections, shell_state, None) {
+                if shell_state.colors_enabled {
+                    eprintln!("{}{}\u{001b}[0m", shell_state.color_scheme.error, e);
+                } else {
+                    eprintln!("{}", e);
+                }
+                shell_state.fd_table.borrow_mut().restore_all_fds().ok();
+                return 1;
+            }
+
+            // Execute the group body
+            let exit_code = execute(*body.clone(), shell_state);
+
+            // Restore FDs
+            if let Err(e) = shell_state.fd_table.borrow_mut().restore_all_fds() {
+                eprintln!("Error restoring FDs: {}", e);
+            }
+
+            exit_code
+        }
         Ast::Subshell { body } => {
             // For subshells with redirections, we need to:
             // 1. Set up output capture if there are output redirections
@@ -1989,7 +2018,7 @@ fn execute_compound_in_pipeline(
     _redirections: &[Redirection],
 ) -> i32 {
     match compound_ast {
-        Ast::Subshell { body } => {
+        Ast::Subshell { body } | Ast::CommandGroup { body } => {
             // Clone state for subshell
             let mut subshell_state = shell_state.clone();
 
