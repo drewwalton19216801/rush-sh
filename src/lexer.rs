@@ -76,14 +76,19 @@ fn skip_whitespace(chars: &mut std::iter::Peekable<std::str::Chars>) {
     }
 }
 
-/// Flush the current word buffer into tokens, checking for keywords
-fn flush_current_token(current: &mut String, tokens: &mut Vec<Token>) {
+/// Flush the current word buffer into tokens, checking for keywords only if not quoted
+fn flush_current_token(current: &mut String, tokens: &mut Vec<Token>, was_quoted: bool) {
     if !current.is_empty() {
-        if let Some(keyword) = is_keyword(current) {
-            tokens.push(keyword);
-        } else {
-            tokens.push(Token::Word(current.clone()));
+        // Only check for keywords if the word was NOT quoted
+        // Quoted strings like "done" should always be Word tokens, not keyword tokens
+        if !was_quoted {
+            if let Some(keyword) = is_keyword(current) {
+                tokens.push(keyword);
+                current.clear();
+                return;
+            }
         }
+        tokens.push(Token::Word(current.clone()));
         current.clear();
     }
 }
@@ -364,6 +369,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
     let mut in_double_quote = false;
     let mut in_single_quote = false;
     let mut just_closed_quote = false; // Track if we just closed a quote with empty content
+    let mut was_quoted = false; // Track if current token contains any quoted content
 
     while let Some(&ch) = chars.peek() {
         match ch {
@@ -373,7 +379,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     tokens.push(Token::Word("".to_string()));
                     just_closed_quote = false;
                 } else {
-                    flush_current_token(&mut current, &mut tokens);
+                    flush_current_token(&mut current, &mut tokens, was_quoted);
+                    was_quoted = false; // Reset after flushing
                 }
                 chars.next();
             }
@@ -383,7 +390,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     tokens.push(Token::Word("".to_string()));
                     just_closed_quote = false;
                 } else {
-                    flush_current_token(&mut current, &mut tokens);
+                    flush_current_token(&mut current, &mut tokens, was_quoted);
+                    was_quoted = false; // Reset after flushing
                 }
                 tokens.push(Token::Newline);
                 chars.next();
@@ -407,6 +415,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         // But we need to track if it was empty
                         just_closed_quote = current.is_empty();
                         in_double_quote = false;
+                        was_quoted = true; // Mark that this token was quoted
                     } else {
                         // Start of double quote - don't push current yet
                         // The quoted content will be appended to current
@@ -447,6 +456,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     // like in: trap 'echo "..."' EXIT
                     just_closed_quote = current.is_empty();
                     in_single_quote = false;
+                    was_quoted = true; // Mark that this token was quoted
                 } else if !in_double_quote {
                     // Start of single quote - don't push current yet
                     // The quoted content will be appended to current
@@ -590,7 +600,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '|' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
                 chars.next(); // consume first |
                 // Check if this is || (OR operator)
                 if let Some(&'|') = chars.peek() {
@@ -603,7 +613,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 skip_whitespace(&mut chars);
             }
             '&' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
                 chars.next(); // consume first &
                 // Check if this is && (AND operator)
                 if let Some(&'&') = chars.peek() {
@@ -638,7 +648,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 };
 
                 // Flush any remaining content before the fd number
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
 
                 chars.next(); // consume >
 
@@ -780,7 +790,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 };
 
                 // Flush any remaining content before the fd number
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
 
                 chars.next(); // consume <
 
@@ -967,17 +977,17 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             ')' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
                 tokens.push(Token::RightParen);
                 chars.next();
             }
             '}' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
                 tokens.push(Token::RightBrace);
                 chars.next();
             }
             '(' if !in_double_quote && !in_single_quote => {
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
                 tokens.push(Token::LeftParen);
                 chars.next();
             }
@@ -1026,19 +1036,19 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                     } else {
                         // Not a brace expansion pattern, treat as separate tokens
-                        flush_current_token(&mut current, &mut tokens);
+                        flush_current_token(&mut current, &mut tokens, false);
                         tokens.push(Token::LeftBrace);
                         chars.next();
                     }
                 } else {
                     // Not a valid brace pattern, treat as separate tokens
-                    flush_current_token(&mut current, &mut tokens);
+                    flush_current_token(&mut current, &mut tokens, false);
                     tokens.push(Token::LeftBrace);
                     chars.next();
                 }
             }
             '`' => {
-                flush_current_token(&mut current, &mut tokens);
+                flush_current_token(&mut current, &mut tokens, false);
                 chars.next();
                 let mut sub_command = String::new();
                 while let Some(&ch) = chars.peek() {
@@ -1061,7 +1071,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     tokens.push(Token::Word("".to_string()));
                     just_closed_quote = false;
                 } else {
-                    flush_current_token(&mut current, &mut tokens);
+                    flush_current_token(&mut current, &mut tokens, false);
                 }
                 chars.next();
                 if let Some(&next_ch) = chars.peek() {
@@ -1176,7 +1186,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
     if just_closed_quote && current.is_empty() {
         tokens.push(Token::Word("".to_string()));
     } else {
-        flush_current_token(&mut current, &mut tokens);
+        flush_current_token(&mut current, &mut tokens, was_quoted);
     }
 
     Ok(tokens)
