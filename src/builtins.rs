@@ -290,11 +290,18 @@ pub fn execute_builtin(
                     let file = unsafe { std::fs::File::from_raw_fd(dup_fd) };
                     Box::new(ColoredWriter::new(file))
                 } else {
-                    // Duplication failed (e.g. FD limit) - this is an error, NOT fallback
+                    // Duplication failed
                     let err = io::Error::last_os_error();
-                    print_error(&format!("Failed to duplicate stdout: {}", err));
-                    let _ = shell_state.fd_table.borrow_mut().restore_all_fds();
-                    return 1;
+                    if err.raw_os_error() == Some(libc::EBADF) {
+                        // EBADF means the FD is closed/invalid (e.g. parent closed stdout).
+                        // In this case, we just run without output.
+                        Box::new(BadFdWriter)
+                    } else {
+                        // Other errors (e.g. EMFILE) are fatal
+                        print_error(&format!("Failed to duplicate stdout: {}", err));
+                        let _ = shell_state.fd_table.borrow_mut().restore_all_fds();
+                        return 1;
+                    }
                 }
             }
             None => {
