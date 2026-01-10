@@ -53,6 +53,21 @@ pub enum FileDescriptor {
     Closed,
 }
 
+impl FileDescriptor {
+    pub fn try_clone(&self) -> Result<Self, String> {
+        match self {
+            FileDescriptor::File(f) => {
+                let new_file = f
+                    .try_clone()
+                    .map_err(|e| format!("Failed to clone file: {}", e))?;
+                Ok(FileDescriptor::File(new_file))
+            }
+            FileDescriptor::Duplicate(fd) => Ok(FileDescriptor::Duplicate(*fd)),
+            FileDescriptor::Closed => Ok(FileDescriptor::Closed),
+        }
+    }
+}
+
 /// File descriptor table for managing open file descriptors
 #[derive(Debug)]
 pub struct FileDescriptorTable {
@@ -231,6 +246,20 @@ impl FileDescriptorTable {
         }
 
         Ok(())
+    }
+
+    /// Create a deep copy of the file descriptor table
+    /// This duplicates all open file descriptors so they are independent of the original table
+    pub fn deep_clone(&self) -> Result<Self, String> {
+        let mut new_fds = HashMap::new();
+        for (fd, descriptor) in &self.fds {
+            new_fds.insert(*fd, descriptor.try_clone()?);
+        }
+
+        Ok(Self {
+            fds: new_fds,
+            saved_fds: self.saved_fds.clone(),
+        })
     }
 
     /// Save all currently open file descriptors
