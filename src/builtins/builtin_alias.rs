@@ -69,12 +69,7 @@ mod tests {
     fn test_execute_builtin_alias_set() {
         let cmd = ShellCommand {
             args: vec!["alias".to_string(), "ll=ls -l".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = AliasBuiltin;
@@ -88,12 +83,7 @@ mod tests {
     fn test_execute_builtin_alias_list() {
         let cmd = ShellCommand {
             args: vec!["alias".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("ll", "ls -l".to_string());
@@ -107,12 +97,7 @@ mod tests {
     fn test_execute_builtin_alias_show() {
         let cmd = ShellCommand {
             args: vec!["alias".to_string(), "ll".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         shell_state.set_alias("ll", "ls -l".to_string());
@@ -126,12 +111,7 @@ mod tests {
     fn test_execute_builtin_alias_show_not_found() {
         let cmd = ShellCommand {
             args: vec!["alias".to_string(), "nonexistent".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = AliasBuiltin;

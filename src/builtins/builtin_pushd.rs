@@ -100,12 +100,7 @@ mod tests {
         let original_dir = std::env::current_dir().unwrap();
         let cmd = ShellCommand {
             args: vec!["pushd".to_string(), "/tmp".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = PushdBuiltin;

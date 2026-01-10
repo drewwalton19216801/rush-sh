@@ -76,12 +76,7 @@ mod tests {
         let original_dir = env::current_dir().unwrap();
         let cmd = ShellCommand {
             args: vec!["cd".to_string(), "/tmp".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = CdBuiltin;
@@ -96,12 +91,7 @@ mod tests {
     fn test_cd_to_invalid_directory() {
         let cmd = ShellCommand {
             args: vec!["cd".to_string(), "/nonexistent".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = CdBuiltin;
@@ -115,12 +105,7 @@ mod tests {
     fn test_cd_no_arguments() {
         let cmd = ShellCommand {
             args: vec!["cd".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = CdBuiltin;

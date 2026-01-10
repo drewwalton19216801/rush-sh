@@ -204,12 +204,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-z".to_string(), "".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -222,12 +217,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-z".to_string(), "hello".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -240,12 +230,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-z".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -258,12 +243,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-n".to_string(), "".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -276,12 +256,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-n".to_string(), "hello".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -294,12 +269,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-n".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -316,12 +286,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-e".to_string(), temp_path.to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -341,12 +306,7 @@ mod tests {
                 "-e".to_string(),
                 "/non/existing/file".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -363,12 +323,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-f".to_string(), temp_path.to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -384,12 +339,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-f".to_string(), "/tmp".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -402,12 +352,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-d".to_string(), "/tmp".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -424,12 +369,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-d".to_string(), temp_path.to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -445,12 +385,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string(), "-x".to_string(), "arg".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -463,12 +398,7 @@ mod tests {
         let builtin = TestBuiltin;
         let cmd = ShellCommand {
             args: vec!["test".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -486,12 +416,7 @@ mod tests {
                 "-eq".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -509,12 +434,7 @@ mod tests {
                 "-eq".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -532,12 +452,7 @@ mod tests {
                 "-ne".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -555,12 +470,7 @@ mod tests {
                 "-ne".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -578,12 +488,7 @@ mod tests {
                 "-lt".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -601,12 +506,7 @@ mod tests {
                 "-lt".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -624,12 +524,7 @@ mod tests {
                 "-le".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -647,12 +542,7 @@ mod tests {
                 "-le".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -670,12 +560,7 @@ mod tests {
                 "-le".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -693,12 +578,7 @@ mod tests {
                 "-gt".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -716,12 +596,7 @@ mod tests {
                 "-gt".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -739,12 +614,7 @@ mod tests {
                 "-ge".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -762,12 +632,7 @@ mod tests {
                 "-ge".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -785,12 +650,7 @@ mod tests {
                 "-ge".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -808,12 +668,7 @@ mod tests {
                 "-eq".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -831,12 +686,7 @@ mod tests {
                 "-eq".to_string(),
                 "abc".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
@@ -854,12 +704,7 @@ mod tests {
                 "-invalid".to_string(),
                 "3".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();

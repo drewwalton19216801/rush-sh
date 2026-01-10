@@ -111,47 +111,108 @@ pub fn execute_builtin(
             eprintln!("{}", msg);
         }
     };
-    // Handle input redirection for built-ins that might need it
-    let _input_content = if let Some(ref input_file) = cmd.input {
-        match std::fs::read_to_string(input_file) {
-            Ok(content) => Some(content),
-            Err(e) => {
-                print_error(&format!("Error reading input file '{}': {}", input_file, e));
-                return 1;
+    // Handle redirections for built-ins
+    use crate::parser::Redirection;
+    
+    // Check for input redirections
+    let _input_content = cmd.redirections.iter().find_map(|r| {
+        if let Redirection::Input(file) = r {
+            match std::fs::read_to_string(file) {
+                Ok(content) => Some(content),
+                Err(e) => {
+                    print_error(&format!("Error reading input file '{}': {}", file, e));
+                    None
+                }
             }
+        } else {
+            None
         }
-    } else {
-        None
-    };
+    });
 
     // Prepare output destination
     let mut output_writer: Box<dyn Write> = if let Some(override_writer) = output_override {
         override_writer
-    } else if let Some(ref output_file) = cmd.output {
-        // Files don't get colors
-        match File::create(output_file) {
-            Ok(file) => Box::new(file),
-            Err(e) => {
-                print_error(&format!(
-                    "Error creating output file '{}': {}",
-                    output_file, e
-                ));
-                return 1;
-            }
-        }
-    } else if let Some(ref append_file) = cmd.append {
-        // Files don't get colors
-        match File::options().append(true).create(true).open(append_file) {
-            Ok(file) => Box::new(file),
-            Err(e) => {
-                print_error(&format!(
-                    "Error opening append file '{}': {}",
-                    append_file, e
-                ));
-                return 1;
-            }
-        }
     } else {
+        // Check for output redirections
+        let mut found_output = false;
+        for redir in &cmd.redirections {
+            match redir {
+                Redirection::Output(file) => {
+                    match File::create(file) {
+                        Ok(f) => {
+                            found_output = true;
+                            break;
+                        }
+                        Err(e) => {
+                            print_error(&format!("Error creating output file '{}': {}", file, e));
+                            return 1;
+                        }
+                    }
+                }
+                Redirection::Append(file) => {
+                    match File::options().append(true).create(true).open(file) {
+                        Ok(f) => {
+                            found_output = true;
+                            break;
+                        }
+                        Err(e) => {
+                            print_error(&format!("Error opening append file '{}': {}", file, e));
+                            return 1;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        if found_output {
+            // Re-open the file for writing (this is a simplified approach)
+            // In a real implementation, we'd want to handle this more efficiently
+            for redir in &cmd.redirections {
+                match redir {
+                    Redirection::Output(file) => {
+                        return match File::create(file) {
+                            Ok(f) => {
+                                let builtins = get_builtins();
+                                if let Some(builtin) = builtins
+                                    .into_iter()
+                                    .find(|b| b.names().contains(&cmd.args[0].as_str()))
+                                {
+                                    builtin.run(cmd, shell_state, &mut Box::new(f) as &mut dyn Write)
+                                } else {
+                                    1
+                                }
+                            }
+                            Err(e) => {
+                                print_error(&format!("Error creating output file '{}': {}", file, e));
+                                1
+                            }
+                        };
+                    }
+                    Redirection::Append(file) => {
+                        return match File::options().append(true).create(true).open(file) {
+                            Ok(f) => {
+                                let builtins = get_builtins();
+                                if let Some(builtin) = builtins
+                                    .into_iter()
+                                    .find(|b| b.names().contains(&cmd.args[0].as_str()))
+                                {
+                                    builtin.run(cmd, shell_state, &mut Box::new(f) as &mut dyn Write)
+                                } else {
+                                    1
+                                }
+                            }
+                            Err(e) => {
+                                print_error(&format!("Error opening append file '{}': {}", file, e));
+                                1
+                            }
+                        };
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
         // Terminal output
         Box::new(ColoredWriter::new(io::stdout()))
     };
@@ -192,12 +253,7 @@ mod tests {
     fn test_execute_builtin_unknown() {
         let cmd = ShellCommand {
             args: vec!["unknown".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let exit_code = execute_builtin(&cmd, &mut shell_state, None);

@@ -94,12 +94,7 @@ mod tests {
     fn test_set_colors_builtin_enable() {
         let cmd = ShellCommand {
             args: vec!["set_colors".to_string(), "on".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = SetColorsBuiltin;
@@ -113,12 +108,7 @@ mod tests {
     fn test_set_colors_builtin_disable() {
         let cmd = ShellCommand {
             args: vec!["set_colors".to_string(), "off".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = SetColorsBuiltin;

@@ -71,12 +71,7 @@ mod tests {
         // Remove the alias
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "test_alias".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let builtin = UnaliasBuiltin;
         let mut output = Vec::new();
@@ -91,12 +86,7 @@ mod tests {
     fn test_execute_builtin_unalias_not_found() {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "nonexistent".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -109,12 +99,7 @@ mod tests {
     fn test_execute_builtin_unalias_no_args() {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -131,12 +116,7 @@ mod tests {
                 "arg1".to_string(),
                 "arg2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -155,12 +135,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "-a".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let builtin = UnaliasBuiltin;
         let mut output = Vec::new();
@@ -176,12 +151,7 @@ mod tests {
     fn test_execute_builtin_unalias_all_no_aliases() {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "-a".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;
@@ -198,12 +168,7 @@ mod tests {
     fn test_execute_builtin_unalias_all_too_many_args() {
         let cmd = ShellCommand {
             args: vec!["unalias".to_string(), "-a".to_string(), "extra".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = UnaliasBuiltin;

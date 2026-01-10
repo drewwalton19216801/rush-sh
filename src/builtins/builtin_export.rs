@@ -58,12 +58,7 @@ mod tests {
     fn test_export_builtin_list() {
         let cmd = ShellCommand {
             args: vec!["export".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.set_exported_var("TEST_VAR", "test_value".to_string());
@@ -79,12 +74,7 @@ mod tests {
     fn test_export_builtin_set() {
         let cmd = ShellCommand {
             args: vec!["export".to_string(), "NEW_VAR=new_value".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = ExportBuiltin;
@@ -102,12 +92,7 @@ mod tests {
     fn test_export_builtin_export_existing() {
         let cmd = ShellCommand {
             args: vec!["export".to_string(), "EXISTING_VAR".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.set_var("EXISTING_VAR", "existing_value".to_string());
