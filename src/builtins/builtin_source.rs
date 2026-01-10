@@ -89,12 +89,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["source".to_string(), temp_script.to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = crate::state::ShellState::new();
         let builtin = SourceBuiltin;

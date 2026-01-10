@@ -43,12 +43,7 @@ mod tests {
     fn test_unset_builtin_unset_variable() {
         let cmd = ShellCommand {
             args: vec!["unset".to_string(), "TEST_VAR".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.set_var("TEST_VAR", "test_value".to_string());
@@ -67,12 +62,7 @@ mod tests {
     fn test_unset_builtin_no_args() {
         let cmd = ShellCommand {
             args: vec!["unset".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = UnsetBuiltin;

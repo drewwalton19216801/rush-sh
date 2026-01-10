@@ -13,6 +13,13 @@ pub enum Token {
     RedirAppend,
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
     RedirHereString(String),    // Here-string: <<<"content"
+    // File descriptor redirections
+    RedirectFdIn(i32, String),      // N<file - redirect fd N from file
+    RedirectFdOut(i32, String),     // N>file - redirect fd N to file
+    RedirectFdAppend(i32, String),  // N>>file - append fd N to file
+    RedirectFdDup(i32, i32),        // N>&M or N<&M - duplicate fd M to fd N
+    RedirectFdClose(i32),           // N>&- or N<&- - close fd N
+    RedirectFdInOut(i32, String),   // N<>file - open fd N for read/write
     If,
     Then,
     Else,
@@ -590,87 +597,185 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 }
             }
             '>' if !in_double_quote && !in_single_quote => {
-                // Check if this is a file descriptor redirection like 2>&1
+                // Check if this is a file descriptor redirection like 2>&1 or 2>file
                 // Look back to see if current ends with a digit
-                let is_fd_redirect = if !current.is_empty() {
-                    current
-                        .chars()
-                        .last()
-                        .map(|c| c.is_ascii_digit())
-                        .unwrap_or(false)
-                } else {
-                    false
-                };
-
-                if is_fd_redirect {
-                    // This might be a file descriptor redirection like 2>&1
-                    chars.next(); // consume >
-                    if let Some(&'&') = chars.peek() {
-                        chars.next(); // consume &
-                        // Now collect the target fd or '-'
-                        let mut target = String::new();
-                        while let Some(&ch) = chars.peek() {
-                            if ch.is_ascii_digit() || ch == '-' {
-                                target.push(ch);
-                                chars.next();
-                            } else {
-                                break;
-                            }
-                        }
-
-                        if !target.is_empty() {
-                            // This is a valid fd redirection like 2>&1 or 2>&-
-                            // Remove the trailing digit from current (the fd number)
+                let fd_num = if !current.is_empty() {
+                    if let Some(last_char) = current.chars().last() {
+                        if last_char.is_ascii_digit() {
+                            // Extract the fd number
+                            let fd = last_char.to_digit(10).unwrap() as i32;
+                            // Remove the fd digit from current
                             current.pop();
-
-                            // Push any remaining content as a token
-                            flush_current_token(&mut current, &mut tokens);
-
-                            // For now, we'll just skip the fd redirection (treat as no-op)
-                            // since we don't fully support it, but we won't treat it as an error
-                            continue;
+                            Some(fd)
                         } else {
-                            // Invalid syntax, put back what we consumed
-                            current.push('>');
-                            current.push('&');
+                            None
                         }
                     } else {
-                        // Not a fd redirection, handle as normal redirect
-                        // Put the > back into processing
-                        flush_current_token(&mut current, &mut tokens);
+                        None
+                    }
+                } else {
+                    None
+                };
 
-                        if let Some(&next_ch) = chars.peek() {
-                            if next_ch == '>' {
-                                chars.next();
-                                tokens.push(Token::RedirAppend);
-                            } else {
-                                tokens.push(Token::RedirOut);
-                            }
+                // Flush any remaining content before the fd number
+                flush_current_token(&mut current, &mut tokens);
+
+                chars.next(); // consume >
+
+                // Check what follows the >
+                if let Some(&'&') = chars.peek() {
+                    chars.next(); // consume &
+                    
+                    // Collect the target fd or '-'
+                    let mut target = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch.is_ascii_digit() || ch == '-' {
+                            target.push(ch);
+                            chars.next();
                         } else {
-                            tokens.push(Token::RedirOut);
+                            break;
+                        }
+                    }
+
+                    if !target.is_empty() {
+                        let source_fd = fd_num.unwrap_or(1); // Default to stdout
+                        
+                        if target == "-" {
+                            // Close fd: N>&-
+                            tokens.push(Token::RedirectFdClose(source_fd));
+                        } else if let Ok(target_fd) = target.parse::<i32>() {
+                            // Duplicate fd: N>&M
+                            tokens.push(Token::RedirectFdDup(source_fd, target_fd));
+                        } else {
+                            // Invalid target, treat as error
+                            return Err(format!("Invalid file descriptor: {}", target));
+                        }
+                        skip_whitespace(&mut chars);
+                    } else {
+                        // Invalid syntax: >& with nothing after
+                        return Err("Invalid redirection syntax: expected fd number or '-' after >&".to_string());
+                    }
+                } else if let Some(&'>') = chars.peek() {
+                    // Append redirection: >> or N>>
+                    chars.next(); // consume second >
+                    skip_whitespace(&mut chars);
+                    
+                    // Collect the filename
+                    let mut filename = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                            break;
+                        }
+                        filename.push(ch);
+                        chars.next();
+                    }
+                    
+                    if !filename.is_empty() {
+                        if let Some(fd) = fd_num {
+                            tokens.push(Token::RedirectFdAppend(fd, filename));
+                        } else {
+                            tokens.push(Token::RedirAppend);
+                            tokens.push(Token::Word(filename));
+                        }
+                    } else {
+                        // No filename provided
+                        if fd_num.is_some() {
+                            return Err("Invalid redirection: expected filename after >>".to_string());
+                        } else {
+                            tokens.push(Token::RedirAppend);
                         }
                     }
                 } else {
-                    // Normal redirection
-                    flush_current_token(&mut current, &mut tokens);
-                    chars.next();
-                    if let Some(&next_ch) = chars.peek() {
-                        if next_ch == '>' {
-                            chars.next();
-                            tokens.push(Token::RedirAppend);
+                    // Regular output redirection: > or N>
+                    skip_whitespace(&mut chars);
+                    
+                    // Collect the filename
+                    let mut filename = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                            break;
+                        }
+                        filename.push(ch);
+                        chars.next();
+                    }
+                    
+                    if !filename.is_empty() {
+                        if let Some(fd) = fd_num {
+                            tokens.push(Token::RedirectFdOut(fd, filename));
+                        } else {
+                            tokens.push(Token::RedirOut);
+                            tokens.push(Token::Word(filename));
+                        }
+                    } else {
+                        // No filename provided
+                        if fd_num.is_some() {
+                            return Err("Invalid redirection: expected filename after >".to_string());
                         } else {
                             tokens.push(Token::RedirOut);
                         }
-                    } else {
-                        tokens.push(Token::RedirOut);
                     }
                 }
             }
             '<' if !in_double_quote && !in_single_quote => {
+                // Check if this is a file descriptor redirection like 3<file or 0<&1
+                let fd_num = if !current.is_empty() {
+                    if let Some(last_char) = current.chars().last() {
+                        if last_char.is_ascii_digit() {
+                            // Extract the fd number
+                            let fd = last_char.to_digit(10).unwrap() as i32;
+                            // Remove the fd digit from current
+                            current.pop();
+                            Some(fd)
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
+                // Flush any remaining content before the fd number
                 flush_current_token(&mut current, &mut tokens);
+
                 chars.next(); // consume <
-                if let Some(&'<') = chars.peek() {
-                    // Check for here-string <<<
+
+                // Check what follows the <
+                if let Some(&'&') = chars.peek() {
+                    chars.next(); // consume &
+                    
+                    // Collect the target fd or '-'
+                    let mut target = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch.is_ascii_digit() || ch == '-' {
+                            target.push(ch);
+                            chars.next();
+                        } else {
+                            break;
+                        }
+                    }
+
+                    if !target.is_empty() {
+                        let source_fd = fd_num.unwrap_or(0); // Default to stdin
+                        
+                        if target == "-" {
+                            // Close fd: N<&-
+                            tokens.push(Token::RedirectFdClose(source_fd));
+                        } else if let Ok(target_fd) = target.parse::<i32>() {
+                            // Duplicate fd: N<&M
+                            tokens.push(Token::RedirectFdDup(source_fd, target_fd));
+                        } else {
+                            // Invalid target
+                            return Err(format!("Invalid file descriptor: {}", target));
+                        }
+                        skip_whitespace(&mut chars);
+                    } else {
+                        // Invalid syntax: <& with nothing after
+                        return Err("Invalid redirection syntax: expected fd number or '-' after <&".to_string());
+                    }
+                } else if let Some(&'<') = chars.peek() {
+                    // Here-document or here-string
                     chars.next(); // consume second <
                     if let Some(&'<') = chars.peek() {
                         chars.next(); // consume third <
@@ -745,9 +850,56 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             );
                         }
                     }
+                } else if let Some(&'>') = chars.peek() {
+                    // Read/write redirection: N<>
+                    chars.next(); // consume >
+                    skip_whitespace(&mut chars);
+                    
+                    // Collect the filename
+                    let mut filename = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                            break;
+                        }
+                        filename.push(ch);
+                        chars.next();
+                    }
+                    
+                    if !filename.is_empty() {
+                        let fd = fd_num.unwrap_or(0); // Default to stdin
+                        tokens.push(Token::RedirectFdInOut(fd, filename));
+                    } else {
+                        return Err("Invalid redirection: expected filename after <>".to_string());
+                    }
                 } else {
-                    // Regular input redirection
-                    tokens.push(Token::RedirIn);
+                    // Regular input redirection: < or N<
+                    skip_whitespace(&mut chars);
+                    
+                    // Collect the filename
+                    let mut filename = String::new();
+                    while let Some(&ch) = chars.peek() {
+                        if ch == ' ' || ch == '\t' || ch == '\n' || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<' {
+                            break;
+                        }
+                        filename.push(ch);
+                        chars.next();
+                    }
+                    
+                    if !filename.is_empty() {
+                        if let Some(fd) = fd_num {
+                            tokens.push(Token::RedirectFdIn(fd, filename));
+                        } else {
+                            tokens.push(Token::RedirIn);
+                            tokens.push(Token::Word(filename));
+                        }
+                    } else {
+                        // No filename provided
+                        if fd_num.is_some() {
+                            return Err("Invalid redirection: expected filename after <".to_string());
+                        } else {
+                            tokens.push(Token::RedirIn);
+                        }
+                    }
                 }
             }
             ')' if !in_double_quote && !in_single_quote => {
@@ -2418,5 +2570,371 @@ mod tests {
         } else {
             panic!("Expected Word token");
         }
+    }
+
+    // ===== File Descriptor Redirection Tests =====
+
+    #[test]
+    fn test_fd_output_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>errors.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "errors.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_input_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<input.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdIn(3, "input.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_append_redirection() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>>errors.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdAppend(2, "errors.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_output() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdDup(2, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_duplication_input() {
+        let shell_state = ShellState::new();
+        let result = lex("command 0<&3", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdDup(0, 3)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_output() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdClose(2)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_close_input() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdClose(3)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_read_write() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<>file.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdInOut(3, "file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_read_write_default() {
+        let shell_state = ShellState::new();
+        let result = lex("command <>file.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdInOut(0, "file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_multiple_fd_redirections() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>err.log 3<input.txt 4>>append.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "err.log".to_string()),
+                Token::RedirectFdIn(3, "input.txt".to_string()),
+                Token::RedirectFdAppend(4, "append.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_redirection_with_pipe() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&1 | grep error", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdDup(2, 1),
+                Token::Pipe,
+                Token::Word("grep".to_string()),
+                Token::Word("error".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_numbers_0_through_9() {
+        let shell_state = ShellState::new();
+        
+        // Test fd 0
+        let result = lex("cmd 0<file", &shell_state).unwrap();
+        assert_eq!(result[1], Token::RedirectFdIn(0, "file".to_string()));
+        
+        // Test fd 9
+        let result = lex("cmd 9>file", &shell_state).unwrap();
+        assert_eq!(result[1], Token::RedirectFdOut(9, "file".to_string()));
+    }
+
+    #[test]
+    fn test_fd_swap_pattern() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>&1 1>&2 2>&3 3>&-", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdDup(3, 1),
+                Token::RedirectFdDup(1, 2),
+                Token::RedirectFdDup(2, 3),
+                Token::RedirectFdClose(3)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_backward_compat_simple_output() {
+        let shell_state = ShellState::new();
+        let result = lex("echo hello > output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string()),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_backward_compat_simple_input() {
+        let shell_state = ShellState::new();
+        let result = lex("cat < input.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("cat".to_string()),
+                Token::RedirIn,
+                Token::Word("input.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_backward_compat_append() {
+        let shell_state = ShellState::new();
+        let result = lex("echo hello >> output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string()),
+                Token::RedirAppend,
+                Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_with_spaces() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2> errors.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "errors.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_no_space() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>errors.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "errors.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_dup_to_self() {
+        let shell_state = ShellState::new();
+        let result = lex("command 1>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdDup(1, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_stderr_to_stdout() {
+        let shell_state = ShellState::new();
+        let result = lex("ls /nonexistent 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("ls".to_string()),
+                Token::Word("/nonexistent".to_string()),
+                Token::RedirectFdDup(2, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_stdout_to_stderr() {
+        let shell_state = ShellState::new();
+        let result = lex("echo error 1>&2", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("error".to_string()),
+                Token::RedirectFdDup(1, 2)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_combined_redirections() {
+        let shell_state = ShellState::new();
+        let result = lex("command >output.txt 2>&1", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirOut,
+                Token::Word("output.txt".to_string()),
+                Token::RedirectFdDup(2, 1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_fd_with_variable_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>$LOGFILE", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "$LOGFILE".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_invalid_fd_dup_no_target() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>&", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected fd number or '-' after >&"));
+    }
+
+    #[test]
+    fn test_invalid_fd_close_input_no_dash() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<&", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected fd number or '-' after <&"));
+    }
+
+    #[test]
+    fn test_fd_inout_no_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<>", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected filename after <>"));
+    }
+
+    #[test]
+    fn test_fd_output_no_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected filename after >"));
+    }
+
+    #[test]
+    fn test_fd_input_no_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3<", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected filename after <"));
+    }
+
+    #[test]
+    fn test_fd_append_no_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>>", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected filename after >>"));
     }
 }

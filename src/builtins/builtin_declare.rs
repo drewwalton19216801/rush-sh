@@ -266,16 +266,22 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
 fn format_command(cmd: &crate::parser::ShellCommand) -> String {
     let mut result = cmd.args.join(" ");
 
-    if let Some(ref input) = cmd.input {
-        result.push_str(&format!(" < {}", input));
-    }
-
-    if let Some(ref output) = cmd.output {
-        result.push_str(&format!(" > {}", output));
-    }
-
-    if let Some(ref append) = cmd.append {
-        result.push_str(&format!(" >> {}", append));
+    // Format redirections
+    for redir in &cmd.redirections {
+        use crate::parser::Redirection;
+        match redir {
+            Redirection::Input(file) => result.push_str(&format!(" < {}", file)),
+            Redirection::Output(file) => result.push_str(&format!(" > {}", file)),
+            Redirection::Append(file) => result.push_str(&format!(" >> {}", file)),
+            Redirection::FdInput(fd, file) => result.push_str(&format!(" {}<{}", fd, file)),
+            Redirection::FdOutput(fd, file) => result.push_str(&format!(" {}>{}", fd, file)),
+            Redirection::FdAppend(fd, file) => result.push_str(&format!(" {}>>{}", fd, file)),
+            Redirection::FdDuplicate(from, to) => result.push_str(&format!(" {}>&{}", from, to)),
+            Redirection::FdClose(fd) => result.push_str(&format!(" {}>&-", fd)),
+            Redirection::FdInputOutput(fd, file) => result.push_str(&format!(" {}<>{}", fd, file)),
+            Redirection::HereDoc(delim, _) => result.push_str(&format!(" << {}", delim)),
+            Redirection::HereString(content) => result.push_str(&format!(" <<< {}", content)),
+        }
     }
 
     result
@@ -290,12 +296,7 @@ mod tests {
     fn test_declare_builtin_run_list_functions() {
         let cmd = crate::parser::ShellCommand {
             args: vec!["declare".to_string(), "-f".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -305,12 +306,7 @@ mod tests {
             "test_func".to_string(),
             Ast::Pipeline(vec![crate::parser::ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: Vec::new(),
             }]),
         );
 
@@ -330,12 +326,7 @@ mod tests {
                 "-f".to_string(),
                 "test_func".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -345,12 +336,7 @@ mod tests {
             "test_func".to_string(),
             Ast::Pipeline(vec![crate::parser::ShellCommand {
                 args: vec!["echo".to_string(), "hello".to_string()],
-                input: None,
-                output: None,
-                append: None,
-                here_doc_delimiter: None,
-                here_doc_quoted: false,
-                here_string_content: None,
+                redirections: Vec::new(),
             }]),
         );
 
@@ -372,12 +358,7 @@ mod tests {
                 "-f".to_string(),
                 "nonexistent".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
@@ -394,12 +375,7 @@ mod tests {
     fn test_declare_builtin_run_invalid_option() {
         let cmd = crate::parser::ShellCommand {
             args: vec!["declare".to_string(), "-x".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;

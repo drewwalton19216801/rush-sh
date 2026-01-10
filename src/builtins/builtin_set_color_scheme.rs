@@ -120,12 +120,7 @@ mod tests {
     fn test_set_color_scheme_builtin_default() {
         let cmd = ShellCommand {
             args: vec!["set_color_scheme".to_string(), "default".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = SetColorSchemeBuiltin;
@@ -140,12 +135,7 @@ mod tests {
     fn test_set_color_scheme_builtin_dark() {
         let cmd = ShellCommand {
             args: vec!["set_color_scheme".to_string(), "dark".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = SetColorSchemeBuiltin;

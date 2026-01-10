@@ -3,7 +3,10 @@ use lazy_static::lazy_static;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::env;
+use std::fs::{File, OpenOptions};
 use std::io::IsTerminal;
+use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
+use std::process::Stdio;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -38,6 +41,333 @@ impl SignalEvent {
             signal_number,
             timestamp: Instant::now(),
         }
+    }
+}
+
+/// Represents an open file descriptor
+#[derive(Debug)]
+pub enum FileDescriptor {
+    /// Standard file opened for reading, writing, or both
+    File(File),
+    /// Duplicate of another file descriptor
+    Duplicate(RawFd),
+    /// Closed file descriptor
+    Closed,
+}
+
+/// File descriptor table for managing open file descriptors
+#[derive(Debug)]
+pub struct FileDescriptorTable {
+    /// Map of fd number to file descriptor
+    fds: HashMap<i32, FileDescriptor>,
+    /// Saved file descriptors for restoration after command execution
+    #[allow(dead_code)]
+    saved_fds: HashMap<i32, RawFd>,
+}
+
+impl FileDescriptorTable {
+    /// Create a new empty file descriptor table
+    pub fn new() -> Self {
+        Self {
+            fds: HashMap::new(),
+            saved_fds: HashMap::new(),
+        }
+    }
+
+    /// Open a file and assign it to a file descriptor number
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number (0-9)
+    /// * `path` - Path to the file to open
+    /// * `read` - Whether to open for reading
+    /// * `write` - Whether to open for writing
+    /// * `append` - Whether to open in append mode
+    /// * `truncate` - Whether to truncate the file
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    pub fn open_fd(
+        &mut self,
+        fd_num: i32,
+        path: &str,
+        read: bool,
+        write: bool,
+        append: bool,
+        truncate: bool,
+    ) -> Result<(), String> {
+        // Validate fd number
+        if !(0..=9).contains(&fd_num) {
+            return Err(format!("Invalid file descriptor number: {}", fd_num));
+        }
+
+        // Open the file with the specified options
+        let file = OpenOptions::new()
+            .read(read)
+            .write(write)
+            .append(append)
+            .truncate(truncate)
+            .create(write || append)
+            .open(path)
+            .map_err(|e| format!("Cannot open {}: {}", path, e))?;
+
+        // Store the file descriptor
+        self.fds.insert(fd_num, FileDescriptor::File(file));
+        Ok(())
+    }
+
+    /// Duplicate a file descriptor
+    ///
+    /// # Arguments
+    /// * `source_fd` - The source file descriptor to duplicate
+    /// * `target_fd` - The target file descriptor number
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    pub fn duplicate_fd(&mut self, source_fd: i32, target_fd: i32) -> Result<(), String> {
+        // Validate fd numbers
+        if !(0..=9).contains(&source_fd) {
+            return Err(format!("Invalid source file descriptor: {}", source_fd));
+        }
+        if !(0..=9).contains(&target_fd) {
+            return Err(format!("Invalid target file descriptor: {}", target_fd));
+        }
+
+        // POSIX: Duplicating to self is a no-op
+        if source_fd == target_fd {
+            return Ok(());
+        }
+
+        // Get the raw fd to duplicate
+        let raw_fd = match self.get_raw_fd(source_fd) {
+            Some(fd) => fd,
+            None => {
+                return Err(format!(
+                    "File descriptor {} is not open or is closed",
+                    source_fd
+                ))
+            }
+        };
+
+        // Store the duplication
+        self.fds
+            .insert(target_fd, FileDescriptor::Duplicate(raw_fd));
+        Ok(())
+    }
+
+    /// Close a file descriptor
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number to close
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    pub fn close_fd(&mut self, fd_num: i32) -> Result<(), String> {
+        // Validate fd number
+        if !(0..=9).contains(&fd_num) {
+            return Err(format!("Invalid file descriptor number: {}", fd_num));
+        }
+
+        // Mark the fd as closed
+        self.fds.insert(fd_num, FileDescriptor::Closed);
+        Ok(())
+    }
+
+    /// Save the current state of a file descriptor for later restoration
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number to save
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
+    pub fn save_fd(&mut self, fd_num: i32) -> Result<(), String> {
+        // Validate fd number
+        if !(0..=9).contains(&fd_num) {
+            return Err(format!("Invalid file descriptor number: {}", fd_num));
+        }
+
+        // Duplicate the fd using dup() syscall to save it
+        let saved_fd = unsafe {
+            let raw_fd = fd_num as RawFd;
+            libc::dup(raw_fd)
+        };
+
+        if saved_fd < 0 {
+            return Err(format!("Failed to save file descriptor {}", fd_num));
+        }
+
+        self.saved_fds.insert(fd_num, saved_fd);
+        Ok(())
+    }
+
+    /// Restore a previously saved file descriptor
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number to restore
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
+    pub fn restore_fd(&mut self, fd_num: i32) -> Result<(), String> {
+        // Validate fd number
+        if !(0..=9).contains(&fd_num) {
+            return Err(format!("Invalid file descriptor number: {}", fd_num));
+        }
+
+        // Get the saved fd
+        if let Some(saved_fd) = self.saved_fds.remove(&fd_num) {
+            // Restore using dup2() syscall
+            unsafe {
+                let result = libc::dup2(saved_fd, fd_num as RawFd);
+                libc::close(saved_fd); // Close the saved fd
+
+                if result < 0 {
+                    return Err(format!("Failed to restore file descriptor {}", fd_num));
+                }
+            }
+
+            // Remove from our tracking
+            self.fds.remove(&fd_num);
+        }
+
+        Ok(())
+    }
+
+    /// Save all currently open file descriptors
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
+    pub fn save_all_fds(&mut self) -> Result<(), String> {
+        // Save all fds that we're tracking
+        let fd_nums: Vec<i32> = self.fds.keys().copied().collect();
+        for fd_num in fd_nums {
+            self.save_fd(fd_num)?;
+        }
+        Ok(())
+    }
+
+    /// Restore all previously saved file descriptors
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
+    pub fn restore_all_fds(&mut self) -> Result<(), String> {
+        // Restore all saved fds
+        let fd_nums: Vec<i32> = self.saved_fds.keys().copied().collect();
+        for fd_num in fd_nums {
+            self.restore_fd(fd_num)?;
+        }
+        Ok(())
+    }
+
+    /// Get a file handle for a given file descriptor number
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number
+    ///
+    /// # Returns
+    /// * `Some(Stdio)` if the fd is open and can be converted to Stdio
+    /// * `None` if the fd is not open or is closed
+    #[allow(dead_code)]
+    pub fn get_stdio(&self, fd_num: i32) -> Option<Stdio> {
+        match self.fds.get(&fd_num) {
+            Some(FileDescriptor::File(file)) => {
+                // Try to duplicate the file descriptor for Stdio
+                let raw_fd = file.as_raw_fd();
+                let dup_fd = unsafe { libc::dup(raw_fd) };
+                if dup_fd >= 0 {
+                    let file = unsafe { File::from_raw_fd(dup_fd) };
+                    Some(Stdio::from(file))
+                } else {
+                    None
+                }
+            }
+            Some(FileDescriptor::Duplicate(raw_fd)) => {
+                // Duplicate the raw fd for Stdio
+                let dup_fd = unsafe { libc::dup(*raw_fd) };
+                if dup_fd >= 0 {
+                    let file = unsafe { File::from_raw_fd(dup_fd) };
+                    Some(Stdio::from(file))
+                } else {
+                    None
+                }
+            }
+            Some(FileDescriptor::Closed) | None => None,
+        }
+    }
+
+    /// Get the raw file descriptor number for a given fd
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number
+    ///
+    /// # Returns
+    /// * `Some(RawFd)` if the fd is open
+    /// * `None` if the fd is not open or is closed
+    fn get_raw_fd(&self, fd_num: i32) -> Option<RawFd> {
+        match self.fds.get(&fd_num) {
+            Some(FileDescriptor::File(file)) => Some(file.as_raw_fd()),
+            Some(FileDescriptor::Duplicate(raw_fd)) => Some(*raw_fd),
+            Some(FileDescriptor::Closed) => None,
+            None => {
+                // Standard file descriptors (0, 1, 2) are always open unless explicitly closed
+                if fd_num >= 0 && fd_num <= 2 {
+                    Some(fd_num as RawFd)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    /// Check if a file descriptor is open
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number
+    ///
+    /// # Returns
+    /// * `true` if the fd is open
+    /// * `false` if the fd is closed or not tracked
+    #[allow(dead_code)]
+    pub fn is_open(&self, fd_num: i32) -> bool {
+        matches!(
+            self.fds.get(&fd_num),
+            Some(FileDescriptor::File(_)) | Some(FileDescriptor::Duplicate(_))
+        )
+    }
+
+    /// Check if a file descriptor is closed
+    ///
+    /// # Arguments
+    /// * `fd_num` - The file descriptor number
+    ///
+    /// # Returns
+    /// * `true` if the fd is explicitly closed
+    /// * `false` otherwise
+    #[allow(dead_code)]
+    pub fn is_closed(&self, fd_num: i32) -> bool {
+        matches!(self.fds.get(&fd_num), Some(FileDescriptor::Closed))
+    }
+
+    /// Clear all file descriptors and saved state
+    #[allow(dead_code)]
+    pub fn clear(&mut self) {
+        self.fds.clear();
+        self.saved_fds.clear();
+    }
+}
+
+impl Default for FileDescriptorTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -121,6 +451,8 @@ pub struct ShellState {
     pub pending_heredoc_content: Option<String>,
     /// Interactive mode heredoc collection state
     pub collecting_heredoc: Option<(String, String, String)>, // (command_line, delimiter, collected_content)
+    /// File descriptor table for managing open file descriptors
+    pub fd_table: Rc<RefCell<FileDescriptorTable>>,
 }
 
 impl ShellState {
@@ -179,6 +511,7 @@ impl ShellState {
             pending_signals: false,
             pending_heredoc_content: None,
             collecting_heredoc: None,
+            fd_table: Rc::new(RefCell::new(FileDescriptorTable::new())),
         }
     }
 
@@ -858,5 +1191,305 @@ mod tests {
         // Both should end with "$ " (or "# " for root)
         assert!(prompt_condensed.ends_with("$ ") || prompt_condensed.ends_with("# "));
         assert!(prompt_full.ends_with("$ ") || prompt_full.ends_with("# "));
+    }
+
+    // File Descriptor Table Tests
+
+    #[test]
+    fn test_fd_table_creation() {
+        let fd_table = FileDescriptorTable::new();
+        assert!(!fd_table.is_open(0));
+        assert!(!fd_table.is_open(1));
+        assert!(!fd_table.is_open(2));
+    }
+
+    #[test]
+    fn test_fd_table_open_file() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_fd_open.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file for reading
+        let result = fd_table.open_fd(3, temp_file, true, false, false, false);
+        assert!(result.is_ok());
+        assert!(fd_table.is_open(3));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_open_file_for_writing() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file path
+        let temp_file = "/tmp/rush_test_fd_write.txt";
+
+        // Open file for writing
+        let result = fd_table.open_fd(4, temp_file, false, true, false, true);
+        assert!(result.is_ok());
+        assert!(fd_table.is_open(4));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_invalid_fd_number() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Test invalid fd numbers
+        let result = fd_table.open_fd(-1, "/tmp/test.txt", true, false, false, false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid file descriptor"));
+
+        let result = fd_table.open_fd(10, "/tmp/test.txt", true, false, false, false);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid file descriptor"));
+    }
+
+    #[test]
+    fn test_fd_table_duplicate_fd() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_fd_dup.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file on fd 3
+        fd_table
+            .open_fd(3, temp_file, true, false, false, false)
+            .unwrap();
+        assert!(fd_table.is_open(3));
+
+        // Duplicate fd 3 to fd 4
+        let result = fd_table.duplicate_fd(3, 4);
+        assert!(result.is_ok());
+        assert!(fd_table.is_open(4));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_duplicate_to_self() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_fd_dup_self.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file on fd 3
+        fd_table
+            .open_fd(3, temp_file, true, false, false, false)
+            .unwrap();
+
+        // Duplicate fd 3 to itself (should be no-op)
+        let result = fd_table.duplicate_fd(3, 3);
+        assert!(result.is_ok());
+        assert!(fd_table.is_open(3));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_duplicate_closed_fd() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Try to duplicate a closed fd
+        let result = fd_table.duplicate_fd(3, 4);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not open"));
+    }
+
+    #[test]
+    fn test_fd_table_close_fd() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_fd_close.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file on fd 3
+        fd_table
+            .open_fd(3, temp_file, true, false, false, false)
+            .unwrap();
+        assert!(fd_table.is_open(3));
+
+        // Close fd 3
+        let result = fd_table.close_fd(3);
+        assert!(result.is_ok());
+        assert!(fd_table.is_closed(3));
+        assert!(!fd_table.is_open(3));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_save_and_restore() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Save stdin (fd 0)
+        let result = fd_table.save_fd(0);
+        assert!(result.is_ok());
+
+        // Restore stdin
+        let result = fd_table.restore_fd(0);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_fd_table_save_all_and_restore_all() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create temporary files
+        let temp_file1 = "/tmp/rush_test_fd_save1.txt";
+        let temp_file2 = "/tmp/rush_test_fd_save2.txt";
+        std::fs::write(temp_file1, "test content 1").unwrap();
+        std::fs::write(temp_file2, "test content 2").unwrap();
+
+        // Open files on fd 3 and 4
+        fd_table
+            .open_fd(3, temp_file1, true, false, false, false)
+            .unwrap();
+        fd_table
+            .open_fd(4, temp_file2, true, false, false, false)
+            .unwrap();
+
+        // Save all fds
+        let result = fd_table.save_all_fds();
+        assert!(result.is_ok());
+
+        // Restore all fds
+        let result = fd_table.restore_all_fds();
+        assert!(result.is_ok());
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file1);
+        let _ = std::fs::remove_file(temp_file2);
+    }
+
+    #[test]
+    fn test_fd_table_clear() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_fd_clear.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file on fd 3
+        fd_table
+            .open_fd(3, temp_file, true, false, false, false)
+            .unwrap();
+        assert!(fd_table.is_open(3));
+
+        // Clear all fds
+        fd_table.clear();
+        assert!(!fd_table.is_open(3));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_get_stdio() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_fd_stdio.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file on fd 3
+        fd_table
+            .open_fd(3, temp_file, true, false, false, false)
+            .unwrap();
+
+        // Get Stdio for fd 3
+        let stdio = fd_table.get_stdio(3);
+        assert!(stdio.is_some());
+
+        // Get Stdio for non-existent fd
+        let stdio = fd_table.get_stdio(5);
+        assert!(stdio.is_none());
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
+    }
+
+    #[test]
+    fn test_fd_table_multiple_operations() {
+        let mut fd_table = FileDescriptorTable::new();
+
+        // Create temporary files
+        let temp_file1 = "/tmp/rush_test_fd_multi1.txt";
+        let temp_file2 = "/tmp/rush_test_fd_multi2.txt";
+        std::fs::write(temp_file1, "test content 1").unwrap();
+        std::fs::write(temp_file2, "test content 2").unwrap();
+
+        // Open file on fd 3
+        fd_table
+            .open_fd(3, temp_file1, true, false, false, false)
+            .unwrap();
+        assert!(fd_table.is_open(3));
+
+        // Duplicate fd 3 to fd 4
+        fd_table.duplicate_fd(3, 4).unwrap();
+        assert!(fd_table.is_open(4));
+
+        // Open another file on fd 5
+        fd_table
+            .open_fd(5, temp_file2, true, false, false, false)
+            .unwrap();
+        assert!(fd_table.is_open(5));
+
+        // Close fd 4
+        fd_table.close_fd(4).unwrap();
+        assert!(fd_table.is_closed(4));
+        assert!(!fd_table.is_open(4));
+
+        // fd 3 and 5 should still be open
+        assert!(fd_table.is_open(3));
+        assert!(fd_table.is_open(5));
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file1);
+        let _ = std::fs::remove_file(temp_file2);
+    }
+
+    #[test]
+    fn test_shell_state_has_fd_table() {
+        let state = ShellState::new();
+        let fd_table = state.fd_table.borrow();
+        assert!(!fd_table.is_open(3));
+    }
+
+    #[test]
+    fn test_shell_state_fd_table_operations() {
+        let state = ShellState::new();
+
+        // Create a temporary file
+        let temp_file = "/tmp/rush_test_state_fd.txt";
+        std::fs::write(temp_file, "test content").unwrap();
+
+        // Open file through shell state's fd table
+        {
+            let mut fd_table = state.fd_table.borrow_mut();
+            fd_table
+                .open_fd(3, temp_file, true, false, false, false)
+                .unwrap();
+        }
+
+        // Verify it's open
+        {
+            let fd_table = state.fd_table.borrow();
+            assert!(fd_table.is_open(3));
+        }
+
+        // Clean up
+        let _ = std::fs::remove_file(temp_file);
     }
 }

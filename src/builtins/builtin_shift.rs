@@ -50,12 +50,7 @@ mod tests {
     fn test_shift_builtin_default() {
         let cmd = ShellCommand {
             args: vec!["shift".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec![
@@ -84,12 +79,7 @@ mod tests {
     fn test_shift_builtin_custom_count() {
         let cmd = ShellCommand {
             args: vec!["shift".to_string(), "2".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec![
@@ -121,12 +111,7 @@ mod tests {
     fn test_shift_builtin_invalid_number() {
         let cmd = ShellCommand {
             args: vec!["shift".to_string(), "invalid".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         let builtin = ShiftBuiltin;
@@ -141,12 +126,7 @@ mod tests {
     fn test_shift_builtin_no_args() {
         let cmd = ShellCommand {
             args: vec!["shift".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.set_positional_params(vec!["arg1".to_string()]);

@@ -299,12 +299,7 @@ mod tests {
                 "echo hello".to_string(),
                 "INT".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -326,12 +321,7 @@ mod tests {
         // Reset the trap
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "-".to_string(), "INT".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -352,12 +342,7 @@ mod tests {
                 "echo hello".to_string(),
                 "INVALID".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -379,12 +364,7 @@ mod tests {
                 "echo hello".to_string(),
                 "KILL".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -408,12 +388,7 @@ mod tests {
                 "TERM".to_string(),
                 "HUP".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -437,12 +412,7 @@ mod tests {
         let mut output = Vec::new();
         let cmd = ShellCommand {
             args: vec!["trap".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -461,12 +431,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "-l".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -485,12 +450,7 @@ mod tests {
 
         let cmd = ShellCommand {
             args: vec!["trap".to_string(), "".to_string(), "INT".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;
@@ -511,12 +471,7 @@ mod tests {
                 "echo signal".to_string(),
                 "2".to_string(),
             ],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
 
         let builtin = TrapBuiltin;

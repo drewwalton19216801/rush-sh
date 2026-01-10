@@ -42,6 +42,15 @@ Rush is a POSIX sh-compatible shell implemented in Rust. It provides both intera
 - **Command Execution**: Execute external commands and built-in commands.
 - **Pipes**: Chain commands using the `|` operator.
 - **Redirections**: Input (`<`) and output (`>`, `>>`) redirections, here-documents (`<<`), and here-strings (`<<<`).
+- **File Descriptor Operations**: Full POSIX-compliant file descriptor management
+  - FD output redirection: `2>errors.log`, `3>output.txt`
+  - FD input redirection: `3<input.txt`, `4<data.txt`
+  - FD append: `2>>errors.log`, `3>>output.txt`
+  - FD duplication: `2>&1` (stderr to stdout), `1>&2` (stdout to stderr), `3>&1`
+  - FD closing: `2>&-` (close stderr), `3>&-`
+  - FD read/write: `3<>file.txt` (open for both reading and writing)
+  - Multiple redirections: `cmd >out.txt 2>err.txt 3>custom.txt`
+  - FD swapping and advanced patterns
 - **Brace Expansion**: Generate multiple strings from patterns with braces.
   - Comma-separated lists: `{a,b,c}` expands to `a b c`
   - Numeric ranges: `{1..5}` expands to `1 2 3 4 5`
@@ -1168,6 +1177,137 @@ jq '.name' <<< '{"name": "Rush", "type": "shell"}'
 - Content is passed to commands via stdin using efficient pipe mechanisms
 - Works with both built-in and external commands
 
+### File Descriptor Operations
+
+Rush provides comprehensive POSIX-compliant file descriptor management, enabling advanced I/O redirection and control over file descriptors beyond the standard stdin (0), stdout (1), and stderr (2):
+
+- **FD Output Redirection**: Redirect any file descriptor to a file
+- **FD Input Redirection**: Open files for reading on custom file descriptors
+- **FD Append**: Append output from any file descriptor to a file
+- **FD Duplication**: Duplicate file descriptors to combine or swap streams
+- **FD Closing**: Explicitly close file descriptors to suppress output
+- **FD Read/Write**: Open files for both reading and writing
+- **Multiple Redirections**: Apply multiple redirections to a single command
+- **Advanced Patterns**: FD swapping, stream separation, and complex I/O routing
+
+**Basic FD Redirection:**
+
+```bash
+# Redirect stderr to a file (FD 2)
+ls /nonexistent 2>errors.log
+
+# Redirect stdout to one file, stderr to another
+command >output.log 2>errors.log
+
+# Append stderr to a file
+command 2>>errors.log
+
+# Open file for reading on FD 3
+cat 3<input.txt
+
+# Open file for reading and writing on FD 3
+cat 3<>file.txt
+```
+
+**FD Duplication:**
+
+```bash
+# Redirect stderr to stdout (combine streams)
+command 2>&1
+
+# Redirect stdout to stderr
+echo "Error message" 1>&2
+
+# Redirect FD 3 to stdout
+command 3>&1
+
+# Combine stderr into stdout, then pipe both
+command 2>&1 | grep pattern
+```
+
+**FD Closing:**
+
+```bash
+# Close stderr to suppress error messages
+command 2>&-
+
+# Close FD 3
+command 3>&-
+
+# Discard all output
+command >/dev/null 2>&1
+```
+
+**Advanced Patterns:**
+
+```bash
+# Separate stdout and stderr to different files
+command >output.txt 2>errors.txt
+
+# Combine streams and redirect to file
+command >combined.log 2>&1
+
+# Swap stdout and stderr
+command 3>&1 1>&2 2>&3 3>&-
+
+# Multiple custom file descriptors
+command 3>custom1.txt 4>custom2.txt 5>custom3.txt
+
+# Pipeline with error handling
+command 2>&1 | tee output.log | grep ERROR
+
+# Conditional error logging
+if ! command 2>errors.log; then
+    cat errors.log
+    exit 1
+fi
+```
+
+**Practical Use Cases:**
+
+```bash
+# Logging: Separate normal output from errors
+./script.sh >output.log 2>errors.log
+
+# Debugging: Capture stderr while displaying stdout
+command 2>debug.log
+
+# Silent execution: Discard all output
+command >/dev/null 2>&1
+
+# Error analysis: Capture and process errors
+command 2>&1 | grep -i error | tee error_summary.txt
+
+# Stream separation: Process stdout and stderr differently
+(command | process_output) 2> >(process_errors)
+
+# Backup with logging
+tar czf backup.tar.gz /data 2>backup_errors.log
+
+# Complex pipelines with error tracking
+(command1 2>&1 | command2) 2>pipeline_errors.log
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Full compatibility with POSIX file descriptor operations
+- **FD Range**: Support for file descriptors 0-9
+- **State Management**: Proper FD lifecycle management with save/restore capabilities
+- **Error Handling**: Comprehensive error reporting for invalid operations
+- **Integration**: Works seamlessly with pipes, redirections, and all shell features
+- **Performance**: Efficient implementation using Rust's file descriptor primitives
+
+**Implementation Details:**
+
+- File descriptors are managed through a dedicated `FileDescriptorTable` in shell state
+- FD operations are parsed during lexing and applied during command execution
+- Supports duplication, closing, and read/write modes
+- Proper cleanup and restoration of file descriptors after command execution
+- Thread-safe implementation for concurrent operations
+- Comprehensive test coverage with 20+ test cases
+
+For a complete demonstration of file descriptor operations, see [`examples/fd_redirection_demo.sh`](examples/fd_redirection_demo.sh).
+
 ### Positional Parameters
 
 Rush now provides comprehensive support for positional parameters, enabling scripts to access and manipulate command-line arguments with full POSIX compliance:
@@ -1804,6 +1944,17 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
   - Multiple patterns: `echo {a,b}{1,2}` → `a1 a2 b1 b2`
   - Create directories: `mkdir -p project/{src,test,docs}`
   - Batch operations: `touch file{1..10}.txt`
+- File descriptor operations:
+  - FD output redirection: `command 2>errors.log`
+  - FD input redirection: `cat 3<input.txt`
+  - FD append: `command 2>>errors.log`
+  - FD duplication: `command 2>&1` (combine stderr into stdout)
+  - FD closing: `command 2>&-` (close stderr)
+  - FD read/write: `cat 3<>file.txt`
+  - Multiple redirections: `command >out.txt 2>err.txt 3>custom.txt`
+  - Stream separation: `./script.sh >output.log 2>errors.log`
+  - Discard output: `command >/dev/null 2>&1`
+  - Demo script: `source examples/fd_redirection_demo.sh`
 - Tab completion:
   - Complete commands: `cd` → `cd`, `env`, `exit`
   - Complete files: `cat f` → `cat file.txt`

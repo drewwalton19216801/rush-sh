@@ -66,12 +66,7 @@ mod tests {
     fn test_env_builtin_run() {
         let cmd = ShellCommand {
             args: vec!["env".to_string()],
-            input: None,
-            output: None,
-            append: None,
-            here_doc_delimiter: None,
-            here_doc_quoted: false,
-            here_string_content: None,
+            redirections: Vec::new(),
         };
         let mut shell_state = ShellState::new();
         shell_state.colors_enabled = false;
