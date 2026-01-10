@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,11 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="layout">
         <!-- Sidebar Navigation -->
@@ -53,7 +57,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.5.9</span>
+                    <span class="version">v0.6.1</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -85,7 +89,8 @@
                             <span class="theme-icon">🌙</span>
                         </button>
                         <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search documentation..."
+                                id="searchInput">
                             <span class="search-icon">🔍</span>
                         </div>
                     </div>
@@ -106,7 +111,8 @@
                         <div class="prereq-card">
                             <div class="prereq-icon">🦀</div>
                             <h3>Rust</h3>
-                            <p>Rush requires Rust edition 2024 or later. Install Rust using <a href="https://rustup.rs/" target="_blank">rustup</a>.</p>
+                            <p>Rush requires Rust edition 2024 or later. Install Rust using <a href="https://rustup.rs/"
+                                    target="_blank">rustup</a>.</p>
                             <div class="code-block">
                                 <pre><code>curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</code></pre>
                             </div>
@@ -192,7 +198,9 @@ cd rush-sh</code></pre>
                                         <div class="code-block">
                                             <pre><code>cargo install rush-sh</code></pre>
                                         </div>
-                                        <p>Installs the latest published version from <a href="https://crates.io/crates/rush-sh" target="_blank">crates.io</a></p>
+                                        <p>Installs the latest published version from <a
+                                                href="https://crates.io/crates/rush-sh" target="_blank">crates.io</a>
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -382,7 +390,8 @@ python3 -m http.server 8000 -d target/
                             <h4>Build Errors</h4>
                             <div class="trouble-solution">
                                 <p><strong>Problem:</strong> Compilation fails with missing dependencies</p>
-                                <p><strong>Solution:</strong> Update Rust and ensure all system dependencies are installed</p>
+                                <p><strong>Solution:</strong> Update Rust and ensure all system dependencies are
+                                    installed</p>
                                 <div class="code-block">
                                     <pre><code>rustup update stable
 sudo apt-get install build-essential  # Ubuntu/Debian
@@ -421,7 +430,8 @@ export NO_COLOR=1</code></pre>
                             <h4>Tab Completion Issues</h4>
                             <div class="trouble-solution">
                                 <p><strong>Problem:</strong> Tab completion not working</p>
-                                <p><strong>Solution:</strong> Ensure you're using an interactive terminal that supports readline</p>
+                                <p><strong>Solution:</strong> Ensure you're using an interactive terminal that supports
+                                    readline</p>
                                 <div class="code-block">
                                     <pre><code># Tab completion works in interactive mode
 ./target/release/rush-sh
@@ -452,4 +462,5 @@ export NO_COLOR=1</code></pre>
 
     <script src="script.js"></script>
 </body>
+
 </html>

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,11 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="layout">
         <!-- Sidebar Navigation -->
@@ -53,7 +57,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.6.0</span>
+                    <span class="version">v0.6.1</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -85,7 +89,8 @@
                             <span class="theme-icon">🌙</span>
                         </button>
                         <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search documentation..."
+                                id="searchInput">
                             <span class="search-icon">🔍</span>
                         </div>
                     </div>
@@ -96,7 +101,8 @@
             <div class="page-content">
                 <div class="feature-hero">
                     <h1>✨ Rush Shell Features</h1>
-                    <p>Comprehensive POSIX sh-compatible shell with advanced expansions, powerful built-ins, and modern interface</p>
+                    <p>Comprehensive POSIX sh-compatible shell with advanced expansions, powerful built-ins, and modern
+                        interface</p>
                 </div>
 
                 <!-- Core Features -->
@@ -106,7 +112,8 @@
                         <div class="feature-card">
                             <div class="feature-icon">⚡</div>
                             <h3>Command Execution</h3>
-                            <p>Execute external commands and built-in commands with full PATH resolution and error handling</p>
+                            <p>Execute external commands and built-in commands with full PATH resolution and error
+                                handling</p>
                             <div class="code-block">
                                 <pre><code># External commands
 ls -la /tmp
@@ -168,7 +175,8 @@ wc -w <<< "count these words"</code></pre>
                         <div class="feature-card">
                             <div class="feature-icon">🔀</div>
                             <h3>File Descriptor Operations</h3>
-                            <p>Complete file descriptor management with duplication, closing, and read/write operations</p>
+                            <p>Complete file descriptor management with duplication, closing, and read/write operations
+                            </p>
                             <div class="code-block">
                                 <pre><code># Duplicate file descriptors
 exec 3>&1  # Duplicate stdout to FD 3
@@ -186,7 +194,8 @@ exec 5<>file.txt  # Open for read/write</code></pre>
                         <div class="feature-card">
                             <div class="feature-icon">🔄</div>
                             <h3>Subshells</h3>
-                            <p>POSIX-compliant subshells with state isolation, exit code propagation, and trap inheritance</p>
+                            <p>POSIX-compliant subshells with state isolation, exit code propagation, and trap
+                                inheritance</p>
                             <div class="code-block">
                                 <pre><code># Execute in subshell
 (cd /tmp && ls)
@@ -209,7 +218,8 @@ exec 5<>file.txt  # Open for read/write</code></pre>
 
                     <div class="expansion-section">
                         <h3>Brace Expansion</h3>
-                        <p>Generate multiple strings from patterns with braces - perfect for batch operations and file generation</p>
+                        <p>Generate multiple strings from patterns with braces - perfect for batch operations and file
+                            generation</p>
 
                         <div class="expansion-examples">
                             <div class="example-group">
@@ -263,7 +273,8 @@ echo user{1..100}@example.com</code></pre>
 
                     <div class="expansion-section">
                         <h3>Command Substitution</h3>
-                        <p>Execute commands and substitute their output inline within the current shell context for optimal performance</p>
+                        <p>Execute commands and substitute their output inline within the current shell context for
+                            optimal performance</p>
 
                         <div class="expansion-examples">
                             <div class="example-group">
@@ -296,7 +307,8 @@ echo "Output: $(echo 'First'; echo 'Second')"</code></pre>
 
                     <div class="expansion-section">
                         <h3>Arithmetic Expansion</h3>
-                        <p>Evaluate mathematical expressions using POSIX-standard $((...)) syntax with full operator precedence</p>
+                        <p>Evaluate mathematical expressions using POSIX-standard $((...)) syntax with full operator
+                            precedence</p>
 
                         <div class="expansion-examples">
                             <div class="example-group">
@@ -498,7 +510,8 @@ local var="value"</code></pre>
                     <h2>🛠️ Built-in Commands</h2>
 
                     <div class="builtins-overview">
-                        <p>Rush includes <strong>20 comprehensive built-in commands</strong> for enhanced functionality and performance:</p>
+                        <p>Rush includes <strong>20 comprehensive built-in commands</strong> for enhanced functionality
+                            and performance:</p>
 
                         <div class="builtins-grid">
                             <div class="builtin-category">
@@ -615,7 +628,8 @@ echo "Welcome to Rush!"</code></pre>
                         <div class="feature-card">
                             <div class="feature-icon">🛡️</div>
                             <h3>Enhanced Trap System</h3>
-                            <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with overflow protection</p>
+                            <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with
+                                overflow protection</p>
                             <div class="code-block">
                                 <pre><code># Set trap handlers
 trap 'echo "Interrupted"' INT
@@ -649,4 +663,5 @@ trap - INT</code></pre>
 
     <script src="script.js"></script>
 </body>
+
 </html>

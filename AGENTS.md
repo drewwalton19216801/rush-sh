@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.6.0. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
+**Rush** is a comprehensive POSIX sh-compatible shell implementation written in Rust, currently at version 0.6.1. The project aims to provide a fully compliant POSIX shell while leveraging Rust's type safety, performance, and memory management capabilities.
 
 ### Project Goals
 
@@ -262,8 +262,8 @@ If you need to add a new mutex for a different type of global state:
 static NEW_RESOURCE_LOCK: Mutex<()> = Mutex::new(());
 ```
 
-2. Document it in this guide
-3. Use it consistently in all tests that access that resource
+1. Document it in this guide
+2. Use it consistently in all tests that access that resource
 
 ### Error Handling Patterns
 

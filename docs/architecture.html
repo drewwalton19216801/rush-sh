@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,11 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="layout">
         <!-- Sidebar Navigation -->
@@ -53,7 +57,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.5.9</span>
+                    <span class="version">v0.6.1</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -85,7 +89,8 @@
                             <span class="theme-icon">🌙</span>
                         </button>
                         <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search documentation..."
+                                id="searchInput">
                             <span class="search-icon">🔍</span>
                         </div>
                     </div>
@@ -252,13 +257,19 @@
                             <div class="component-details">
                                 <h4>Responsibilities</h4>
                                 <ul>
-                                    <li><strong>Token Recognition:</strong> Identifies commands, operators, keywords, and special tokens</li>
-                                    <li><strong>Quote Handling:</strong> Processes single/double quotes and escape sequences</li>
-                                    <li><strong>Variable Detection:</strong> Identifies variable patterns for deferred expansion</li>
+                                    <li><strong>Token Recognition:</strong> Identifies commands, operators, keywords,
+                                        and special tokens</li>
+                                    <li><strong>Quote Handling:</strong> Processes single/double quotes and escape
+                                        sequences</li>
+                                    <li><strong>Variable Detection:</strong> Identifies variable patterns for deferred
+                                        expansion</li>
                                     <li><strong>Alias Expansion:</strong> Expands command aliases before parsing</li>
-                                    <li><strong>Command Substitution:</strong> Preserves $(...) and `...` syntax for runtime expansion</li>
-                                    <li><strong>Here-document Tokenization:</strong> Recognizes << and <<< operators for here-documents and here-strings</li>
-                                    <li><strong>FD Redirection Parsing:</strong> Handles file descriptor redirection operators (N>&M, N<&M, N>&-, N<&-)</li>
+                                    <li><strong>Command Substitution:</strong> Preserves $(...) and `...` syntax for
+                                        runtime expansion</li>
+                                    <li><strong>Here-document Tokenization:</strong> Recognizes << and <<< operators for
+                                            here-documents and here-strings</li>
+                                    <li><strong>FD Redirection Parsing:</strong> Handles file descriptor redirection
+                                        operators (N>&M, N<&M, N>&-, N<&-)< /li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -279,12 +290,17 @@
                             <div class="component-details">
                                 <h4>Responsibilities</h4>
                                 <ul>
-                                    <li><strong>AST Construction:</strong> Builds Abstract Syntax Tree from token stream</li>
-                                    <li><strong>Control Structures:</strong> Handles if/elif/else, case, for, while, functions</li>
-                                    <li><strong>Pipeline Construction:</strong> Creates pipeline structures for command chaining</li>
+                                    <li><strong>AST Construction:</strong> Builds Abstract Syntax Tree from token stream
+                                    </li>
+                                    <li><strong>Control Structures:</strong> Handles if/elif/else, case, for, while,
+                                        functions</li>
+                                    <li><strong>Pipeline Construction:</strong> Creates pipeline structures for command
+                                        chaining</li>
                                     <li><strong>Redirection Parsing:</strong> Processes I/O redirection operators</li>
-                                    <li><strong>Subshell Parsing:</strong> Parses subshell expressions with proper nesting</li>
-                                    <li><strong>FD Redirection AST Nodes:</strong> Constructs AST nodes for file descriptor operations</li>
+                                    <li><strong>Subshell Parsing:</strong> Parses subshell expressions with proper
+                                        nesting</li>
+                                    <li><strong>FD Redirection AST Nodes:</strong> Constructs AST nodes for file
+                                        descriptor operations</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -305,14 +321,21 @@
                             <div class="component-details">
                                 <h4>Responsibilities</h4>
                                 <ul>
-                                    <li><strong>Command Execution:</strong> Runs external commands and built-in functions</li>
-                                    <li><strong>Variable Expansion:</strong> Runtime expansion of variables and parameters</li>
-                                    <li><strong>Pipeline Management:</strong> Coordinates data flow between pipeline stages</li>
-                                    <li><strong>Redirection Handling:</strong> Manages file descriptors and I/O redirection</li>
+                                    <li><strong>Command Execution:</strong> Runs external commands and built-in
+                                        functions</li>
+                                    <li><strong>Variable Expansion:</strong> Runtime expansion of variables and
+                                        parameters</li>
+                                    <li><strong>Pipeline Management:</strong> Coordinates data flow between pipeline
+                                        stages</li>
+                                    <li><strong>Redirection Handling:</strong> Manages file descriptors and I/O
+                                        redirection</li>
                                     <li><strong>Error Propagation:</strong> Handles exit codes and error conditions</li>
-                                    <li><strong>Subshell Execution:</strong> Executes subshells with state isolation and trap inheritance</li>
-                                    <li><strong>FD Table Management:</strong> Manages file descriptor duplication, closing, and read/write operations</li>
-                                    <li><strong>Here-document Processing:</strong> Handles here-document and here-string expansion and execution</li>
+                                    <li><strong>Subshell Execution:</strong> Executes subshells with state isolation and
+                                        trap inheritance</li>
+                                    <li><strong>FD Table Management:</strong> Manages file descriptor duplication,
+                                        closing, and read/write operations</li>
+                                    <li><strong>Here-document Processing:</strong> Handles here-document and here-string
+                                        expansion and execution</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -333,13 +356,18 @@
                             <div class="component-details">
                                 <h4>Responsibilities</h4>
                                 <ul>
-                                    <li><strong>Variable Scoping:</strong> Global and local variable management with proper scoping</li>
-                                    <li><strong>Environment Integration:</strong> Coordination with system environment variables</li>
-                                    <li><strong>Function Context:</strong> Function call stack and local variable scoping</li>
+                                    <li><strong>Variable Scoping:</strong> Global and local variable management with
+                                        proper scoping</li>
+                                    <li><strong>Environment Integration:</strong> Coordination with system environment
+                                        variables</li>
+                                    <li><strong>Function Context:</strong> Function call stack and local variable
+                                        scoping</li>
                                     <li><strong>Directory Stack:</strong> pushd/popd/dirs functionality</li>
                                     <li><strong>Alias Management:</strong> Command alias storage and expansion</li>
-                                    <li><strong>FD Table:</strong> File descriptor table with save/restore capabilities for subshells</li>
-                                    <li><strong>Trap Management:</strong> Signal trap handlers with inheritance and queue management</li>
+                                    <li><strong>FD Table:</strong> File descriptor table with save/restore capabilities
+                                        for subshells</li>
+                                    <li><strong>Trap Management:</strong> Signal trap handlers with inheritance and
+                                        queue management</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
@@ -368,11 +396,16 @@
                             <div class="engine-details">
                                 <h4>Features</h4>
                                 <ul>
-                                    <li><strong>Shunting-yard Algorithm:</strong> Proper operator precedence and associativity</li>
-                                    <li><strong>Token-based Parsing:</strong> Converts infix expressions to Reverse Polish Notation</li>
-                                    <li><strong>Variable Integration:</strong> Seamlessly accesses shell variables during evaluation</li>
-                                    <li><strong>Comprehensive Operators:</strong> Arithmetic, comparison, bitwise, and logical operations</li>
-                                    <li><strong>Error Handling:</strong> Robust error reporting for syntax errors and division by zero</li>
+                                    <li><strong>Shunting-yard Algorithm:</strong> Proper operator precedence and
+                                        associativity</li>
+                                    <li><strong>Token-based Parsing:</strong> Converts infix expressions to Reverse
+                                        Polish Notation</li>
+                                    <li><strong>Variable Integration:</strong> Seamlessly accesses shell variables
+                                        during evaluation</li>
+                                    <li><strong>Comprehensive Operators:</strong> Arithmetic, comparison, bitwise, and
+                                        logical operations</li>
+                                    <li><strong>Error Handling:</strong> Robust error reporting for syntax errors and
+                                        division by zero</li>
                                 </ul>
 
                                 <h4>Supported Operations</h4>
@@ -406,11 +439,16 @@
                             <div class="engine-details">
                                 <h4>Features</h4>
                                 <ul>
-                                    <li><strong>Modifier Parsing:</strong> Sophisticated parsing of POSIX sh parameter expansion modifiers</li>
-                                    <li><strong>String Operations:</strong> Default values, substring extraction, pattern removal, and substitution</li>
-                                    <li><strong>Indirect Expansion:</strong> Dynamic variable access (${!name}) and variable name listing (${!prefix*})</li>
-                                    <li><strong>Error Handling:</strong> Robust error reporting for malformed expressions and edge cases</li>
-                                    <li><strong>Performance:</strong> Efficient string manipulation with minimal memory allocation</li>
+                                    <li><strong>Modifier Parsing:</strong> Sophisticated parsing of POSIX sh parameter
+                                        expansion modifiers</li>
+                                    <li><strong>String Operations:</strong> Default values, substring extraction,
+                                        pattern removal, and substitution</li>
+                                    <li><strong>Indirect Expansion:</strong> Dynamic variable access (${!name}) and
+                                        variable name listing (${!prefix*})</li>
+                                    <li><strong>Error Handling:</strong> Robust error reporting for malformed
+                                        expressions and edge cases</li>
+                                    <li><strong>Performance:</strong> Efficient string manipulation with minimal memory
+                                        allocation</li>
                                 </ul>
 
                                 <h4>Supported Modifiers</h4>
@@ -448,11 +486,16 @@
                             <div class="engine-details">
                                 <h4>Features</h4>
                                 <ul>
-                                    <li><strong>Pattern Detection:</strong> Identifies brace patterns during lexing with nested brace support</li>
-                                    <li><strong>Comma-Separated Lists:</strong> Expands {a,b,c} into multiple alternatives</li>
-                                    <li><strong>Range Expansion:</strong> Numeric ({1..10}) and alphabetic ({a..z}) range generation</li>
-                                    <li><strong>Prefix/Suffix Handling:</strong> Combines braces with surrounding text for complex patterns</li>
-                                    <li><strong>Error Handling:</strong> Graceful handling of malformed patterns with clear error messages</li>
+                                    <li><strong>Pattern Detection:</strong> Identifies brace patterns during lexing with
+                                        nested brace support</li>
+                                    <li><strong>Comma-Separated Lists:</strong> Expands {a,b,c} into multiple
+                                        alternatives</li>
+                                    <li><strong>Range Expansion:</strong> Numeric ({1..10}) and alphabetic ({a..z})
+                                        range generation</li>
+                                    <li><strong>Prefix/Suffix Handling:</strong> Combines braces with surrounding text
+                                        for complex patterns</li>
+                                    <li><strong>Error Handling:</strong> Graceful handling of malformed patterns with
+                                        clear error messages</li>
                                 </ul>
 
                                 <h4>Expansion Types</h4>
@@ -597,30 +640,40 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
                         <div class="performance-section">
                             <h3>Memory Management</h3>
                             <ul>
-                                <li><strong>String Reuse:</strong> Reuse String instances where possible to reduce allocations</li>
+                                <li><strong>String Reuse:</strong> Reuse String instances where possible to reduce
+                                    allocations</li>
                                 <li><strong>Minimal Copying:</strong> Avoid unnecessary allocations in hot paths</li>
-                                <li><strong>Efficient Data Structures:</strong> Use appropriate data structures for each use case</li>
-                                <li><strong>Streaming Operations:</strong> Process large inputs in chunks when possible</li>
+                                <li><strong>Efficient Data Structures:</strong> Use appropriate data structures for each
+                                    use case</li>
+                                <li><strong>Streaming Operations:</strong> Process large inputs in chunks when possible
+                                </li>
                             </ul>
                         </div>
 
                         <div class="performance-section">
                             <h3>Execution Optimization</h3>
                             <ul>
-                                <li><strong>Built-in Optimization:</strong> Built-in commands execute without process spawning</li>
-                                <li><strong>In-Context Execution:</strong> Command substitution uses in-process execution for built-ins</li>
-                                <li><strong>Efficient Token Processing:</strong> Minimal copying during token processing pipeline</li>
-                                <li><strong>Lazy Evaluation:</strong> Expansions are only executed when actually encountered</li>
+                                <li><strong>Built-in Optimization:</strong> Built-in commands execute without process
+                                    spawning</li>
+                                <li><strong>In-Context Execution:</strong> Command substitution uses in-process
+                                    execution for built-ins</li>
+                                <li><strong>Efficient Token Processing:</strong> Minimal copying during token processing
+                                    pipeline</li>
+                                <li><strong>Lazy Evaluation:</strong> Expansions are only executed when actually
+                                    encountered</li>
                             </ul>
                         </div>
 
                         <div class="performance-section">
                             <h3>Caching Strategy</h3>
                             <ul>
-                                <li><strong>Alias Expansion:</strong> Results are not cached (by design for freshness)</li>
+                                <li><strong>Alias Expansion:</strong> Results are not cached (by design for freshness)
+                                </li>
                                 <li><strong>Variable Lookups:</strong> O(1) access with HashMap implementation</li>
-                                <li><strong>Function Definitions:</strong> Stored efficiently in HashMap for fast lookup</li>
-                                <li><strong>Path Resolution:</strong> PATH searching optimized for external commands</li>
+                                <li><strong>Function Definitions:</strong> Stored efficiently in HashMap for fast lookup
+                                </li>
+                                <li><strong>Path Resolution:</strong> PATH searching optimized for external commands
+                                </li>
                             </ul>
                         </div>
                     </div>
@@ -633,7 +686,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
                     <div class="dependencies-list">
                         <div class="dependency-item">
                             <div class="dep-name">rustyline</div>
-                            <div class="dep-description">Interactive line editing and history with signal handling support</div>
+                            <div class="dep-description">Interactive line editing and history with signal handling
+                                support</div>
                         </div>
 
                         <div class="dependency-item">
@@ -643,7 +697,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
 
                         <div class="dependency-item">
                             <div class="dep-name">glob</div>
-                            <div class="dep-description">Pattern matching for case statements and wildcard expansion</div>
+                            <div class="dep-description">Pattern matching for case statements and wildcard expansion
+                            </div>
                         </div>
 
                         <div class="dependency-item">
@@ -676,4 +731,5 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String><
 
     <script src="script.js"></script>
 </body>
+
 </html>

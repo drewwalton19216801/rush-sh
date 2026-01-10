@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,11 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
 </head>
+
 <body>
     <div class="layout">
         <!-- Sidebar Navigation -->
@@ -53,7 +57,7 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.6.0</span>
+                    <span class="version">v0.6.1</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
@@ -85,7 +89,8 @@
                             <span class="theme-icon">🌙</span>
                         </button>
                         <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                            <input type="text" class="search-input" placeholder="Search documentation..."
+                                id="searchInput">
                             <span class="search-icon">🔍</span>
                         </div>
                     </div>
@@ -100,13 +105,15 @@
                         <div class="hero-text">
                             <h1 class="hero-title">
                                 Rush Shell
-                                <span class="version-badge">v0.6.0</span>
+                                <span class="version-badge">v0.6.1</span>
                             </h1>
                             <p class="hero-subtitle">
                                 A comprehensive POSIX sh-compatible shell implementation written in Rust
                             </p>
                             <div class="hero-description">
-                                <p>Rush is a feature-rich Unix shell that combines the reliability and safety of Rust with full POSIX compliance. Built from the ground up with performance, security, and maintainability in mind.</p>
+                                <p>Rush is a feature-rich Unix shell that combines the reliability and safety of Rust
+                                    with full POSIX compliance. Built from the ground up with performance, security, and
+                                    maintainability in mind.</p>
                             </div>
 
                             <div class="hero-stats">
@@ -190,40 +197,46 @@
                         <div class="feature-card">
                             <div class="feature-icon">🔧</div>
                             <h3>Full POSIX Compliance</h3>
-                            <p>Implements IEEE Std 1003.1-2008 with comprehensive support for shell grammar, built-in utilities, and standard behavior</p>
+                            <p>Implements IEEE Std 1003.1-2008 with comprehensive support for shell grammar, built-in
+                                utilities, and standard behavior</p>
                             <a href="compliance.html" class="feature-link">View Compliance Status →</a>
                         </div>
 
                         <div class="feature-card">
                             <div class="feature-icon">⚡</div>
                             <h3>High Performance</h3>
-                            <p>Leverages Rust's zero-cost abstractions for optimal execution speed while maintaining memory safety</p>
+                            <p>Leverages Rust's zero-cost abstractions for optimal execution speed while maintaining
+                                memory safety</p>
                             <a href="benchmarks.html" class="feature-link">View Benchmarks →</a>
                         </div>
 
                         <div class="feature-card">
                             <div class="feature-icon">🛡️</div>
                             <h3>Memory Safe</h3>
-                            <p>Built with Rust's ownership system ensuring no memory leaks, data races, or segmentation faults</p>
+                            <p>Built with Rust's ownership system ensuring no memory leaks, data races, or segmentation
+                                faults</p>
                         </div>
 
                         <div class="feature-card">
                             <div class="feature-icon">🎨</div>
                             <h3>Modern Interface</h3>
-                            <p>Enhanced with colors, tab completion, and intelligent prompt with condensed directory display</p>
+                            <p>Enhanced with colors, tab completion, and intelligent prompt with condensed directory
+                                display</p>
                         </div>
 
                         <div class="feature-card">
                             <div class="feature-icon">🔨</div>
                             <h3>Rich Feature Set</h3>
-                            <p>18 built-in commands, advanced expansions, control structures, and comprehensive variable support</p>
+                            <p>18 built-in commands, advanced expansions, control structures, and comprehensive variable
+                                support</p>
                             <a href="features.html" class="feature-link">Explore Features →</a>
                         </div>
 
                         <div class="feature-card">
                             <div class="feature-icon">🧪</div>
                             <h3>Thoroughly Tested</h3>
-                            <p>413+ test functions covering all components with comprehensive edge case and error condition coverage</p>
+                            <p>413+ test functions covering all components with comprehensive edge case and error
+                                condition coverage</p>
                         </div>
                     </div>
                 </section>
@@ -236,7 +249,8 @@
                             <div class="update-badge">🚀</div>
                             <div class="update-content">
                                 <h4>Subshell Support</h4>
-                                <p>Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, and depth limit protection (60+ test cases)</p>
+                                <p>Full POSIX-compliant subshells with state isolation, exit code propagation, trap
+                                    inheritance, and depth limit protection (60+ test cases)</p>
                             </div>
                         </div>
 
@@ -244,7 +258,8 @@
                             <div class="update-badge">⚡</div>
                             <div class="update-content">
                                 <h4>File Descriptor Operations</h4>
-                                <p>Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and read/write operations (30+ test cases)</p>
+                                <p>Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and
+                                            read/write operations (30+ test cases)</p>
                             </div>
                         </div>
 
@@ -252,7 +267,8 @@
                             <div class="update-badge">🎯</div>
                             <div class="update-content">
                                 <h4>Here-documents & Here-strings</h4>
-                                <p>Full implementation of << and <<< with proper expansion handling for multi-line and single-line input redirection</p>
+                                <p>Full implementation of << and <<< with proper expansion handling for multi-line and
+                                        single-line input redirection</p>
                             </div>
                         </div>
 
@@ -260,7 +276,8 @@
                             <div class="update-badge">🔍</div>
                             <div class="update-content">
                                 <h4>Enhanced Trap System</h4>
-                                <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with overflow protection</p>
+                                <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with
+                                    overflow protection</p>
                             </div>
                         </div>
                     </div>
@@ -325,4 +342,5 @@ pwd</code></pre>
 
     <script src="script.js"></script>
 </body>
+
 </html>
