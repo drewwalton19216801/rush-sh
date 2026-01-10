@@ -1356,7 +1356,7 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
         i += 1;
     }
 
-    if !current_cmd.args.is_empty() {
+    if !current_cmd.args.is_empty() || current_cmd.compound.is_some() {
         commands.push(current_cmd);
     }
 
