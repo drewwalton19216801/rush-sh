@@ -25,6 +25,19 @@ impl<W: Write> Write for ColoredWriter<W> {
     }
 }
 
+/// A writer that always returns EBADF
+pub struct BadFdWriter;
+
+impl Write for BadFdWriter {
+    fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+        Err(io::Error::from_raw_os_error(libc::EBADF))
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Err(io::Error::from_raw_os_error(libc::EBADF))
+    }
+}
+
 mod builtin_alias;
 mod builtin_cd;
 mod builtin_declare;
@@ -265,7 +278,6 @@ pub fn execute_builtin(
         }
     }
 
-    // Get output writer - use stdout by default
     // Get output writer - try to get FD 1 from fd_table to respect redirections
     let mut output_writer: Box<dyn Write> = {
         let raw_fd = shell_state.fd_table.borrow().get_raw_fd(1);
@@ -278,11 +290,24 @@ pub fn execute_builtin(
                     let file = unsafe { std::fs::File::from_raw_fd(dup_fd) };
                     Box::new(ColoredWriter::new(file))
                 } else {
-                    // Fallback to stdout if duplication fails
-                    Box::new(ColoredWriter::new(io::stdout()))
+                    // Duplication failed
+                    let err = io::Error::last_os_error();
+                    if err.raw_os_error() == Some(libc::EBADF) {
+                        // EBADF means the FD is closed/invalid (e.g. parent closed stdout).
+                        // In this case, we just run without output.
+                        Box::new(BadFdWriter)
+                    } else {
+                        // Other errors (e.g. EMFILE) are fatal
+                        print_error(&format!("Failed to duplicate stdout: {}", err));
+                        let _ = shell_state.fd_table.borrow_mut().restore_all_fds();
+                        return 1;
+                    }
                 }
             }
-            None => Box::new(ColoredWriter::new(io::stdout())),
+            None => {
+                // FD 1 is closed. Do NOT fall back to stdout.
+                Box::new(BadFdWriter)
+            }
         }
     };
 
