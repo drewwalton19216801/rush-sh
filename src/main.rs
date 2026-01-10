@@ -527,7 +527,12 @@ fn contains_keyword(line: &str, keyword: &str) -> bool {
         }
 
         match ch {
-            '#' => return current_word == keyword, // Comment starts, check if the last word was the keyword
+            '#' => {
+                if current_word.is_empty() {
+                    return false; // Comment starts at word boundary
+                }
+                current_word.push(ch); // # inside word, treat as literal
+            }
             '\'' => {
                 in_single_quote = true;
                 current_word.push(ch);
