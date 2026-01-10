@@ -310,7 +310,15 @@ impl FileDescriptorTable {
         match self.fds.get(&fd_num) {
             Some(FileDescriptor::File(file)) => Some(file.as_raw_fd()),
             Some(FileDescriptor::Duplicate(raw_fd)) => Some(*raw_fd),
-            Some(FileDescriptor::Closed) | None => None,
+            Some(FileDescriptor::Closed) => None,
+            None => {
+                // Standard file descriptors (0, 1, 2) are always open unless explicitly closed
+                if fd_num >= 0 && fd_num <= 2 {
+                    Some(fd_num as RawFd)
+                } else {
+                    None
+                }
+            }
         }
     }
 
@@ -1188,7 +1196,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_open_file() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create a temporary file
@@ -1236,7 +1243,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_duplicate_fd() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create a temporary file
@@ -1260,7 +1266,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_duplicate_to_self() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create a temporary file
@@ -1293,7 +1298,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_close_fd() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create a temporary file
@@ -1331,7 +1335,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_save_all_and_restore_all() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create temporary files
@@ -1363,7 +1366,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_clear() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create a temporary file
@@ -1386,7 +1388,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_get_stdio() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create a temporary file
@@ -1412,7 +1413,6 @@ mod tests {
 
     #[test]
     fn test_fd_table_multiple_operations() {
-        use std::io::Write;
         let mut fd_table = FileDescriptorTable::new();
 
         // Create temporary files
@@ -1460,7 +1460,6 @@ mod tests {
 
     #[test]
     fn test_shell_state_fd_table_operations() {
-        use std::io::Write;
         let state = ShellState::new();
 
         // Create a temporary file

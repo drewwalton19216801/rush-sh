@@ -139,7 +139,7 @@ pub fn execute_builtin(
             match redir {
                 Redirection::Output(file) => {
                     match File::create(file) {
-                        Ok(f) => {
+                        Ok(_f) => {
                             found_output = true;
                             break;
                         }
@@ -151,7 +151,7 @@ pub fn execute_builtin(
                 }
                 Redirection::Append(file) => {
                     match File::options().append(true).create(true).open(file) {
-                        Ok(f) => {
+                        Ok(_f) => {
                             found_output = true;
                             break;
                         }
