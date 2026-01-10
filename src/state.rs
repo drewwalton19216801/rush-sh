@@ -61,6 +61,7 @@ pub struct FileDescriptorTable {
     /// Map of fd number to file descriptor
     fds: HashMap<i32, FileDescriptor>,
     /// Saved file descriptors for restoration after command execution
+    #[allow(dead_code)]
     saved_fds: HashMap<i32, RawFd>,
 }
 
@@ -182,6 +183,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
     pub fn save_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
         if !(0..=9).contains(&fd_num) {
@@ -210,6 +212,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
     pub fn restore_fd(&mut self, fd_num: i32) -> Result<(), String> {
         // Validate fd number
         if !(0..=9).contains(&fd_num) {
@@ -240,6 +243,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
     pub fn save_all_fds(&mut self) -> Result<(), String> {
         // Save all fds that we're tracking
         let fd_nums: Vec<i32> = self.fds.keys().copied().collect();
@@ -254,6 +258,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
+    #[allow(dead_code)]
     pub fn restore_all_fds(&mut self) -> Result<(), String> {
         // Restore all saved fds
         let fd_nums: Vec<i32> = self.saved_fds.keys().copied().collect();
@@ -271,6 +276,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Some(Stdio)` if the fd is open and can be converted to Stdio
     /// * `None` if the fd is not open or is closed
+    #[allow(dead_code)]
     pub fn get_stdio(&self, fd_num: i32) -> Option<Stdio> {
         match self.fds.get(&fd_num) {
             Some(FileDescriptor::File(file)) => {
@@ -330,6 +336,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `true` if the fd is open
     /// * `false` if the fd is closed or not tracked
+    #[allow(dead_code)]
     pub fn is_open(&self, fd_num: i32) -> bool {
         matches!(
             self.fds.get(&fd_num),
@@ -345,11 +352,13 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `true` if the fd is explicitly closed
     /// * `false` otherwise
+    #[allow(dead_code)]
     pub fn is_closed(&self, fd_num: i32) -> bool {
         matches!(self.fds.get(&fd_num), Some(FileDescriptor::Closed))
     }
 
     /// Clear all file descriptors and saved state
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.fds.clear();
         self.saved_fds.clear();
