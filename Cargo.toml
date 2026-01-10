@@ -6,12 +6,12 @@ members = [
 
 [workspace.dependencies]
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.148"
+serde_json = "1.0.149"
 chrono = { version = "0.4", features = ["serde"] }
 
 [package]
 name = "rush-sh"
-version = "0.5.9"
+version = "0.6.0"
 edition = "2024"
 description = "A POSIX sh-compatible shell written in Rust"
 license = "MIT"
