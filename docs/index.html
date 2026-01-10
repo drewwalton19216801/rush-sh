@@ -57,287 +57,285 @@
 
             <div class="sidebar-footer">
                 <div class="version-info">
-                    <span class="version">v0.6.1</span>
+                    <span class="version">v0.6.2</span>
                     <span class="status">~90% POSIX Compliant</span>
                 </div>
-                <div class="external-links">
-                    <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
-                        <span class="nav-icon">🔗</span>
-                        <span>GitHub</span>
-                    </a>
+                <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
+                    <span class="nav-icon">🔗</span>
+                    <span>GitHub</span>
+                </a>
+            </div>
+    </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Mobile menu button -->
+        <button class="mobile-menu-btn" id="mobileMenuBtn">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+
+        <!-- Header -->
+        <header class="page-header">
+            <div class="header-content">
+                <div class="breadcrumb">
+                    <span>Rush Shell Documentation</span>
+                </div>
+                <div class="header-actions">
+                    <button class="theme-toggle" id="themeToggle">
+                        <span class="theme-icon">🌙</span>
+                    </button>
+                    <div class="search-container">
+                        <input type="text" class="search-input" placeholder="Search documentation..." id="searchInput">
+                        <span class="search-icon">🔍</span>
+                    </div>
                 </div>
             </div>
-        </nav>
+        </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Mobile menu button -->
-            <button class="mobile-menu-btn" id="mobileMenuBtn">
-                <span></span>
-                <span></span>
-                <span></span>
-            </button>
+        <!-- Page Content -->
+        <div class="page-content">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-content">
+                    <div class="hero-text">
+                        <h1 class="hero-title">
+                            Rush Shell
+                            <span class="version-badge">v0.6.2</span>
+                        </h1>
+                        <p class="hero-subtitle">
+                            A comprehensive POSIX sh-compatible shell implementation written in Rust
+                        </p>
+                        <div class="hero-description">
+                            <p>Rush is a feature-rich Unix shell that combines the reliability and safety of Rust
+                                with full POSIX compliance. Built from the ground up with performance, security, and
+                                maintainability in mind.</p>
+                        </div>
 
-            <!-- Header -->
-            <header class="page-header">
-                <div class="header-content">
-                    <div class="breadcrumb">
-                        <span>Rush Shell Documentation</span>
+                        <div class="hero-stats">
+                            <div class="stat">
+                                <div class="stat-value">~90%</div>
+                                <div class="stat-label">POSIX Compliant</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">20</div>
+                                <div class="stat-label">Built-in Commands</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">413+</div>
+                                <div class="stat-label">Test Functions</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-value">100%</div>
+                                <div class="stat-label">Rust Powered</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="header-actions">
-                        <button class="theme-toggle" id="themeToggle">
-                            <span class="theme-icon">🌙</span>
-                        </button>
-                        <div class="search-container">
-                            <input type="text" class="search-input" placeholder="Search documentation..."
-                                id="searchInput">
-                            <span class="search-icon">🔍</span>
+
+                    <div class="hero-visual">
+                        <div class="terminal-demo">
+                            <div class="terminal-header">
+                                <div class="terminal-dots">
+                                    <span class="dot red"></span>
+                                    <span class="dot yellow"></span>
+                                    <span class="dot green"></span>
+                                </div>
+                                <div class="terminal-title">rush-sh</div>
+                            </div>
+                            <div class="terminal-body">
+                                <div class="terminal-prompt">
+                                    <span class="prompt-path">/h/d/p/r/rush-sh $</span>
+                                    <span class="prompt-cursor">█</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </header>
+            </section>
 
-            <!-- Page Content -->
-            <div class="page-content">
-                <!-- Hero Section -->
-                <section class="hero">
-                    <div class="hero-content">
-                        <div class="hero-text">
-                            <h1 class="hero-title">
-                                Rush Shell
-                                <span class="version-badge">v0.6.1</span>
-                            </h1>
-                            <p class="hero-subtitle">
-                                A comprehensive POSIX sh-compatible shell implementation written in Rust
-                            </p>
-                            <div class="hero-description">
-                                <p>Rush is a feature-rich Unix shell that combines the reliability and safety of Rust
-                                    with full POSIX compliance. Built from the ground up with performance, security, and
-                                    maintainability in mind.</p>
-                            </div>
-
-                            <div class="hero-stats">
-                                <div class="stat">
-                                    <div class="stat-value">~90%</div>
-                                    <div class="stat-label">POSIX Compliant</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value">20</div>
-                                    <div class="stat-label">Built-in Commands</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value">413+</div>
-                                    <div class="stat-label">Test Functions</div>
-                                </div>
-                                <div class="stat">
-                                    <div class="stat-value">100%</div>
-                                    <div class="stat-label">Rust Powered</div>
-                                </div>
-                            </div>
+            <!-- Quick Start -->
+            <section class="quick-start">
+                <h2>🚀 Quick Start</h2>
+                <div class="quick-start-grid">
+                    <div class="quick-start-card">
+                        <div class="card-icon">⚡</div>
+                        <h3>Interactive Mode</h3>
+                        <div class="code-block">
+                            <pre><code>./target/release/rush-sh</code></pre>
                         </div>
+                        <p>Start the shell in interactive mode with a modern prompt</p>
+                    </div>
 
-                        <div class="hero-visual">
-                            <div class="terminal-demo">
-                                <div class="terminal-header">
-                                    <div class="terminal-dots">
-                                        <span class="dot red"></span>
-                                        <span class="dot yellow"></span>
-                                        <span class="dot green"></span>
-                                    </div>
-                                    <div class="terminal-title">rush-sh</div>
-                                </div>
-                                <div class="terminal-body">
-                                    <div class="terminal-prompt">
-                                        <span class="prompt-path">/h/d/p/r/rush-sh $</span>
-                                        <span class="prompt-cursor">█</span>
-                                    </div>
-                                </div>
+                    <div class="quick-start-card">
+                        <div class="card-icon">📜</div>
+                        <h3>Script Mode</h3>
+                        <div class="code-block">
+                            <pre><code>./target/release/rush-sh script.sh</code></pre>
+                        </div>
+                        <p>Execute commands from a file</p>
+                    </div>
+
+                    <div class="quick-start-card">
+                        <div class="card-icon">🎯</div>
+                        <h3>Command Mode</h3>
+                        <div class="code-block">
+                            <pre><code>./target/release/rush-sh -c "echo Hello World"</code></pre>
+                        </div>
+                        <p>Execute a single command string</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Key Features -->
+            <section class="key-features">
+                <h2>✨ Key Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-icon">🔧</div>
+                        <h3>Full POSIX Compliance</h3>
+                        <p>Implements IEEE Std 1003.1-2008 with comprehensive support for shell grammar, built-in
+                            utilities, and standard behavior</p>
+                        <a href="compliance.html" class="feature-link">View Compliance Status →</a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">⚡</div>
+                        <h3>High Performance</h3>
+                        <p>Leverages Rust's zero-cost abstractions for optimal execution speed while maintaining
+                            memory safety</p>
+                        <a href="benchmarks.html" class="feature-link">View Benchmarks →</a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">🛡️</div>
+                        <h3>Memory Safe</h3>
+                        <p>Built with Rust's ownership system ensuring no memory leaks, data races, or segmentation
+                            faults</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">🎨</div>
+                        <h3>Modern Interface</h3>
+                        <p>Enhanced with colors, tab completion, and intelligent prompt with condensed directory
+                            display</p>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">🔨</div>
+                        <h3>Rich Feature Set</h3>
+                        <p>18 built-in commands, advanced expansions, control structures, and comprehensive variable
+                            support</p>
+                        <a href="features.html" class="feature-link">Explore Features →</a>
+                    </div>
+
+                    <div class="feature-card">
+                        <div class="feature-icon">🧪</div>
+                        <h3>Thoroughly Tested</h3>
+                        <p>413+ test functions covering all components with comprehensive edge case and error
+                            condition coverage</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Recent Updates -->
+            <section class="recent-updates">
+                <h2>🆕 What's New</h2>
+                <div class="updates-list">
+                    <div class="update-item">
+                        <div class="update-badge">🚀</div>
+                        <div class="update-content">
+                            <h4>Subshell Support</h4>
+                            <p>Full POSIX-compliant subshells with state isolation, exit code propagation, trap
+                                inheritance, and depth limit protection (60+ test cases)</p>
+                        </div>
+                    </div>
+
+                    <div class="update-item">
+                        <div class="update-badge">⚡</div>
+                        <div class="update-content">
+                            <h4>File Descriptor Operations</h4>
+                            <p>Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and
+                                        read/write operations (30+ test cases)</p>
+                        </div>
+                    </div>
+
+                    <div class="update-item">
+                        <div class="update-badge">🎯</div>
+                        <div class="update-content">
+                            <h4>Here-documents & Here-strings</h4>
+                            <p>Full implementation of << and <<< with proper expansion handling for multi-line and
+                                    single-line input redirection</p>
+                        </div>
+                    </div>
+
+                    <div class="update-item">
+                        <div class="update-badge">🔍</div>
+                        <div class="update-content">
+                            <h4>Enhanced Trap System</h4>
+                            <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with
+                                overflow protection</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Getting Started -->
+            <section class="getting-started">
+                <h2>🎯 Getting Started</h2>
+                <div class="steps-container">
+                    <div class="step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h4>Build the Project</h4>
+                            <div class="code-block">
+                                <pre><code>git clone https://github.com/drewwalton19216801/rush-sh.git
+cd rush-sh
+cargo build --release</code></pre>
                             </div>
                         </div>
                     </div>
-                </section>
 
-                <!-- Quick Start -->
-                <section class="quick-start">
-                    <h2>🚀 Quick Start</h2>
-                    <div class="quick-start-grid">
-                        <div class="quick-start-card">
-                            <div class="card-icon">⚡</div>
-                            <h3>Interactive Mode</h3>
+                    <div class="step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h4>Start Interactive Shell</h4>
                             <div class="code-block">
                                 <pre><code>./target/release/rush-sh</code></pre>
                             </div>
-                            <p>Start the shell in interactive mode with a modern prompt</p>
                         </div>
+                    </div>
 
-                        <div class="quick-start-card">
-                            <div class="card-icon">📜</div>
-                            <h3>Script Mode</h3>
+                    <div class="step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h4>Try Basic Commands</h4>
                             <div class="code-block">
-                                <pre><code>./target/release/rush-sh script.sh</code></pre>
-                            </div>
-                            <p>Execute commands from a file</p>
-                        </div>
-
-                        <div class="quick-start-card">
-                            <div class="card-icon">🎯</div>
-                            <h3>Command Mode</h3>
-                            <div class="code-block">
-                                <pre><code>./target/release/rush-sh -c "echo Hello World"</code></pre>
-                            </div>
-                            <p>Execute a single command string</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Key Features -->
-                <section class="key-features">
-                    <h2>✨ Key Features</h2>
-                    <div class="features-grid">
-                        <div class="feature-card">
-                            <div class="feature-icon">🔧</div>
-                            <h3>Full POSIX Compliance</h3>
-                            <p>Implements IEEE Std 1003.1-2008 with comprehensive support for shell grammar, built-in
-                                utilities, and standard behavior</p>
-                            <a href="compliance.html" class="feature-link">View Compliance Status →</a>
-                        </div>
-
-                        <div class="feature-card">
-                            <div class="feature-icon">⚡</div>
-                            <h3>High Performance</h3>
-                            <p>Leverages Rust's zero-cost abstractions for optimal execution speed while maintaining
-                                memory safety</p>
-                            <a href="benchmarks.html" class="feature-link">View Benchmarks →</a>
-                        </div>
-
-                        <div class="feature-card">
-                            <div class="feature-icon">🛡️</div>
-                            <h3>Memory Safe</h3>
-                            <p>Built with Rust's ownership system ensuring no memory leaks, data races, or segmentation
-                                faults</p>
-                        </div>
-
-                        <div class="feature-card">
-                            <div class="feature-icon">🎨</div>
-                            <h3>Modern Interface</h3>
-                            <p>Enhanced with colors, tab completion, and intelligent prompt with condensed directory
-                                display</p>
-                        </div>
-
-                        <div class="feature-card">
-                            <div class="feature-icon">🔨</div>
-                            <h3>Rich Feature Set</h3>
-                            <p>18 built-in commands, advanced expansions, control structures, and comprehensive variable
-                                support</p>
-                            <a href="features.html" class="feature-link">Explore Features →</a>
-                        </div>
-
-                        <div class="feature-card">
-                            <div class="feature-icon">🧪</div>
-                            <h3>Thoroughly Tested</h3>
-                            <p>413+ test functions covering all components with comprehensive edge case and error
-                                condition coverage</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Recent Updates -->
-                <section class="recent-updates">
-                    <h2>🆕 What's New</h2>
-                    <div class="updates-list">
-                        <div class="update-item">
-                            <div class="update-badge">🚀</div>
-                            <div class="update-content">
-                                <h4>Subshell Support</h4>
-                                <p>Full POSIX-compliant subshells with state isolation, exit code propagation, trap
-                                    inheritance, and depth limit protection (60+ test cases)</p>
-                            </div>
-                        </div>
-
-                        <div class="update-item">
-                            <div class="update-badge">⚡</div>
-                            <div class="update-content">
-                                <h4>File Descriptor Operations</h4>
-                                <p>Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and
-                                            read/write operations (30+ test cases)</p>
-                            </div>
-                        </div>
-
-                        <div class="update-item">
-                            <div class="update-badge">🎯</div>
-                            <div class="update-content">
-                                <h4>Here-documents & Here-strings</h4>
-                                <p>Full implementation of << and <<< with proper expansion handling for multi-line and
-                                        single-line input redirection</p>
-                            </div>
-                        </div>
-
-                        <div class="update-item">
-                            <div class="update-badge">🔍</div>
-                            <div class="update-content">
-                                <h4>Enhanced Trap System</h4>
-                                <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with
-                                    overflow protection</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- Getting Started -->
-                <section class="getting-started">
-                    <h2>🎯 Getting Started</h2>
-                    <div class="steps-container">
-                        <div class="step">
-                            <div class="step-number">1</div>
-                            <div class="step-content">
-                                <h4>Build the Project</h4>
-                                <div class="code-block">
-                                    <pre><code>git clone https://github.com/drewwalton19216801/rush-sh.git
-cd rush-sh
-cargo build --release</code></pre>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="step">
-                            <div class="step-number">2</div>
-                            <div class="step-content">
-                                <h4>Start Interactive Shell</h4>
-                                <div class="code-block">
-                                    <pre><code>./target/release/rush-sh</code></pre>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="step">
-                            <div class="step-number">3</div>
-                            <div class="step-content">
-                                <h4>Try Basic Commands</h4>
-                                <div class="code-block">
-                                    <pre><code>echo "Hello, Rush!"
+                                <pre><code>echo "Hello, Rush!"
 ls -la
 pwd</code></pre>
-                                </div>
                             </div>
                         </div>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                <!-- Navigation Footer -->
-                <div class="section-nav">
-                    <div class="nav-links">
-                        <a href="features.html" class="nav-button primary">
-                            <span>Explore Features</span>
-                            <span class="nav-arrow">→</span>
-                        </a>
-                        <a href="installation.html" class="nav-button secondary">
-                            <span>Installation Guide</span>
-                            <span class="nav-arrow">→</span>
-                        </a>
-                    </div>
+            <!-- Navigation Footer -->
+            <div class="section-nav">
+                <div class="nav-links">
+                    <a href="features.html" class="nav-button primary">
+                        <span>Explore Features</span>
+                        <span class="nav-arrow">→</span>
+                    </a>
+                    <a href="installation.html" class="nav-button secondary">
+                        <span>Installation Guide</span>
+                        <span class="nav-arrow">→</span>
+                    </a>
                 </div>
             </div>
-        </main>
+        </div>
+    </main>
     </div>
 
     <script src="script.js"></script>
