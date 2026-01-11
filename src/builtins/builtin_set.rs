@@ -6,18 +6,85 @@ use crate::state::ShellState;
 pub struct SetBuiltin;
 
 impl super::Builtin for SetBuiltin {
+    /// Primary name of the builtin.
+    ///
+    /// # Returns
+    ///
+    /// `'set'` — the primary name for this builtin.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// let b = SetBuiltin;
+    /// assert_eq!(b.name(), "set");
+    /// ```
     fn name(&self) -> &'static str {
         "set"
     }
 
+    /// Canonical names under which the builtin is registered.
+    ///
+    /// # Returns
+    ///
+    /// A vector of `'static` string slices containing the builtin's public names; currently contains only the primary name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let b = crate::builtins::builtin_set::SetBuiltin;
+    /// let names = b.names();
+    /// assert_eq!(names, vec!["set"]);
+    /// ```
     fn names(&self) -> Vec<&'static str> {
         vec![self.name()]
     }
 
+    /// Short help text for the `set` builtin: what it does.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crate::builtins::builtin_set::SetBuiltin;
+    /// let b = SetBuiltin;
+    /// assert_eq!(b.description(), "Set or unset shell options and positional parameters");
+    /// ```
     fn description(&self) -> &'static str {
         "Set or unset shell options and positional parameters"
     }
 
+    /// Execute the `set` builtin: display variables/options or apply option and positional-parameter changes.
+    ///
+    /// If invoked with no additional arguments, writes all shell variables to `output_writer`. If arguments request
+    /// display of options, writes all options. Otherwise parses and applies short and named option changes (preserving
+    /// last-wins semantics for combined short options) and updates the shell state's positional parameters when a
+    /// double-dash (`--`) or explicit positional arguments are provided. On parse or option-application errors, an error
+    /// message is written and a non-zero exit code is returned.
+    ///
+    /// # Parameters
+    ///
+    /// - `cmd`: the parsed command containing arguments (first argument is the command name).
+    /// - `shell_state`: mutable shell state that may be modified (options and positional parameters).
+    /// - `output_writer`: writer used for command output.
+    ///
+    /// # Returns
+    ///
+    /// `0` on success, `1` if parsing fails or applying an option fails.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use parser::ShellCommand;
+    /// use state::ShellState;
+    /// use builtins::builtin_set::SetBuiltin;
+    /// use std::io::sink;
+    ///
+    /// let builtin = SetBuiltin;
+    /// let cmd = ShellCommand { args: vec!["set".into(), "-e".into()] };
+    /// let mut shell = ShellState::default();
+    /// let mut out = sink();
+    /// let code = builtin.run(&cmd, &mut shell, &mut out);
+    /// assert!(code == 0);
+    /// ```
     fn run(
         &self,
         cmd: &ShellCommand,
@@ -90,14 +157,25 @@ struct ParsedArgs {
     found_double_dash: bool,
 }
 
-/// Parse set command arguments
+/// Parse command-line arguments for the `set` builtin and classify flags, named options, positional parameters, and display mode.
+///
+/// Recognizes short flags (e.g., `-e`, combined `-eux`) and records them in order with their enable/disable state; recognizes named options via `-oNAME`, `-o NAME`, `+oNAME`, or `+o NAME`; treats `-o`/`+o` with no following argument as a request to display all options; and treats `--` as the end-of-options marker so remaining arguments become positional parameters.
 ///
 /// # Arguments
-/// * `args` - Command arguments (excluding "set" itself)
+///
+/// * `args` - command arguments excluding the command name
 ///
 /// # Returns
-/// * `Ok(ParsedArgs)` on success
-/// * `Err(String)` with error message on failure
+///
+/// `Ok(ParsedArgs)` with parsed flags, named options, positional args, display mode, and `found_double_dash`; `Err(String)` on parse failure.
+///
+/// # Examples
+///
+/// ```
+/// let parsed = parse_arguments(&[String::from("-e"), String::from("--"), String::from("arg1")]).unwrap();
+/// assert_eq!(parsed.options_in_order, vec![('e', true)]);
+/// assert_eq!(parsed.positional_args, vec![String::from("arg1")]);
+/// ```
 fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
     let mut options_in_order = Vec::new();
     let mut named_options = Vec::new();
@@ -169,7 +247,24 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
     })
 }
 
-/// Display all shell variables
+/// Writes all shell variables to the given writer as lines in the form `NAME=value`, sorted by variable name.
+///
+/// Each variable from `shell_state` is emitted on its own line in alphabetical order by name.
+///
+/// # Returns
+/// `0` on success.
+///
+/// # Examples
+///
+/// ```
+/// use crate::state::ShellState;
+/// let mut state = ShellState::default();
+/// state.variables.insert("TEST_VAR".to_string(), "test_value".to_string());
+/// let mut out: Vec<u8> = Vec::new();
+/// assert_eq!(display_all_variables(&state, &mut out), 0);
+/// let s = String::from_utf8(out).unwrap();
+/// assert!(s.contains("TEST_VAR=test_value"));
+/// ```
 fn display_all_variables(shell_state: &ShellState, output_writer: &mut dyn Write) -> i32 {
     // Get all variables sorted by name
     let mut vars: Vec<(&String, &String)> = shell_state.variables.iter().collect();
@@ -182,7 +277,24 @@ fn display_all_variables(shell_state: &ShellState, output_writer: &mut dyn Write
     0
 }
 
-/// Display all shell options with their current state
+/// Prints all shell options with their current on/off state to the given writer.
+///
+/// Each option is written on its own line. Options with a short name are formatted as
+/// `set -<short> -o <long-name> <status>`; options without a short name are formatted as
+/// `set -o <long-name> <status>`. `<status>` is `on` when the option is enabled and `off` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// let state = ShellState::default();
+/// let mut buf = Vec::new();
+/// let _ = display_all_options(&state, &mut buf);
+/// let output = String::from_utf8(buf).unwrap();
+/// // Output contains lines like "set -o errexit on"
+/// assert!(output.contains("set -o"));
+/// ```
+///
+/// Returns 0 on success.
 fn display_all_options(shell_state: &ShellState, output_writer: &mut dyn Write) -> i32 {
     let options = shell_state.options.get_all_options();
 
@@ -204,7 +316,10 @@ fn display_all_options(shell_state: &ShellState, output_writer: &mut dyn Write) 
     0
 }
 
-/// Print error message with color support
+/// Write an error message to standard error, using the shell's error color when enabled.
+///
+/// If `shell_state.colors_enabled` is true, the message is prefixed with `shell_state.color_scheme.error`
+/// and terminated with an ANSI reset sequence; otherwise the message is written plainly. No value is returned.
 fn print_error(shell_state: &ShellState, msg: &str) {
     if shell_state.colors_enabled {
         eprintln!("{}{}\x1b[0m", shell_state.color_scheme.error, msg);

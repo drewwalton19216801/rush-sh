@@ -50,6 +50,20 @@ pub enum Token {
     Bang,     // ! (negation operator)
 }
 
+/// Map a keyword string to its corresponding shell Token.
+///
+/// # Returns
+///
+/// `Some(Token::X)` if `word` matches a recognized shell keyword (for example: `if`, `then`,
+/// `else`, `elif`, `fi`, `case`, `in`, `esac`, `local`, `return`, `for`, `while`, `until`,
+/// `break`, `continue`, `do`, `done`), `None` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(is_keyword("if"), Some(Token::If));
+/// assert_eq!(is_keyword("foobar"), None);
+/// ```
 fn is_keyword(word: &str) -> Option<Token> {
     match word {
         "if" => Some(Token::If),
@@ -383,6 +397,28 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
     }
 }
 
+/// Tokenizes a shell-like input string into a sequence of lexer `Token`s.
+///
+/// The lexer recognizes words, quoting (single/double), parameter and arithmetic
+/// expansions (kept as literals for runtime expansion), command substitutions,
+/// pipes and logical operators, parentheses and braces (including brace expansion
+/// detection), tilde expansion, a wide range of redirection forms (including
+/// file-descriptor-aware redirections, here-documents/strings, and the `>|`
+/// noclobber override), aliases, and control-flow keywords. Returns `Err` with a
+/// diagnostic string for syntax errors (for example, invalid redirection forms
+/// or missing filenames).
+///
+/// # Examples
+///
+/// ```
+/// use crate::lexer::{lex, Token};
+/// use crate::state::ShellState;
+///
+/// let state = ShellState::default();
+/// let toks = lex("echo hello | cat > out.txt", &state).unwrap();
+/// assert!(matches!(toks[0], Token::Word(ref s) if s == "echo"));
+/// assert_eq!(toks.last().unwrap(), &Token::Word("out.txt".to_string()));
+/// ```
 pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
