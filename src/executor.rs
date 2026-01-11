@@ -831,6 +831,7 @@ fn apply_input_redirection(
                 false, // write
                 false, // append
                 false, // truncate
+                false, // clobber
             )?;
 
             // Also perform OS-level dup2
@@ -859,6 +860,7 @@ fn apply_input_redirection(
             false, // write
             false, // append
             false, // truncate
+            false, // clobber
         )?;
 
         // If we have an external command, set up the file descriptor in the child process
@@ -969,6 +971,7 @@ fn apply_output_redirection(
                 true,  // write
                 append,
                 !append, // truncate if not appending
+                false, // clobber
             )?;
         }
     } else {
@@ -997,6 +1000,7 @@ fn apply_output_redirection(
             true,  // write
             append,
             !append, // truncate if not appending
+            shell_state.options.noclobber && !force_clobber && !append, // create_new
         )?;
 
         // Also perform OS-level dup2 to ensure child processes inherit the redirection
@@ -1098,6 +1102,7 @@ fn apply_fd_input_output(
         true,  // write
         false, // append
         false, // truncate
+        false, // create_new
     )?;
 
     Ok(())
