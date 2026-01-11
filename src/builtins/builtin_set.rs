@@ -92,11 +92,6 @@ impl super::Builtin for SetBuiltin {
         // Parse arguments
         match parse_arguments(&cmd.args[1..]) {
             Ok(parsed) => {
-                // Handle display-only modes (no options to apply)
-                if parsed.display_mode == DisplayMode::AllVariables {
-                    return display_all_variables(shell_state, output_writer);
-                }
-
                 // Apply short option changes in order (preserves last-wins semantics)
                 for (opt, enable) in &parsed.options_in_order {
                     if let Err(e) = shell_state.options.set_by_short_name(*opt, *enable) {
@@ -137,7 +132,6 @@ impl super::Builtin for SetBuiltin {
 #[derive(Debug, PartialEq)]
 enum DisplayMode {
     None,
-    AllVariables,
     AllOptions,
 }
 
@@ -230,11 +224,6 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
         }
 
         i += 1;
-    }
-
-    // If no arguments at all, display all variables
-    if args.is_empty() {
-        display_mode = DisplayMode::AllVariables;
     }
 
     Ok(ParsedArgs {
@@ -579,7 +568,7 @@ mod tests {
     #[test]
     fn test_parse_arguments_empty() {
         let result = parse_arguments(&[]).unwrap();
-        assert_eq!(result.display_mode, DisplayMode::AllVariables);
+        assert_eq!(result.display_mode, DisplayMode::None);
         assert!(result.options_in_order.is_empty());
     }
 
