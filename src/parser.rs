@@ -559,6 +559,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             let mut end = i;
             let mut brace_depth = 0;
             let mut paren_depth = 0;
+            let mut if_depth = 0;
+            let mut loop_depth = 0;
+            let mut case_depth = 0;
             
             while end < tokens.len() {
                 match &tokens[end] {
@@ -578,13 +581,29 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                             break;
                         }
                     }
+                    Token::If => if_depth += 1,
+                    Token::Fi => if if_depth > 0 { if_depth -= 1; },
+                    Token::For | Token::While | Token::Until => loop_depth += 1,
+                    Token::Done => if loop_depth > 0 { loop_depth -= 1; },
+                    Token::Case => case_depth += 1,
+                    Token::Esac => if case_depth > 0 { case_depth -= 1; },
                     Token::Newline | Token::Semicolon => {
-                        if brace_depth == 0 && paren_depth == 0 {
+                        if brace_depth == 0
+                            && paren_depth == 0
+                            && if_depth == 0
+                            && loop_depth == 0
+                            && case_depth == 0
+                        {
                             break;
                         }
                     }
                     Token::And | Token::Or => {
-                        if brace_depth == 0 && paren_depth == 0 {
+                        if brace_depth == 0
+                            && paren_depth == 0
+                            && if_depth == 0
+                            && loop_depth == 0
+                            && case_depth == 0
+                        {
                             break;
                         }
                     }
