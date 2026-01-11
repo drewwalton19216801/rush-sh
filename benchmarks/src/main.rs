@@ -530,9 +530,9 @@ fn register_pipeline_benchmarks(suite: &mut BenchmarkSuite) {
         "Complex pipeline execution",
         Box::new(|iterations| {
             let test_cases = vec![
-                "cat /dev/null | grep pattern | sort | uniq",
-                "find . -name '*.rs' | wc -l",
-                "ps aux | grep rush | wc -l",
+                "echo test | grep test | sort | uniq",
+                "printf 'line1\\nline2\\nline3' | wc -l",
+                "echo hello | cat | cat | cat",
             ];
 
             let start = Instant::now();

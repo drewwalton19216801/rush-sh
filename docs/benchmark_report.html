@@ -1,130 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rush Shell Benchmark Report</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #0f172a;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: #1e293b;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-        }
-
-        h1 {
-            color: #f8fafc;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-
-        h2 {
-            color: #cbd5e1;
-            border-bottom: 2px solid #334155;
-            padding-bottom: 10px;
-        }
-
-        .summary {
-            background: #334155;
-            padding: 20px;
-            border-radius: 5px;
-            margin-bottom: 30px;
-        }
-
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-        }
-
-        .summary-item {
-            text-align: center;
-        }
-
-        .summary-value {
-            font-size: 2em;
-            font-weight: bold;
-            color: #34d399;
-        }
-
-        .summary-label {
-            color: #94a3b8;
-            font-size: 0.9em;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        th,
-        td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #475569;
-            color: #f8fafc;
-        }
-
-        th {
-            background-color: #334155;
-            font-weight: 600;
-            color: #f8fafc;
-        }
-
-        tr:hover {
-            background-color: #475569;
-        }
-
-        .duration {
-            font-family: 'Courier New', monospace;
-        }
-
-        .performance-indicator {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 0.8em;
-            font-weight: bold;
-        }
-
-        .fast {
-            background-color: #064e3b;
-            color: #34d399;
-        }
-
-        .medium {
-            background-color: #451a03;
-            color: #fbbf24;
-        }
-
-        .slow {
-            background-color: #7f1d1d;
-            color: #f87171;
-        }
-
-        .timestamp {
-            color: #94a3b8;
-            font-size: 0.9em;
-            margin-bottom: 20px;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #0f172a; }
+        .container { max-width: 1200px; margin: 0 auto; background: #1e293b; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+        h1 { color: #f8fafc; text-align: center; margin-bottom: 30px; }
+        h2 { color: #cbd5e1; border-bottom: 2px solid #334155; padding-bottom: 10px; }
+        .summary { background: #334155; padding: 20px; border-radius: 5px; margin-bottom: 30px; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .summary-item { text-align: center; }
+        .summary-value { font-size: 2em; font-weight: bold; color: #34d399; }
+        .summary-label { color: #94a3b8; font-size: 0.9em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #475569; color: #f8fafc; }
+        th { background-color: #334155; font-weight: 600; color: #f8fafc; }
+        tr:hover { background-color: #475569; }
+        .duration { font-family: 'Courier New', monospace; }
+        .performance-indicator { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
+        .fast { background-color: #064e3b; color: #34d399; }
+        .medium { background-color: #451a03; color: #fbbf24; }
+        .slow { background-color: #7f1d1d; color: #f87171; }
+        .timestamp { color: #94a3b8; font-size: 0.9em; margin-bottom: 20px; }
     </style>
 </head>
-
 <body>
     <div class="container">
         <h1>🚀 Rush Shell Performance Benchmark Report</h1>
-        <div class="timestamp">Generated on: 2025-10-04 02:33:50 UTC</div>
+        <div class="timestamp">Generated on: 2026-01-11 00:56:17 UTC</div>
         <div class="summary">
             <h2>Summary</h2>
             <div class="summary-grid">
@@ -133,11 +38,11 @@
                     <div class="summary-label">Total Benchmarks</div>
                 </div>
                 <div class="summary-item">
-                    <div class="summary-value">8.00s</div>
+                    <div class="summary-value">4.20s</div>
                     <div class="summary-label">Total Time</div>
                 </div>
                 <div class="summary-item">
-                    <div class="summary-value">400ms</div>
+                    <div class="summary-value">210ms</div>
                     <div class="summary-label">Avg per Benchmark</div>
                 </div>
             </div>
@@ -162,7 +67,7 @@
                     <td>100</td>
                     <td class="duration">0ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">409562</td>
+                    <td class="duration">379929</td>
                     <td><span class="performance-indicator fast">Fast</span></td>
                 </tr>
                 <tr>
@@ -171,16 +76,16 @@
                     <td>100</td>
                     <td class="duration">0ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">207355</td>
+                    <td class="duration">172381</td>
                     <td><span class="performance-indicator fast">Fast</span></td>
                 </tr>
                 <tr>
                     <td><strong>lexer_large_input</strong></td>
                     <td>Large input tokenization</td>
                     <td>100</td>
-                    <td class="duration">60ms</td>
+                    <td class="duration">62ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">1651</td>
+                    <td class="duration">1603</td>
                     <td><span class="performance-indicator medium">Medium</span></td>
                 </tr>
                 <tr>
@@ -189,7 +94,7 @@
                     <td>100</td>
                     <td class="duration">0ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">102706</td>
+                    <td class="duration">100020</td>
                     <td><span class="performance-indicator fast">Fast</span></td>
                 </tr>
                 <tr>
@@ -198,7 +103,7 @@
                     <td>100</td>
                     <td class="duration">1ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">85101</td>
+                    <td class="duration">83582</td>
                     <td><span class="performance-indicator fast">Fast</span></td>
                 </tr>
                 <tr>
@@ -207,133 +112,133 @@
                     <td>100</td>
                     <td class="duration">1ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">55860</td>
+                    <td class="duration">54600</td>
                     <td><span class="performance-indicator fast">Fast</span></td>
                 </tr>
                 <tr>
                     <td><strong>executor_builtin_commands</strong></td>
                     <td>Builtin command execution</td>
                     <td>100</td>
-                    <td class="duration">197ms</td>
-                    <td class="duration">1ms</td>
-                    <td class="duration">507</td>
+                    <td class="duration">215ms</td>
+                    <td class="duration">2ms</td>
+                    <td class="duration">465</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>executor_external_commands</strong></td>
                     <td>External command execution</td>
                     <td>100</td>
-                    <td class="duration">567ms</td>
-                    <td class="duration">5ms</td>
-                    <td class="duration">176</td>
+                    <td class="duration">645ms</td>
+                    <td class="duration">6ms</td>
+                    <td class="duration">155</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>executor_variable_operations</strong></td>
                     <td>Variable assignment and expansion</td>
                     <td>100</td>
-                    <td class="duration">102ms</td>
+                    <td class="duration">112ms</td>
                     <td class="duration">1ms</td>
-                    <td class="duration">974</td>
+                    <td class="duration">886</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>expansion_variables</strong></td>
                     <td>Variable expansion performance</td>
                     <td>100</td>
-                    <td class="duration">151ms</td>
+                    <td class="duration">163ms</td>
                     <td class="duration">1ms</td>
-                    <td class="duration">662</td>
+                    <td class="duration">611</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>expansion_arithmetic</strong></td>
                     <td>Arithmetic expansion performance</td>
                     <td>100</td>
-                    <td class="duration">205ms</td>
+                    <td class="duration">223ms</td>
                     <td class="duration">2ms</td>
-                    <td class="duration">486</td>
+                    <td class="duration">448</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>expansion_command_substitution</strong></td>
                     <td>Command substitution performance</td>
                     <td>100</td>
-                    <td class="duration">370ms</td>
-                    <td class="duration">3ms</td>
-                    <td class="duration">270</td>
+                    <td class="duration">400ms</td>
+                    <td class="duration">4ms</td>
+                    <td class="duration">250</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>control_if_statements</strong></td>
                     <td>If statement execution</td>
                     <td>100</td>
-                    <td class="duration">295ms</td>
-                    <td class="duration">2ms</td>
-                    <td class="duration">339</td>
+                    <td class="duration">322ms</td>
+                    <td class="duration">3ms</td>
+                    <td class="duration">310</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>control_loops</strong></td>
                     <td>Loop execution (for/while)</td>
                     <td>100</td>
-                    <td class="duration">252ms</td>
+                    <td class="duration">271ms</td>
                     <td class="duration">2ms</td>
-                    <td class="duration">397</td>
+                    <td class="duration">368</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>control_case_statements</strong></td>
                     <td>Case statement execution</td>
                     <td>100</td>
-                    <td class="duration">52ms</td>
+                    <td class="duration">55ms</td>
                     <td class="duration">0ms</td>
-                    <td class="duration">1893</td>
+                    <td class="duration">1787</td>
                     <td><span class="performance-indicator medium">Medium</span></td>
                 </tr>
                 <tr>
                     <td><strong>pipeline_simple</strong></td>
                     <td>Simple pipeline execution</td>
                     <td>100</td>
-                    <td class="duration">313ms</td>
+                    <td class="duration">359ms</td>
                     <td class="duration">3ms</td>
-                    <td class="duration">319</td>
+                    <td class="duration">278</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>pipeline_complex</strong></td>
                     <td>Complex pipeline execution</td>
                     <td>100</td>
-                    <td class="duration">4717ms</td>
-                    <td class="duration">47ms</td>
-                    <td class="duration">21</td>
+                    <td class="duration">596ms</td>
+                    <td class="duration">5ms</td>
+                    <td class="duration">168</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>pipeline_redirections</strong></td>
                     <td>Pipeline with redirections</td>
                     <td>100</td>
-                    <td class="duration">157ms</td>
+                    <td class="duration">167ms</td>
                     <td class="duration">1ms</td>
-                    <td class="duration">636</td>
+                    <td class="duration">598</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>script_execution</strong></td>
                     <td>Script file execution (multi-line script)</td>
                     <td>100</td>
-                    <td class="duration">398ms</td>
-                    <td class="duration">3ms</td>
-                    <td class="duration">251</td>
+                    <td class="duration">432ms</td>
+                    <td class="duration">4ms</td>
+                    <td class="duration">231</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
                 <tr>
                     <td><strong>command_line_execution</strong></td>
                     <td>Command-line execution mode (single commands)</td>
                     <td>100</td>
-                    <td class="duration">156ms</td>
+                    <td class="duration">166ms</td>
                     <td class="duration">1ms</td>
-                    <td class="duration">639</td>
+                    <td class="duration">599</td>
                     <td><span class="performance-indicator slow">Slow</span></td>
                 </tr>
             </tbody>
@@ -355,5 +260,4 @@
         </div>
     </div>
 </body>
-
 </html>

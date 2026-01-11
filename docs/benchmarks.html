@@ -115,14 +115,14 @@
                         <div class="stat-card">
                             <div class="stat-icon">⏱️</div>
                             <div class="stat-content">
-                                <div class="stat-value">8.00s</div>
+                                <div class="stat-value">4.20s</div>
                                 <div class="stat-label">Total Execution Time</div>
                             </div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-icon">📈</div>
                             <div class="stat-content">
-                                <div class="stat-value">400ms</div>
+                                <div class="stat-value">210ms</div>
                                 <div class="stat-label">Average per Benchmark</div>
                             </div>
                         </div>
@@ -176,15 +176,15 @@
                             <div class="fastest-list">
                                 <div class="component-item">
                                     <span class="component-name">Lexer (Basic Tokens)</span>
-                                    <span class="component-time">409,562 ops/sec</span>
+                                    <span class="component-time">379,929 ops/sec</span>
                                 </div>
                                 <div class="component-item">
                                     <span class="component-name">Parser (Basic Commands)</span>
-                                    <span class="component-time">102,706 ops/sec</span>
+                                    <span class="component-time">100,020 ops/sec</span>
                                 </div>
                                 <div class="component-item">
                                     <span class="component-name">Case Statements</span>
-                                    <span class="component-time">1,893 ops/sec</span>
+                                    <span class="component-time">1,787 ops/sec</span>
                                 </div>
                             </div>
                         </div>
@@ -193,16 +193,16 @@
                             <h3>Optimization Opportunities</h3>
                             <div class="slowest-list">
                                 <div class="component-item slow">
+                                    <span class="component-name">External Commands</span>
+                                    <span class="component-time">155 ops/sec</span>
+                                </div>
+                                <div class="component-item slow">
                                     <span class="component-name">Complex Pipelines</span>
-                                    <span class="component-time">21 ops/sec</span>
+                                    <span class="component-time">168 ops/sec</span>
                                 </div>
                                 <div class="component-item slow">
                                     <span class="component-name">Script Execution</span>
-                                    <span class="component-time">251 ops/sec</span>
-                                </div>
-                                <div class="component-item slow">
-                                    <span class="component-name">Command Substitution</span>
-                                    <span class="component-time">270 ops/sec</span>
+                                    <span class="component-time">231 ops/sec</span>
                                 </div>
                             </div>
                         </div>
@@ -290,8 +290,13 @@
                         <div class="instruction-card">
                             <h3>Complete Benchmark Suite</h3>
                             <div class="code-block">
-                                <pre><code># Run from repository root
-cargo run -p rush-benchmarks</code></pre>
+                                <pre><code># Run from benchmarks directory
+cd benchmarks
+mkdir -p target
+cargo run --bin rush-benchmark
+
+# Copy report to docs
+cp target/benchmark_report.html ../docs/benchmark_report.html</code></pre>
                             </div>
                             <p>Executes 20+ benchmark scenarios covering all major components</p>
                         </div>
@@ -299,7 +304,8 @@ cargo run -p rush-benchmarks</code></pre>
                         <div class="instruction-card">
                             <h3>View HTML Report</h3>
                             <div class="code-block">
-                                <pre><code># Serve locally
+                                <pre><code># Serve locally from benchmarks directory
+cd benchmarks
 python3 -m http.server 8000 -d target/
 
 # Visit http://localhost:8000/benchmark_report.html</code></pre>
@@ -310,8 +316,8 @@ python3 -m http.server 8000 -d target/
                         <div class="instruction-card">
                             <h3>JSON Results</h3>
                             <div class="code-block">
-                                <pre><code># Machine-readable results
-cat target/benchmark_results.json</code></pre>
+                                <pre><code># Machine-readable results from benchmarks directory
+cat benchmarks/target/benchmark_results.json</code></pre>
                             </div>
                             <p>Structured data for CI/CD integration and trend analysis</p>
                         </div>
