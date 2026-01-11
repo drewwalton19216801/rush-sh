@@ -757,11 +757,6 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     // This is >| (noclobber override)
                     chars.next(); // consume |
                     
-                    // Only allow >| without fd number (standard output redirection)
-                    if fd_num.is_some() {
-                        return Err("Invalid redirection: >| cannot be used with file descriptor numbers".to_string());
-                    }
-                    
                     skip_whitespace(&mut chars);
                     
                     // Collect the filename (handle quotes)
@@ -788,10 +783,17 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     }
                     
                     if !filename.is_empty() {
-                        tokens.push(Token::RedirOutClobber);
-                        tokens.push(Token::Word(filename));
+                        if let Some(fd) = fd_num {
+                            // With fd number, use RedirectFdOut (clobber is implied by >|)
+                            tokens.push(Token::RedirectFdOut(fd, filename));
+                        } else {
+                            // Without fd number, use RedirOutClobber
+                            tokens.push(Token::RedirOutClobber);
+                            tokens.push(Token::Word(filename));
+                        }
                     } else {
-                        tokens.push(Token::RedirOutClobber);
+                        // No filename provided - error
+                        return Err("Invalid redirection: expected filename after >|".to_string());
                     }
                 } else if let Some(&'&') = chars.peek() {
                     chars.next(); // consume &
@@ -3489,5 +3491,146 @@ mod tests {
                 Token::Word("hello!".to_string())
             ]
         );
+    }
+
+    // ===== OutputClobber (>|) Tests =====
+
+    #[test]
+    fn test_output_clobber_basic() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >| output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_fd_number() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test 2>| errors.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirectFdOut(2, "errors.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_fd_number_no_space() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>|file.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(3, "file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_missing_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >|", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected filename after >|"));
+    }
+
+    #[test]
+    fn test_output_clobber_with_quoted_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >| \"output file.txt\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("output file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_fd_and_quoted_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>| 'error log.txt'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "error log.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_multiple_fds() {
+        let shell_state = ShellState::new();
+        let result = lex("command >| out.txt 2>| err.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("out.txt".to_string()),
+                Token::RedirectFdOut(2, "err.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_pipe() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >| output.txt | cat", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("output.txt".to_string()),
+                Token::Pipe,
+                Token::Word("cat".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_fd_0_through_9() {
+        let shell_state = ShellState::new();
+        
+        // Test fd 0 (unusual but valid)
+        let result = lex("cmd 0>| file", &shell_state).unwrap();
+        assert_eq!(result[1], Token::RedirectFdOut(0, "file".to_string()));
+        
+        // Test fd 9
+        let result = lex("cmd 9>| file", &shell_state).unwrap();
+        assert_eq!(result[1], Token::RedirectFdOut(9, "file".to_string()));
+    }
+
+    #[test]
+    fn test_output_clobber_consistency_with_regular_redirect() {
+        let shell_state = ShellState::new();
+        
+        // Regular redirect without fd
+        let result1 = lex("echo test > output.txt", &shell_state).unwrap();
+        // Clobber redirect without fd
+        let result2 = lex("echo test >| output.txt", &shell_state).unwrap();
+        
+        // Both should have same structure, just different redirect token
+        assert_eq!(result1.len(), result2.len());
+        assert_eq!(result1[0], result2[0]); // echo
+        assert_eq!(result1[1], result2[1]); // test
+        assert_eq!(result1[3], result2[3]); // output.txt
     }
 }
