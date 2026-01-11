@@ -17,6 +17,7 @@ pub enum Token {
     // File descriptor redirections
     RedirectFdIn(i32, String),     // N<file - redirect fd N from file
     RedirectFdOut(i32, String),    // N>file - redirect fd N to file
+    RedirectFdOutClobber(i32, String), // N>|file - redirect fd N to file with noclobber override
     RedirectFdAppend(i32, String), // N>>file - append fd N to file
     RedirectFdDup(i32, i32),       // N>&M or N<&M - duplicate fd M to fd N
     RedirectFdClose(i32),          // N>&- or N<&- - close fd N
@@ -778,8 +779,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     
                     if !filename.is_empty() {
                         if let Some(fd) = fd_num {
-                            // With fd number, use RedirectFdOut (clobber is implied by >|)
-                            tokens.push(Token::RedirectFdOut(fd, filename));
+                            // With fd number, use RedirectFdOutClobber for proper noclobber override
+                            tokens.push(Token::RedirectFdOutClobber(fd, filename));
                         } else {
                             // Without fd number, use RedirOutClobber
                             tokens.push(Token::RedirOutClobber);

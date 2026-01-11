@@ -772,6 +772,9 @@ fn apply_redirections(
             Redirection::FdOutput(fd, file) => {
                 apply_output_redirection(*fd, file, false, false, shell_state, command.as_deref_mut())?;
             }
+            Redirection::FdOutputClobber(fd, file) => {
+                apply_output_redirection(*fd, file, false, true, shell_state, command.as_deref_mut())?;
+            }
             Redirection::FdAppend(fd, file) => {
                 apply_output_redirection(*fd, file, true, false, shell_state, command.as_deref_mut())?;
             }

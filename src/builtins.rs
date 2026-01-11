@@ -204,6 +204,7 @@ pub fn execute_builtin(
             | Redirection::Append(file)
             | Redirection::FdInput(_, file)
             | Redirection::FdOutput(_, file)
+            | Redirection::FdOutputClobber(_, file)
             | Redirection::FdAppend(_, file)
             | Redirection::FdInputOutput(_, file) => {
                 files_to_expand.push(file.clone());
@@ -280,7 +281,7 @@ pub fn execute_builtin(
                     false, // truncate
                 )
             }
-            Redirection::FdOutput(fd, _) => {
+            Redirection::FdOutput(fd, _) | Redirection::FdOutputClobber(fd, _) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
                     *fd, file, false, // read
