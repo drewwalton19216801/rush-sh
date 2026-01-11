@@ -16,12 +16,13 @@
 
 - **Compliance Level**: ~91% POSIX compliant
 - **Test Coverage**: 413+ test functions across all components
-- **Built-in Commands**: 22 implemented commands
+- **Built-in Commands**: 24 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
 ### Recently Implemented Features
 
+- **Loop Control Builtins**: POSIX-compliant `break` and `continue` commands with support for nested loops via optional [n] argument, working with for/while/until loops, and 29 comprehensive test cases
 - **Subshell Support**: Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, depth limit protection (max 100 levels), and 60+ test cases
 - **File Descriptor Operations**: Complete FD table management, duplication (N>&M, N<&M), closing (N>&-, N<&-), read/write (N<>), with 30+ test cases
 - **Here-documents**: Full implementation of `<<` and `<<<` (here-strings) with proper expansion handling
@@ -86,6 +87,7 @@ src/
 - **Function Context**: Function call stack and local variable scoping
 - **Directory Stack**: pushd/popd/dirs functionality
 - **Alias Management**: Command alias storage and expansion
+- **Loop Control State**: Break and continue level tracking for nested loop control
 - **FD Table**: File descriptor table with save/restore capabilities for subshells
 - **Trap Management**: Signal trap handlers with inheritance and queue management
 

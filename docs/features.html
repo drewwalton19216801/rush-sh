@@ -484,6 +484,37 @@ while [ $count -le 5 ]; do
 done</code></pre>
                                 </div>
                             </div>
+
+                            <div class="example-group">
+                                <h4>Loop Control</h4>
+                                <div class="code-block">
+                                    <pre><code># Break - exit from loop
+for i in 1 2 3 4 5; do
+    if [ $i -eq 3 ]; then
+        break  # Exit loop when i equals 3
+    fi
+    echo "Number: $i"
+done
+
+# Continue - skip to next iteration
+for i in 1 2 3 4 5; do
+    if [ $i -eq 3 ]; then
+        continue  # Skip 3
+    fi
+    echo "Number: $i"
+done
+
+# Nested loops with break [n]
+for i in 1 2 3; do
+    for j in a b c; do
+        if [ "$j" = "b" ]; then
+            break 2  # Break out of both loops
+        fi
+        echo "$i-$j"
+    done
+done</code></pre>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -527,7 +558,7 @@ local var="value"</code></pre>
                     <h2>🛠️ Built-in Commands</h2>
 
                     <div class="builtins-overview">
-                        <p>Rush includes <strong>21 comprehensive built-in commands</strong> for enhanced functionality
+                        <p>Rush includes <strong>24 comprehensive built-in commands</strong> for enhanced functionality
                             and performance:</p>
 
                         <div class="builtins-grid">
@@ -579,6 +610,15 @@ local var="value"</code></pre>
                                 <h4>Signal Handling</h4>
                                 <ul>
                                     <li><code>trap</code> - Set signal handlers and traps</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Loop Control</h4>
+                                <ul>
+                                    <li><code>break</code> - Exit from loops</li>
+                                    <li><code>continue</code> - Skip to next loop iteration</li>
+                                    <li><code>return</code> - Return from functions</li>
                                 </ul>
                             </div>
 
