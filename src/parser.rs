@@ -627,7 +627,10 @@ fn parse_single_command(tokens: &[Token]) -> Result<(Ast, usize), String> {
                 if i > start {
                     match &tokens[i] {
                         Token::And | Token::Or => {
-                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
+                            if brace_depth == 0 && paren_depth == 0 {
+                                if last_was_pipe {
+                                    return Err("Expected command after |".to_string());
+                                }
                                 break;
                             }
                         }
