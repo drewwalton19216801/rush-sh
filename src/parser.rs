@@ -493,6 +493,252 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     parse_pipeline(tokens)
 }
 
+/// Helper function to parse a single command without operators.
+/// Returns the parsed AST and the number of tokens consumed.
+fn parse_single_command(tokens: &[Token]) -> Result<(Ast, usize), String> {
+    if tokens.is_empty() {
+        return Err("Expected command".to_string());
+    }
+    
+    let mut i = 0;
+    
+    // Skip leading newlines
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+    
+    if i >= tokens.len() {
+        return Err("Expected command".to_string());
+    }
+    
+    // Handle negation first - recursively parse what comes after !
+    if tokens[i] == Token::Bang {
+        i += 1; // Skip the bang
+        
+        // Skip any newlines after the bang
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
+        
+        if i >= tokens.len() {
+            return Err("Expected command after !".to_string());
+        }
+        
+        // Recursively parse the negated command
+        // IMPORTANT: This should only consume a single atomic command,
+        // not a chain with logical operators
+        let (negated_ast, consumed) = parse_single_command(&tokens[i..])?;
+        i += consumed;
+        
+        // Negation only applies to the immediately following command
+        // Return immediately without consuming any following operators
+        return Ok((Ast::Negation {
+            command: Box::new(negated_ast),
+        }, i));
+    }
+    
+    let start = i;
+    
+    // Handle special constructs that have their own boundaries
+    match &tokens[i] {
+        Token::LeftParen => {
+            // Subshell - find matching paren
+            let mut paren_depth = 1;
+            i += 1;
+            while i < tokens.len() && paren_depth > 0 {
+                match tokens[i] {
+                    Token::LeftParen => paren_depth += 1,
+                    Token::RightParen => paren_depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
+            if paren_depth != 0 {
+                return Err("Unmatched parenthesis".to_string());
+            }
+        }
+        Token::LeftBrace => {
+            // Command group - find matching brace
+            let mut brace_depth = 1;
+            i += 1;
+            while i < tokens.len() && brace_depth > 0 {
+                match tokens[i] {
+                    Token::LeftBrace => brace_depth += 1,
+                    Token::RightBrace => brace_depth -= 1,
+                    _ => {}
+                }
+                i += 1;
+            }
+            if brace_depth != 0 {
+                return Err("Unmatched brace".to_string());
+            }
+        }
+        Token::If => {
+            // Find matching fi
+            let mut if_depth = 1;
+            i += 1;
+            while i < tokens.len() && if_depth > 0 {
+                match tokens[i] {
+                    Token::If => if_depth += 1,
+                    Token::Fi => {
+                        if_depth -= 1;
+                        if if_depth == 0 {
+                            i += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+        }
+        Token::For | Token::While | Token::Until => {
+            // Find matching done
+            let mut loop_depth = 1;
+            i += 1;
+            while i < tokens.len() && loop_depth > 0 {
+                match tokens[i] {
+                    Token::For | Token::While | Token::Until => loop_depth += 1,
+                    Token::Done => {
+                        loop_depth -= 1;
+                        if loop_depth == 0 {
+                            i += 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+        }
+        Token::Case => {
+            // Find matching esac
+            i += 1;
+            while i < tokens.len() {
+                if tokens[i] == Token::Esac {
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+        }
+        _ => {
+            // Regular command/pipeline - stop at sequence separators
+            let mut brace_depth = 0;
+            let mut paren_depth = 0;
+            let mut last_was_pipe = false;
+            
+            while i < tokens.len() {
+                // Check if we should stop before processing this token
+                // For logical operators (&&, ||), always stop at depth 0 after consuming at least one token
+                // For other separators, only stop after consuming at least one token
+                if i > start {
+                    match &tokens[i] {
+                        Token::And | Token::Or => {
+                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
+                                break;
+                            }
+                        }
+                        Token::Newline | Token::Semicolon => {
+                            if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
+                                break;
+                            }
+                        }
+                        Token::RightBrace if brace_depth == 0 => break,
+                        Token::RightParen if paren_depth == 0 => break,
+                        _ => {}
+                    }
+                }
+                
+                // Now process the token
+                match &tokens[i] {
+                    Token::LeftBrace => {
+                        brace_depth += 1;
+                        last_was_pipe = false;
+                    }
+                    Token::RightBrace => {
+                        if brace_depth > 0 {
+                            brace_depth -= 1;
+                            last_was_pipe = false;
+                        }
+                    }
+                    Token::LeftParen => {
+                        paren_depth += 1;
+                        last_was_pipe = false;
+                    }
+                    Token::RightParen => {
+                        if paren_depth > 0 {
+                            paren_depth -= 1;
+                            last_was_pipe = false;
+                        }
+                    }
+                    Token::Pipe => last_was_pipe = true,
+                    Token::Word(_) => last_was_pipe = false,
+                    _ => last_was_pipe = false,
+                }
+                i += 1;
+            }
+        }
+    }
+    
+    let command_tokens = &tokens[start..i];
+    
+    // Safety check: ensure we consumed at least one token to prevent infinite loops
+    if i == start {
+        return Err("Internal parser error: parse_single_command consumed no tokens".to_string());
+    }
+    
+    let ast = parse_slice(command_tokens)?;
+    Ok((ast, i))
+}
+
+/// Helper function to parse commands with && and || operators.
+/// This builds a left-associative chain of operators.
+/// Returns the parsed AST and the number of tokens consumed.
+fn parse_next_command(tokens: &[Token]) -> Result<(Ast, usize), String> {
+    // Parse the first command
+    let (mut ast, mut i) = parse_single_command(tokens)?;
+    
+    // Build left-associative chain of && and || operators iteratively
+    loop {
+        // Check if there's an && or || operator after this command
+        if i >= tokens.len() || (tokens[i] != Token::And && tokens[i] != Token::Or) {
+            break;
+        }
+        
+        let operator = tokens[i].clone();
+        i += 1; // Skip the operator
+        
+        // Skip any newlines after the operator
+        while i < tokens.len() && tokens[i] == Token::Newline {
+            i += 1;
+        }
+        
+        if i >= tokens.len() {
+            return Err("Expected command after operator".to_string());
+        }
+        
+        // Parse the next single command (without chaining)
+        let (right_ast, consumed) = parse_single_command(&tokens[i..])?;
+        i += consumed;
+        
+        // Build left-associative structure
+        ast = match operator {
+            Token::And => Ast::And {
+                left: Box::new(ast),
+                right: Box::new(right_ast),
+            },
+            Token::Or => Ast::Or {
+                left: Box::new(ast),
+                right: Box::new(right_ast),
+            },
+            _ => unreachable!(),
+        };
+    }
+    
+    Ok((ast, i))
+}
+
 /// Parses a slice of tokens into a top-level AST representing one or more sequential shell commands.
 ///
 /// This function consumes the provided token sequence and produces an `Ast` that represents either a
@@ -541,126 +787,6 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
         // Find the end of this command
         let start = i;
-
-        // Check for negation: Bang at start of command
-        if tokens[i] == Token::Bang {
-            i += 1; // Skip the bang
-            
-            // Skip any newlines after the bang
-            while i < tokens.len() && tokens[i] == Token::Newline {
-                i += 1;
-            }
-            
-            if i >= tokens.len() {
-                return Err("Expected command after !".to_string());
-            }
-            
-            // Find the end of the negated command
-            let mut end = i;
-            let mut brace_depth = 0;
-            let mut paren_depth = 0;
-            let mut if_depth = 0;
-            let mut loop_depth = 0;
-            let mut case_depth = 0;
-            
-            while end < tokens.len() {
-                match &tokens[end] {
-                    Token::LeftBrace => brace_depth += 1,
-                    Token::RightBrace => {
-                        if brace_depth > 0 {
-                            brace_depth -= 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    Token::LeftParen => paren_depth += 1,
-                    Token::RightParen => {
-                        if paren_depth > 0 {
-                            paren_depth -= 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    Token::If => if_depth += 1,
-                    Token::Fi => if if_depth > 0 { if_depth -= 1; },
-                    Token::For | Token::While | Token::Until => loop_depth += 1,
-                    Token::Done => if loop_depth > 0 { loop_depth -= 1; },
-                    Token::Case => case_depth += 1,
-                    Token::Esac => if case_depth > 0 { case_depth -= 1; },
-                    Token::Newline | Token::Semicolon => {
-                        if brace_depth == 0
-                            && paren_depth == 0
-                            && if_depth == 0
-                            && loop_depth == 0
-                            && case_depth == 0
-                        {
-                            break;
-                        }
-                    }
-                    Token::And | Token::Or => {
-                        if brace_depth == 0
-                            && paren_depth == 0
-                            && if_depth == 0
-                            && loop_depth == 0
-                            && case_depth == 0
-                        {
-                            break;
-                        }
-                    }
-                    _ => {}
-                }
-                end += 1;
-            }
-            
-            // Parse the negated command
-            let negated_tokens = &tokens[i..end];
-            let negated_ast = parse_commands_sequentially(negated_tokens)?;
-            
-            let negation_ast = Ast::Negation {
-                command: Box::new(negated_ast),
-            };
-            
-            i = end;
-            
-            // Handle operators after negation (&&, ||, ;, newline)
-            if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
-                let operator = tokens[i].clone();
-                i += 1; // Skip the operator
-                
-                // Skip any newlines after the operator
-                while i < tokens.len() && tokens[i] == Token::Newline {
-                    i += 1;
-                }
-                
-                // Parse the right side recursively
-                let remaining_tokens = &tokens[i..];
-                let right_ast = parse_commands_sequentially(remaining_tokens)?;
-                
-                // Create And or Or node
-                let combined_ast = match operator {
-                    Token::And => Ast::And {
-                        left: Box::new(negation_ast),
-                        right: Box::new(right_ast),
-                    },
-                    Token::Or => Ast::Or {
-                        left: Box::new(negation_ast),
-                        right: Box::new(right_ast),
-                    },
-                    _ => unreachable!(),
-                };
-                
-                commands.push(combined_ast);
-                break; // We've consumed the rest of the tokens
-            }
-            
-            commands.push(negation_ast);
-            
-            // Skip semicolon or newline after negation
-            if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
-                i += 1;
-            }
-            continue;
-        }
 
         // Check for subshell: LeftParen at start of command
         // Must check BEFORE function definition to avoid ambiguity
@@ -846,9 +972,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     i += 1;
                 }
 
-                // Parse the right side recursively
-                let remaining_tokens = &tokens[i..];
-                let right_ast = parse_commands_sequentially(remaining_tokens)?;
+                // Parse only the next command (not the entire remaining sequence)
+                let (right_ast, consumed) = parse_next_command(&tokens[i..])?;
+                i += consumed;
 
                 // Create And or Or node
                 let combined_ast = match operator {
@@ -864,10 +990,15 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 };
 
                 commands.push(combined_ast);
-                break; // We've consumed the rest of the tokens
+                
+                // Skip semicolon or newline after the combined command
+                if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                    i += 1;
+                }
+                continue;
+            } else {
+                commands.push(subshell_ast);
             }
-
-            commands.push(subshell_ast);
 
             // Skip semicolon or newline after subshell
             if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
@@ -1059,9 +1190,9 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     i += 1;
                 }
 
-                // Parse the right side recursively
-                let remaining_tokens = &tokens[i..];
-                let right_ast = parse_commands_sequentially(remaining_tokens)?;
+                // Parse only the next command (not the entire remaining sequence)
+                let (right_ast, consumed) = parse_next_command(&tokens[i..])?;
+                i += consumed;
 
                 // Create And or Or node
                 let combined_ast = match operator {
@@ -1077,10 +1208,15 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 };
 
                 commands.push(combined_ast);
-                break; // We've consumed the rest of the tokens
+                
+                // Skip semicolon or newline after the combined command
+                if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                    i += 1;
+                }
+                continue;
+            } else {
+                commands.push(group_ast);
             }
-
-            commands.push(group_ast);
 
             // Skip semicolon or newline after group
             if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
@@ -1191,6 +1327,13 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 i += 1;
             }
         } else {
+            // Sanity check: we shouldn't be starting a command with an operator
+            if matches!(tokens[i], Token::And | Token::Or | Token::Semicolon) {
+                // Skip this token and continue to next iteration
+                i += 1;
+                continue;
+            }
+            
             // For simple commands, stop at newline, semicolon, &&, or ||
             // But check if the next token after newline is a control flow keyword
             let mut brace_depth = 0;
@@ -1253,40 +1396,11 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }
             }
 
-            let ast = parse_slice(command_tokens)?;
-
-            // Check if the next token is && or ||
-            if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
-                let operator = tokens[i].clone();
-                i += 1; // Skip the operator
-
-                // Skip any newlines after the operator
-                while i < tokens.len() && tokens[i] == Token::Newline {
-                    i += 1;
-                }
-
-                // Parse the right side recursively
-                let remaining_tokens = &tokens[i..];
-                let right_ast = parse_commands_sequentially(remaining_tokens)?;
-
-                // Create And or Or node
-                let combined_ast = match operator {
-                    Token::And => Ast::And {
-                        left: Box::new(ast),
-                        right: Box::new(right_ast),
-                    },
-                    Token::Or => Ast::Or {
-                        left: Box::new(ast),
-                        right: Box::new(right_ast),
-                    },
-                    _ => unreachable!(),
-                };
-
-                commands.push(combined_ast);
-                break; // We've consumed the rest of the tokens
-            } else {
-                commands.push(ast);
-            }
+            // Use parse_next_command to handle operators
+            let (ast, consumed) = parse_next_command(&tokens[start..])?;
+            i = start + consumed;
+            
+            commands.push(ast);
         }
 
         if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
@@ -3251,6 +3365,337 @@ mod tests {
             );
         } else {
             panic!("Expected Pipeline");
+        }
+    }
+
+    // ===== Operator Precedence and Negation Tests =====
+
+    #[test]
+    fn test_negation_with_and_operator() {
+        // Test: ! cmd1 && cmd2
+        // Should parse as: (! cmd1) && cmd2
+        let tokens = vec![
+            Token::Bang,
+            Token::Word("false".to_string()),
+            Token::And,
+            Token::Word("echo".to_string()),
+            Token::Word("success".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be an And node with negation on the left
+        if let Ast::And { left, right } = result {
+            // Left should be a negation
+            if let Ast::Negation { command } = *left {
+                if let Ast::Pipeline(cmds) = *command {
+                    assert_eq!(cmds[0].args, vec!["false"]);
+                } else {
+                    panic!("Expected Pipeline in negation");
+                }
+            } else {
+                panic!("Expected Negation on left side of And");
+            }
+            
+            // Right should be echo success
+            if let Ast::Pipeline(cmds) = *right {
+                assert_eq!(cmds[0].args, vec!["echo", "success"]);
+            } else {
+                panic!("Expected Pipeline on right side of And");
+            }
+        } else {
+            panic!("Expected And node, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_negation_with_or_operator() {
+        // Test: ! cmd1 || cmd2
+        // Should parse as: (! cmd1) || cmd2
+        let tokens = vec![
+            Token::Bang,
+            Token::Word("true".to_string()),
+            Token::Or,
+            Token::Word("echo".to_string()),
+            Token::Word("fallback".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be an Or node with negation on the left
+        if let Ast::Or { left, right } = result {
+            // Left should be a negation
+            if let Ast::Negation { command } = *left {
+                if let Ast::Pipeline(cmds) = *command {
+                    assert_eq!(cmds[0].args, vec!["true"]);
+                } else {
+                    panic!("Expected Pipeline in negation");
+                }
+            } else {
+                panic!("Expected Negation on left side of Or");
+            }
+            
+            // Right should be echo fallback
+            if let Ast::Pipeline(cmds) = *right {
+                assert_eq!(cmds[0].args, vec!["echo", "fallback"]);
+            } else {
+                panic!("Expected Pipeline on right side of Or");
+            }
+        } else {
+            panic!("Expected Or node, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_negation_and_semicolon_sequence() {
+        // Test: ! cmd1 && cmd2 ; cmd3
+        // Should parse as: Sequence([(! cmd1) && cmd2, cmd3])
+        let tokens = vec![
+            Token::Bang,
+            Token::Word("false".to_string()),
+            Token::And,
+            Token::Word("echo".to_string()),
+            Token::Word("second".to_string()),
+            Token::Semicolon,
+            Token::Word("echo".to_string()),
+            Token::Word("third".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be a Sequence with two commands
+        if let Ast::Sequence(commands) = result {
+            assert_eq!(commands.len(), 2);
+            
+            // First command should be (! false) && echo second
+            if let Ast::And { left, right } = &commands[0] {
+                if let Ast::Negation { command } = &**left {
+                    if let Ast::Pipeline(cmds) = &**command {
+                        assert_eq!(cmds[0].args, vec!["false"]);
+                    } else {
+                        panic!("Expected Pipeline in negation");
+                    }
+                } else {
+                    panic!("Expected Negation");
+                }
+                
+                if let Ast::Pipeline(cmds) = &**right {
+                    assert_eq!(cmds[0].args, vec!["echo", "second"]);
+                } else {
+                    panic!("Expected Pipeline");
+                }
+            } else {
+                panic!("Expected And node");
+            }
+            
+            // Second command should be echo third
+            if let Ast::Pipeline(cmds) = &commands[1] {
+                assert_eq!(cmds[0].args, vec!["echo", "third"]);
+            } else {
+                panic!("Expected Pipeline");
+            }
+        } else {
+            panic!("Expected Sequence, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_nested_logical_operators() {
+        // Test: cmd1 && ! cmd2 || cmd3
+        // Should parse as: (cmd1 && (! cmd2)) || cmd3
+        let tokens = vec![
+            Token::Word("true".to_string()),
+            Token::And,
+            Token::Bang,
+            Token::Word("false".to_string()),
+            Token::Or,
+            Token::Word("echo".to_string()),
+            Token::Word("fallback".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be an Or node
+        if let Ast::Or { left, right } = result {
+            // Left should be: true && ! false
+            if let Ast::And { left: and_left, right: and_right } = *left {
+                // and_left should be true
+                if let Ast::Pipeline(cmds) = *and_left {
+                    assert_eq!(cmds[0].args, vec!["true"]);
+                } else {
+                    panic!("Expected Pipeline");
+                }
+                
+                // and_right should be ! false
+                if let Ast::Negation { command } = *and_right {
+                    if let Ast::Pipeline(cmds) = *command {
+                        assert_eq!(cmds[0].args, vec!["false"]);
+                    } else {
+                        panic!("Expected Pipeline in negation");
+                    }
+                } else {
+                    panic!("Expected Negation");
+                }
+            } else {
+                panic!("Expected And node on left side of Or");
+            }
+            
+            // Right should be echo fallback
+            if let Ast::Pipeline(cmds) = *right {
+                assert_eq!(cmds[0].args, vec!["echo", "fallback"]);
+            } else {
+                panic!("Expected Pipeline");
+            }
+        } else {
+            panic!("Expected Or node, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_subshell_with_and_operator_and_sequence() {
+        // Test: (cmd1) && cmd2 ; cmd3
+        // Should parse as: Sequence([(cmd1) && cmd2, cmd3])
+        let tokens = vec![
+            Token::LeftParen,
+            Token::Word("true".to_string()),
+            Token::RightParen,
+            Token::And,
+            Token::Word("echo".to_string()),
+            Token::Word("second".to_string()),
+            Token::Semicolon,
+            Token::Word("echo".to_string()),
+            Token::Word("third".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be a Sequence
+        if let Ast::Sequence(commands) = result {
+            assert_eq!(commands.len(), 2);
+            
+            // First should be (true) && echo second
+            if let Ast::And { .. } = &commands[0] {
+                // Structure is correct
+            } else {
+                panic!("Expected And node");
+            }
+            
+            // Second should be echo third
+            if let Ast::Pipeline(cmds) = &commands[1] {
+                assert_eq!(cmds[0].args, vec!["echo", "third"]);
+            } else {
+                panic!("Expected Pipeline");
+            }
+        } else {
+            panic!("Expected Sequence, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_command_group_with_or_operator_and_sequence() {
+        // Test: { cmd1; } || cmd2 ; cmd3
+        // Should parse as: Sequence([{ cmd1; } || cmd2, cmd3])
+        let tokens = vec![
+            Token::LeftBrace,
+            Token::Word("false".to_string()),
+            Token::Semicolon,
+            Token::RightBrace,
+            Token::Or,
+            Token::Word("echo".to_string()),
+            Token::Word("second".to_string()),
+            Token::Semicolon,
+            Token::Word("echo".to_string()),
+            Token::Word("third".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be a Sequence
+        if let Ast::Sequence(commands) = result {
+            assert_eq!(commands.len(), 2);
+            
+            // First should be { false; } || echo second
+            if let Ast::Or { .. } = &commands[0] {
+                // Structure is correct
+            } else {
+                panic!("Expected Or node");
+            }
+            
+            // Second should be echo third
+            if let Ast::Pipeline(cmds) = &commands[1] {
+                assert_eq!(cmds[0].args, vec!["echo", "third"]);
+            } else {
+                panic!("Expected Pipeline");
+            }
+        } else {
+            panic!("Expected Sequence, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_multiple_and_operators_in_sequence() {
+        // Test: cmd1 && cmd2 && cmd3
+        // Should parse as: (cmd1 && cmd2) && cmd3 (left-associative)
+        let tokens = vec![
+            Token::Word("true".to_string()),
+            Token::And,
+            Token::Word("echo".to_string()),
+            Token::Word("second".to_string()),
+            Token::And,
+            Token::Word("echo".to_string()),
+            Token::Word("third".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be an And node with left-associative structure
+        if let Ast::And { left, right } = result {
+            // Left should be: true && echo second
+            if let Ast::And { left: inner_left, right: inner_right } = *left {
+                if let Ast::Pipeline(cmds) = *inner_left {
+                    assert_eq!(cmds[0].args, vec!["true"]);
+                } else {
+                    panic!("Expected Pipeline");
+                }
+                
+                if let Ast::Pipeline(cmds) = *inner_right {
+                    assert_eq!(cmds[0].args, vec!["echo", "second"]);
+                } else {
+                    panic!("Expected Pipeline");
+                }
+            } else {
+                panic!("Expected nested And node on left");
+            }
+            
+            // Right should be: echo third
+            if let Ast::Pipeline(cmds) = *right {
+                assert_eq!(cmds[0].args, vec!["echo", "third"]);
+            } else {
+                panic!("Expected Pipeline on right");
+            }
+        } else {
+            panic!("Expected And node, got: {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_negation_in_pipeline() {
+        // Test: ! cmd1 | cmd2
+        // Negation should apply to the entire pipeline
+        let tokens = vec![
+            Token::Bang,
+            Token::Word("grep".to_string()),
+            Token::Word("pattern".to_string()),
+            Token::Pipe,
+            Token::Word("wc".to_string()),
+            Token::Word("-l".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        
+        // Should be a Negation wrapping a Pipeline
+        if let Ast::Negation { command } = result {
+            if let Ast::Pipeline(cmds) = *command {
+                assert_eq!(cmds.len(), 2);
+                assert_eq!(cmds[0].args, vec!["grep", "pattern"]);
+                assert_eq!(cmds[1].args, vec!["wc", "-l"]);
+            } else {
+                panic!("Expected Pipeline in negation");
+            }
+        } else {
+            panic!("Expected Negation, got: {:?}", result);
         }
     }
 }
