@@ -604,6 +604,76 @@ fn expand_wildcards(args: &[String], shell_state: &ShellState) -> Result<Vec<Str
     Ok(expanded_args)
 }
 
+/// Atomically write data to a file, respecting noclobber settings
+///
+/// When noclobber is enabled and force_clobber is false, uses create_new()
+/// to atomically fail if file exists. Otherwise allows overwriting.
+fn write_file_with_noclobber(
+    path: &str,
+    data: &[u8],
+    noclobber: bool,
+    force_clobber: bool,
+    shell_state: &ShellState,
+) -> Result<(), String> {
+    use std::fs::OpenOptions;
+    
+    if noclobber && !force_clobber {
+        // Atomic check-and-create: fails if file exists
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                            shell_state.color_scheme.error, path
+                        )
+                    } else {
+                        format!("cannot overwrite existing file '{}' (noclobber is set)", path)
+                    }
+                } else {
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}Cannot create {}: {}\x1b[0m",
+                            shell_state.color_scheme.error, path, e
+                        )
+                    } else {
+                        format!("Cannot create {}: {}", path, e)
+                    }
+                }
+            })?;
+        
+        file.write_all(data)
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!(
+                        "{}Failed to write to {}: {}\x1b[0m",
+                        shell_state.color_scheme.error, path, e
+                    )
+                } else {
+                    format!("Failed to write to {}: {}", path, e)
+                }
+            })?;
+    } else {
+        // Allow overwriting (normal behavior or force_clobber)
+        std::fs::write(path, data)
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!(
+                        "{}Cannot write to {}: {}\x1b[0m",
+                        shell_state.color_scheme.error, path, e
+                    )
+                } else {
+                    format!("Cannot write to {}: {}", path, e)
+                }
+            })?;
+    }
+    
+    Ok(())
+}
+
 /// Collect here-document content from stdin until the specified delimiter is found
 /// This function reads from stdin line by line until it finds a line that exactly matches the delimiter
 /// If shell_state has pending_heredoc_content, it uses that instead (for script execution)
@@ -827,22 +897,54 @@ fn apply_output_redirection(
 ) -> Result<(), String> {
     let expanded_file = expand_variables_in_string(file, shell_state);
 
-    // Check noclobber option (-C): Prevent overwriting existing files with >
-    // Note: >> (append) and >| (force overwrite) are not affected by noclobber
-    if shell_state.options.noclobber && !append && !force_clobber && std::path::Path::new(&expanded_file).exists() {
-        return Err(format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file));
-    }
-
     // Open file for writing or appending
+    // For noclobber with > (not append, not force_clobber), use atomic create_new()
     let file_handle = if append {
         OpenOptions::new()
             .append(true)
             .create(true)
             .open(&expanded_file)
-            .map_err(|e| format!("Cannot open {}: {}", expanded_file, e))?
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!("{}Cannot open {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                } else {
+                    format!("Cannot open {}: {}", expanded_file, e)
+                }
+            })?
+    } else if shell_state.options.noclobber && !force_clobber {
+        // Atomic check-and-create: fails if file exists
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&expanded_file)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                            shell_state.color_scheme.error, expanded_file
+                        )
+                    } else {
+                        format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file)
+                    }
+                } else {
+                    if shell_state.colors_enabled {
+                        format!("{}Cannot create {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                    } else {
+                        format!("Cannot create {}: {}", expanded_file, e)
+                    }
+                }
+            })?
     } else {
+        // Normal create (truncate) or force_clobber
         File::create(&expanded_file)
-            .map_err(|e| format!("Cannot create {}: {}", expanded_file, e))?
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!("{}Cannot create {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                } else {
+                    format!("Cannot create {}: {}", expanded_file, e)
+                }
+            })?
     };
 
     if let Some(cmd) = command {
@@ -2461,43 +2563,29 @@ fn execute_compound_with_redirections(
                         Redirection::Output(file) => {
                             let expanded_file = expand_variables_in_string(file, shell_state);
                             
-                            // Check noclobber option: prevent overwriting existing files with >
-                            if shell_state.options.noclobber && std::path::Path::new(&expanded_file).exists() {
-                                if shell_state.colors_enabled {
-                                    eprintln!(
-                                        "{}Redirection error: cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
-                                        shell_state.color_scheme.error, expanded_file
-                                    );
-                                } else {
-                                    eprintln!("Redirection error: cannot overwrite existing file '{}' (noclobber is set)", expanded_file);
-                                }
-                                return 1;
-                            }
-                            
-                            if let Err(e) = std::fs::write(&expanded_file, &output) {
-                                if shell_state.colors_enabled {
-                                    eprintln!(
-                                        "{}Redirection error: {}\x1b[0m",
-                                        shell_state.color_scheme.error, e
-                                    );
-                                } else {
-                                    eprintln!("Redirection error: {}", e);
-                                }
+                            // Use atomic write helper to prevent TOCTOU race condition
+                            if let Err(e) = write_file_with_noclobber(
+                                &expanded_file,
+                                &output,
+                                shell_state.options.noclobber,
+                                false, // not force_clobber
+                                shell_state,
+                            ) {
+                                eprintln!("Redirection error: {}", e);
                                 return 1;
                             }
                         }
                         Redirection::OutputClobber(file) => {
                             let expanded_file = expand_variables_in_string(file, shell_state);
                             // >| always overwrites, even with noclobber set
-                            if let Err(e) = std::fs::write(&expanded_file, &output) {
-                                if shell_state.colors_enabled {
-                                    eprintln!(
-                                        "{}Redirection error: {}\x1b[0m",
-                                        shell_state.color_scheme.error, e
-                                    );
-                                } else {
-                                    eprintln!("Redirection error: {}", e);
-                                }
+                            if let Err(e) = write_file_with_noclobber(
+                                &expanded_file,
+                                &output,
+                                false, // noclobber doesn't apply
+                                true,  // force_clobber
+                                shell_state,
+                            ) {
+                                eprintln!("Redirection error: {}", e);
                                 return 1;
                             }
                         }
