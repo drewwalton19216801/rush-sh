@@ -573,12 +573,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                                                 current.push_str(&expanded);
                                             }
                                         }
-                                        Err(e) => {
-                                            // Check if this is a nounset error (unbound variable)
-                                            if e.contains("unbound variable") {
-                                                // Propagate nounset errors immediately
-                                                return Err(e);
-                                            }
+                                        Err(_) => {
                                             // On error, fall back to literal syntax but split into separate tokens
                                             if !current.is_empty() {
                                                 if let Some(keyword) = is_keyword(&current) {
