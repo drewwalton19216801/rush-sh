@@ -1831,9 +1831,9 @@ set_color_scheme light     # Light theme
 
 The color system is designed to be both powerful and unobtrusive, providing visual enhancements while respecting user preferences and accessibility needs.
 
-### Set Builtin - Shell Options and Positional Parameters
+### Set Built-in - Shell Options and Positional Parameters
 
-Rush now provides comprehensive support for the POSIX `set` builtin command, enabling control over shell behavior through option flags and management of positional parameters:
+Rush now provides comprehensive support for the POSIX `set` built-in command, enabling control over shell behavior through option flags and management of positional parameters:
 
 - **Shell Option Management**: Enable/disable shell behavior flags with `-` (enable) and `+` (disable) syntax
 - **Named Options**: Use `-o optname` or `+o optname` for long option names
@@ -1851,6 +1851,27 @@ Rush now provides comprehensive support for the POSIX `set` builtin command, ena
 
 **Basic Usage:**
 
+```bash
+# Enable multiple options at once
+set -eu                    # Enable errexit and nounset
+
+# Display all shell options with their current state
+set +o                     # Shows all options (on/off)
+
+# Set positional parameters
+set -- arg1 arg2 arg3      # Sets $1=arg1, $2=arg2, $3=arg3
+
+# Clear positional parameters
+set --                     # Clears all positional parameters
+
+# Named option syntax
+set -o errexit            # Enable errexit using long name
+set +o nounset            # Disable nounset using long name
+
+# Display all shell variables
+set                        # Shows all variables (NAME=value format)
+```
+
 
 **Key Features:**
 
@@ -1864,7 +1885,7 @@ Rush now provides comprehensive support for the POSIX `set` builtin command, ena
 
 **Implementation Details:**
 
-- Options are stored in `ShellState.options` structure
+- Options are stored in [`ShellState.options`](src/state.rs:738) structure
 - errexit checks occur after each command execution
 - nounset validation happens during variable expansion
 - xtrace prints to stderr before command execution
@@ -1873,7 +1894,7 @@ Rush now provides comprehensive support for the POSIX `set` builtin command, ena
 - noclobber prevents `>` from overwriting (use `>|` to override)
 - allexport automatically exports variables when set
 
-The `set` builtin provides essential control over shell behavior, making scripts more robust and debugging easier while maintaining full POSIX compatibility.
+The `set` built-in provides essential control over shell behavior, making scripts more robust and debugging easier while maintaining full POSIX compatibility.
 
 ### .rushrc Configuration File
 
