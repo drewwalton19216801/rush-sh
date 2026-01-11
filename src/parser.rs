@@ -85,6 +85,8 @@ pub enum Redirection {
     FdInput(i32, String),
     /// Output to file with explicit fd: N> file
     FdOutput(i32, String),
+    /// Output to file with explicit fd and noclobber override: N>| file
+    FdOutputClobber(i32, String),
     /// Append to file with explicit fd: N>> file
     FdAppend(i32, String),
     /// Duplicate file descriptor: N>&M or N<&M
@@ -872,6 +874,10 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                         redirections.push(Redirection::FdOutput(*fd, file.clone()));
                         i += 1;
                     }
+                    Token::RedirectFdOutClobber(fd, file) => {
+                        redirections.push(Redirection::FdOutputClobber(*fd, file.clone()));
+                        i += 1;
+                    }
                     Token::RedirectFdIn(fd, file) => {
                         redirections.push(Redirection::FdInput(*fd, file.clone()));
                         i += 1;
@@ -1537,6 +1543,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                                 .push(Redirection::FdOutput(*fd, file.clone()));
                             i += 1;
                         }
+                        Token::RedirectFdOutClobber(fd, file) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdOutputClobber(*fd, file.clone()));
+                            i += 1;
+                        }
                         Token::RedirectFdIn(fd, file) => {
                             current_cmd
                                 .redirections
@@ -1679,6 +1691,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                             current_cmd
                                 .redirections
                                 .push(Redirection::FdOutput(*fd, file.clone()));
+                            i += 1;
+                        }
+                        Token::RedirectFdOutClobber(fd, file) => {
+                            current_cmd
+                                .redirections
+                                .push(Redirection::FdOutputClobber(*fd, file.clone()));
                             i += 1;
                         }
                         Token::RedirectFdIn(fd, file) => {
@@ -1860,6 +1878,11 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 current_cmd
                     .redirections
                     .push(Redirection::FdOutput(*fd, file.clone()));
+            }
+            Token::RedirectFdOutClobber(fd, file) => {
+                current_cmd
+                    .redirections
+                    .push(Redirection::FdOutputClobber(*fd, file.clone()));
             }
             Token::RedirectFdAppend(fd, file) => {
                 current_cmd

@@ -772,6 +772,9 @@ fn apply_redirections(
             Redirection::FdOutput(fd, file) => {
                 apply_output_redirection(*fd, file, false, false, shell_state, command.as_deref_mut())?;
             }
+            Redirection::FdOutputClobber(fd, file) => {
+                apply_output_redirection(*fd, file, false, true, shell_state, command.as_deref_mut())?;
+            }
             Redirection::FdAppend(fd, file) => {
                 apply_output_redirection(*fd, file, true, false, shell_state, command.as_deref_mut())?;
             }
@@ -828,6 +831,7 @@ fn apply_input_redirection(
                 false, // write
                 false, // append
                 false, // truncate
+                false, // clobber
             )?;
 
             // Also perform OS-level dup2
@@ -856,6 +860,7 @@ fn apply_input_redirection(
             false, // write
             false, // append
             false, // truncate
+            false, // clobber
         )?;
 
         // If we have an external command, set up the file descriptor in the child process
@@ -966,11 +971,28 @@ fn apply_output_redirection(
                 true,  // write
                 append,
                 !append, // truncate if not appending
+                false, // clobber
             )?;
         }
     } else {
         // Current process redirection (builtins, command groups)
-        // We MUST update the file descriptor table for ALL FDs including 1 and 2
+        // Check noclobber before opening in fd_table
+        if shell_state.options.noclobber && !force_clobber && !append {
+            // Check if file exists before opening
+            if std::path::Path::new(&expanded_file).exists() {
+                let error_msg = if shell_state.colors_enabled {
+                    format!(
+                        "{}cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                        shell_state.color_scheme.error, expanded_file
+                    )
+                } else {
+                    format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file)
+                };
+                return Err(error_msg);
+            }
+        }
+        
+        // Now safe to open - we MUST update the file descriptor table for ALL FDs including 1 and 2
         shell_state.fd_table.borrow_mut().open_fd(
             fd,
             &expanded_file,
@@ -978,6 +1000,7 @@ fn apply_output_redirection(
             true,  // write
             append,
             !append, // truncate if not appending
+            shell_state.options.noclobber && !force_clobber && !append, // create_new
         )?;
 
         // Also perform OS-level dup2 to ensure child processes inherit the redirection
@@ -1079,6 +1102,7 @@ fn apply_fd_input_output(
         true,  // write
         false, // append
         false, // truncate
+        false, // create_new
     )?;
 
     Ok(())

@@ -313,6 +313,7 @@ fn format_command(cmd: &crate::parser::ShellCommand) -> String {
             Redirection::Append(file) => result.push_str(&format!(" >> {}", file)),
             Redirection::FdInput(fd, file) => result.push_str(&format!(" {}<{}", fd, file)),
             Redirection::FdOutput(fd, file) => result.push_str(&format!(" {}>{}", fd, file)),
+            Redirection::FdOutputClobber(fd, file) => result.push_str(&format!(" {}>|{}", fd, file)),
             Redirection::FdAppend(fd, file) => result.push_str(&format!(" {}>>{}", fd, file)),
             Redirection::FdDuplicate(from, to) => result.push_str(&format!(" {}>&{}", from, to)),
             Redirection::FdClose(fd) => result.push_str(&format!(" {}>&-", fd)),

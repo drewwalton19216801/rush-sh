@@ -17,6 +17,7 @@ pub enum Token {
     // File descriptor redirections
     RedirectFdIn(i32, String),     // N<file - redirect fd N from file
     RedirectFdOut(i32, String),    // N>file - redirect fd N to file
+    RedirectFdOutClobber(i32, String), // N>|file - redirect fd N to file with noclobber override
     RedirectFdAppend(i32, String), // N>>file - append fd N to file
     RedirectFdDup(i32, i32),       // N>&M or N<&M - duplicate fd M to fd N
     RedirectFdClose(i32),          // N>&- or N<&- - close fd N
@@ -778,8 +779,8 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     
                     if !filename.is_empty() {
                         if let Some(fd) = fd_num {
-                            // With fd number, use RedirectFdOut (clobber is implied by >|)
-                            tokens.push(Token::RedirectFdOut(fd, filename));
+                            // With fd number, use RedirectFdOutClobber for proper noclobber override
+                            tokens.push(Token::RedirectFdOutClobber(fd, filename));
                         } else {
                             // Without fd number, use RedirOutClobber
                             tokens.push(Token::RedirOutClobber);
@@ -3513,7 +3514,7 @@ mod tests {
             vec![
                 Token::Word("echo".to_string()),
                 Token::Word("test".to_string()),
-                Token::RedirectFdOut(2, "errors.log".to_string())
+                Token::RedirectFdOutClobber(2, "errors.log".to_string())
             ]
         );
     }
@@ -3526,7 +3527,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirectFdOut(3, "file.txt".to_string())
+                Token::RedirectFdOutClobber(3, "file.txt".to_string())
             ]
         );
     }
@@ -3562,7 +3563,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirectFdOut(2, "error log.txt".to_string())
+                Token::RedirectFdOutClobber(2, "error log.txt".to_string())
             ]
         );
     }
@@ -3577,7 +3578,7 @@ mod tests {
                 Token::Word("command".to_string()),
                 Token::RedirOutClobber,
                 Token::Word("out.txt".to_string()),
-                Token::RedirectFdOut(2, "err.txt".to_string())
+                Token::RedirectFdOutClobber(2, "err.txt".to_string())
             ]
         );
     }
@@ -3605,11 +3606,11 @@ mod tests {
         
         // Test fd 0 (unusual but valid)
         let result = lex("cmd 0>| file", &shell_state).unwrap();
-        assert_eq!(result[1], Token::RedirectFdOut(0, "file".to_string()));
+        assert_eq!(result[1], Token::RedirectFdOutClobber(0, "file".to_string()));
         
         // Test fd 9
         let result = lex("cmd 9>| file", &shell_state).unwrap();
-        assert_eq!(result[1], Token::RedirectFdOut(9, "file".to_string()));
+        assert_eq!(result[1], Token::RedirectFdOutClobber(9, "file".to_string()));
     }
 
     #[test]

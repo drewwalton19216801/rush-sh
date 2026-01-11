@@ -204,6 +204,7 @@ pub fn execute_builtin(
             | Redirection::Append(file)
             | Redirection::FdInput(_, file)
             | Redirection::FdOutput(_, file)
+            | Redirection::FdOutputClobber(_, file)
             | Redirection::FdAppend(_, file)
             | Redirection::FdInputOutput(_, file) => {
                 files_to_expand.push(file.clone());
@@ -251,6 +252,7 @@ pub fn execute_builtin(
                     false, // write
                     false, // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::Output(_) | Redirection::OutputClobber(_) => {
@@ -260,6 +262,7 @@ pub fn execute_builtin(
                     true,  // write
                     false, // append
                     true,  // truncate
+                    false, // create_new
                 )
             }
             Redirection::Append(_) => {
@@ -269,6 +272,7 @@ pub fn execute_builtin(
                     true,  // write
                     true,  // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdInput(fd, _) => {
@@ -278,15 +282,17 @@ pub fn execute_builtin(
                     false, // write
                     false, // append
                     false, // truncate
+                    false, // create_new
                 )
             }
-            Redirection::FdOutput(fd, _) => {
+            Redirection::FdOutput(fd, _) | Redirection::FdOutputClobber(fd, _) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
                     *fd, file, false, // read
                     true,  // write
                     false, // append
                     true,  // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdAppend(fd, _) => {
@@ -296,6 +302,7 @@ pub fn execute_builtin(
                     true,  // write
                     true,  // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdDuplicate(target_fd, source_fd) => shell_state
@@ -310,6 +317,7 @@ pub fn execute_builtin(
                     true,  // write
                     false, // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             // Here-documents and here-strings are handled differently for builtins

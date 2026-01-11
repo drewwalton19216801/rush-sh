@@ -107,7 +107,15 @@ impl FileDescriptorTable {
         write: bool,
         append: bool,
         truncate: bool,
+        create_new: bool,
     ) -> Result<(), String> {
+        let mut opts = OpenOptions::new();
+        if create_new {
+            opts.create_new(true); // Atomic check-and-create
+        } else if truncate {
+            opts.create(true).truncate(true);
+        }
+
         // Validate fd number
         if !(0..=1024).contains(&fd_num) {
             return Err(format!("Invalid file descriptor number: {}", fd_num));
@@ -412,34 +420,34 @@ impl Default for FileDescriptorTable {
 pub struct ShellOptions {
     /// -e: Exit on command failure
     pub errexit: bool,
-    
+
     /// -u: Treat unset variables as error
     pub nounset: bool,
-    
+
     /// -x: Print commands before execution
     pub xtrace: bool,
-    
+
     /// -v: Print input lines as read
     pub verbose: bool,
-    
+
     /// -n: Read but don't execute commands
     pub noexec: bool,
-    
+
     /// -f: Disable pathname expansion
     pub noglob: bool,
-    
+
     /// -C: Prevent overwriting files with redirection
     pub noclobber: bool,
-    
+
     /// -a: Auto-export all variables
     pub allexport: bool,
-    
+
     /// -b: Notify of job completion immediately
     pub notify: bool,
-    
+
     /// Ignore EOF (Ctrl+D) - not a standard POSIX option but commonly supported
     pub ignoreeof: bool,
-    
+
     /// -m: Enable job control (monitor)
     pub monitor: bool,
 }
@@ -500,7 +508,7 @@ impl ShellOptions {
             _ => None,
         }
     }
-    
+
     /// Set a shell option identified by its single-character short name.
     ///
     /// Sets the option corresponding to `name` to `value`. Recognized short names:
@@ -526,20 +534,50 @@ impl ShellOptions {
     /// ```
     pub fn set_by_short_name(&mut self, name: char, value: bool) -> Result<(), String> {
         match name {
-            'e' => { self.errexit = value; Ok(()) },
-            'u' => { self.nounset = value; Ok(()) },
-            'x' => { self.xtrace = value; Ok(()) },
-            'v' => { self.verbose = value; Ok(()) },
-            'n' => { self.noexec = value; Ok(()) },
-            'f' => { self.noglob = value; Ok(()) },
-            'C' => { self.noclobber = value; Ok(()) },
-            'a' => { self.allexport = value; Ok(()) },
-            'b' => { self.notify = value; Ok(()) },
-            'm' => { self.monitor = value; Ok(()) },
+            'e' => {
+                self.errexit = value;
+                Ok(())
+            }
+            'u' => {
+                self.nounset = value;
+                Ok(())
+            }
+            'x' => {
+                self.xtrace = value;
+                Ok(())
+            }
+            'v' => {
+                self.verbose = value;
+                Ok(())
+            }
+            'n' => {
+                self.noexec = value;
+                Ok(())
+            }
+            'f' => {
+                self.noglob = value;
+                Ok(())
+            }
+            'C' => {
+                self.noclobber = value;
+                Ok(())
+            }
+            'a' => {
+                self.allexport = value;
+                Ok(())
+            }
+            'b' => {
+                self.notify = value;
+                Ok(())
+            }
+            'm' => {
+                self.monitor = value;
+                Ok(())
+            }
             _ => Err(format!("Invalid option: -{}", name)),
         }
     }
-    
+
     /// Retrieve the value of a shell option by its long name.
     ///
     /// `name` is the option's full identifier (for example: "errexit", "nounset", "xtrace").
@@ -575,7 +613,7 @@ impl ShellOptions {
             _ => None,
         }
     }
-    
+
     /// Set a shell option by its long name.
     ///
     /// Sets the specified long-form option (for example `"errexit"` or `"nounset"`) to the provided boolean value.
@@ -593,21 +631,54 @@ impl ShellOptions {
     /// ```
     pub fn set_by_long_name(&mut self, name: &str, value: bool) -> Result<(), String> {
         match name {
-            "errexit" => { self.errexit = value; Ok(()) },
-            "nounset" => { self.nounset = value; Ok(()) },
-            "xtrace" => { self.xtrace = value; Ok(()) },
-            "verbose" => { self.verbose = value; Ok(()) },
-            "noexec" => { self.noexec = value; Ok(()) },
-            "noglob" => { self.noglob = value; Ok(()) },
-            "noclobber" => { self.noclobber = value; Ok(()) },
-            "allexport" => { self.allexport = value; Ok(()) },
-            "notify" => { self.notify = value; Ok(()) },
-            "ignoreeof" => { self.ignoreeof = value; Ok(()) },
-            "monitor" => { self.monitor = value; Ok(()) },
+            "errexit" => {
+                self.errexit = value;
+                Ok(())
+            }
+            "nounset" => {
+                self.nounset = value;
+                Ok(())
+            }
+            "xtrace" => {
+                self.xtrace = value;
+                Ok(())
+            }
+            "verbose" => {
+                self.verbose = value;
+                Ok(())
+            }
+            "noexec" => {
+                self.noexec = value;
+                Ok(())
+            }
+            "noglob" => {
+                self.noglob = value;
+                Ok(())
+            }
+            "noclobber" => {
+                self.noclobber = value;
+                Ok(())
+            }
+            "allexport" => {
+                self.allexport = value;
+                Ok(())
+            }
+            "notify" => {
+                self.notify = value;
+                Ok(())
+            }
+            "ignoreeof" => {
+                self.ignoreeof = value;
+                Ok(())
+            }
+            "monitor" => {
+                self.monitor = value;
+                Ok(())
+            }
             _ => Err(format!("Invalid option: {}", name)),
         }
     }
-    
+
     /// Lists all shell option names with their short-letter aliases and current values.
     ///
     /// Returns a vector of tuples `(long_name, short_name, value)` for every supported option.
@@ -1629,7 +1700,7 @@ mod tests {
         std::fs::write(temp_file, "test content").unwrap();
 
         // Open file for reading
-        let result = fd_table.open_fd(3, temp_file, true, false, false, false);
+        let result = fd_table.open_fd(3, temp_file, true, false, false, false, false);
         assert!(result.is_ok());
         assert!(fd_table.is_open(3));
 
@@ -1645,7 +1716,7 @@ mod tests {
         let temp_file = "/tmp/rush_test_fd_write.txt";
 
         // Open file for writing
-        let result = fd_table.open_fd(4, temp_file, false, true, false, true);
+        let result = fd_table.open_fd(4, temp_file, false, true, false, true, false);
         assert!(result.is_ok());
         assert!(fd_table.is_open(4));
 
@@ -1658,11 +1729,11 @@ mod tests {
         let mut fd_table = FileDescriptorTable::new();
 
         // Test invalid fd numbers
-        let result = fd_table.open_fd(-1, "/tmp/test.txt", true, false, false, false);
+        let result = fd_table.open_fd(-1, "/tmp/test.txt", true, false, false, false, false);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid file descriptor"));
 
-        let result = fd_table.open_fd(1025, "/tmp/test.txt", true, false, false, false);
+        let result = fd_table.open_fd(1025, "/tmp/test.txt", true, false, false, false, false);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid file descriptor"));
     }
@@ -1677,7 +1748,7 @@ mod tests {
 
         // Open file on fd 3
         fd_table
-            .open_fd(3, temp_file, true, false, false, false)
+            .open_fd(3, temp_file, true, false, false, false, false)
             .unwrap();
         assert!(fd_table.is_open(3));
 
@@ -1700,7 +1771,7 @@ mod tests {
 
         // Open file on fd 3
         fd_table
-            .open_fd(3, temp_file, true, false, false, false)
+            .open_fd(3, temp_file, true, false, false, false, false)
             .unwrap();
 
         // Duplicate fd 3 to itself (should be no-op)
@@ -1732,7 +1803,7 @@ mod tests {
 
         // Open file on fd 3
         fd_table
-            .open_fd(3, temp_file, true, false, false, false)
+            .open_fd(3, temp_file, true, false, false, false, false)
             .unwrap();
         assert!(fd_table.is_open(3));
 
@@ -1787,10 +1858,10 @@ mod tests {
         }
 
         fd_table
-            .open_fd(50, &temp_file1, true, false, false, false)
+            .open_fd(50, &temp_file1, true, false, false, false, false)
             .unwrap();
         fd_table
-            .open_fd(51, &temp_file2, true, false, false, false)
+            .open_fd(51, &temp_file2, true, false, false, false, false)
             .unwrap();
 
         // Save all fds
@@ -1824,7 +1895,7 @@ mod tests {
         // FileDescriptorTable::clear() just clears map. File drops.
 
         fd_table
-            .open_fd(50, temp_file, true, false, false, false)
+            .open_fd(50, temp_file, true, false, false, false, false)
             .unwrap();
         assert!(fd_table.is_open(50));
 
@@ -1846,7 +1917,7 @@ mod tests {
 
         // Open file on fd 3
         fd_table
-            .open_fd(3, temp_file, true, false, false, false)
+            .open_fd(3, temp_file, true, false, false, false, false)
             .unwrap();
 
         // Get Stdio for fd 3
@@ -1873,7 +1944,7 @@ mod tests {
 
         // Open file on fd 3
         fd_table
-            .open_fd(3, temp_file1, true, false, false, false)
+            .open_fd(3, temp_file1, true, false, false, false, false)
             .unwrap();
         assert!(fd_table.is_open(3));
 
@@ -1883,7 +1954,7 @@ mod tests {
 
         // Open another file on fd 5
         fd_table
-            .open_fd(5, temp_file2, true, false, false, false)
+            .open_fd(5, temp_file2, true, false, false, false, false)
             .unwrap();
         assert!(fd_table.is_open(5));
 
@@ -1920,7 +1991,7 @@ mod tests {
         {
             let mut fd_table = state.fd_table.borrow_mut();
             fd_table
-                .open_fd(3, temp_file, true, false, false, false)
+                .open_fd(3, temp_file, true, false, false, false, false)
                 .unwrap();
         }
 
@@ -2036,8 +2107,17 @@ mod tests {
 
         // Test all valid long options
         let long_opts = vec![
-            "errexit", "nounset", "xtrace", "verbose", "noexec", "noglob", "noclobber",
-            "allexport", "notify", "ignoreeof", "monitor",
+            "errexit",
+            "nounset",
+            "xtrace",
+            "verbose",
+            "noexec",
+            "noglob",
+            "noclobber",
+            "allexport",
+            "notify",
+            "ignoreeof",
+            "monitor",
         ];
         for opt in long_opts {
             assert!(options.set_by_long_name(opt, true).is_ok());
@@ -2054,7 +2134,7 @@ mod tests {
         options.xtrace = true;
 
         let all_options = options.get_all_options();
-        
+
         // Should have 11 options
         assert_eq!(all_options.len(), 11);
 
@@ -2085,13 +2165,13 @@ mod tests {
     #[test]
     fn test_shell_state_options_modification() {
         let mut state = ShellState::new();
-        
+
         state.options.errexit = true;
         assert!(state.options.errexit);
-        
+
         state.options.set_by_short_name('u', true).unwrap();
         assert!(state.options.nounset);
-        
+
         state.options.set_by_long_name("xtrace", true).unwrap();
         assert!(state.options.xtrace);
     }
@@ -2106,7 +2186,11 @@ mod tests {
 
         let result = options.set_by_long_name("invalid_option", true);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid option: invalid_option"));
+        assert!(
+            result
+                .unwrap_err()
+                .contains("Invalid option: invalid_option")
+        );
     }
 
     #[test]
