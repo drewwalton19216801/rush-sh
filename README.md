@@ -1851,69 +1851,6 @@ Rush now provides comprehensive support for the POSIX `set` builtin command, ena
 
 **Basic Usage:**
 
-```bash
-# Enable errexit (exit on error)
-set -e
-
-# Enable multiple options at once
-set -eux  # errexit, nounset, xtrace
-
-# Disable an option
-set +e
-
-# Use named options
-set -o errexit
-set +o errexit
-
-# Display all options
-set +o
-
-# Display all variables
-set
-
-# Set positional parameters
-set -- arg1 arg2 arg3
-echo $1  # arg1
-echo $#  # 3
-
-# Clear positional parameters
-set --
-
-# Combine options with positional parameters
-set -e -- arg1 arg2
-```
-
-**Advanced Usage:**
-
-```bash
-# Strict mode for safer scripts
-set -euo pipefail
-
-# Debug mode with command tracing
-set -x
-echo "This command will be printed before execution"
-set +x
-
-# Syntax check without execution
-set -n
-# Commands are parsed but not executed
-
-# Protect against accidental file overwrites
-set -C
-echo "data" > file.txt   # Creates file
-echo "more" > file.txt   # Error: file exists (noclobber prevents overwrite)
-echo "more" >| file.txt  # Override noclobber with >| operator
-
-# Auto-export all variables
-set -a
-MY_VAR=value  # Automatically exported
-set +a
-
-# Custom trace prompt
-PS4='+ ${BASH_SOURCE}:${LINENO}: '
-set -x
-echo "Traced with file and line info"
-```
 
 **Key Features:**
 
