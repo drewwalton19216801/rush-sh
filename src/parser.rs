@@ -840,11 +840,14 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     }
                     Token::RedirOutClobber => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::OutputClobber(file.clone()));
-                                i += 1;
-                            }
+                        if i >= tokens.len() {
+                            return Err("expected filename after >|".to_string());
+                        }
+                        if let Token::Word(file) = &tokens[i] {
+                            redirections.push(Redirection::OutputClobber(file.clone()));
+                            i += 1;
+                        } else {
+                            return Err("expected filename after >|".to_string());
                         }
                     }
                     Token::RedirIn => {
@@ -1058,11 +1061,14 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     }
                     Token::RedirOutClobber => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::OutputClobber(file.clone()));
-                                i += 1;
-                            }
+                        if i >= tokens.len() {
+                            return Err("expected filename after >|".to_string());
+                        }
+                        if let Token::Word(file) = &tokens[i] {
+                            redirections.push(Redirection::OutputClobber(file.clone()));
+                            i += 1;
+                        } else {
+                            return Err("expected filename after >|".to_string());
                         }
                     }
                     Token::RedirIn => {
@@ -1491,13 +1497,16 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                         }
                         Token::RedirOutClobber => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::OutputClobber(file.clone()));
-                                    i += 1;
-                                }
+                            if i >= tokens.len() {
+                                return Err("expected filename after >|".to_string());
+                            }
+                            if let Token::Word(file) = &tokens[i] {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::OutputClobber(file.clone()));
+                                i += 1;
+                            } else {
+                                return Err("expected filename after >|".to_string());
                             }
                         }
                         Token::RedirIn => {
@@ -1632,13 +1641,16 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                         }
                         Token::RedirOutClobber => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::OutputClobber(file.clone()));
-                                    i += 1;
-                                }
+                            if i >= tokens.len() {
+                                return Err("expected filename after >|".to_string());
+                            }
+                            if let Token::Word(file) = &tokens[i] {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::OutputClobber(file.clone()));
+                                i += 1;
+                            } else {
+                                return Err("expected filename after >|".to_string());
                             }
                         }
                         Token::RedirIn => {
@@ -1806,12 +1818,15 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             }
             Token::RedirOutClobber => {
                 i += 1;
-                if i < tokens.len()
-                    && let Token::Word(ref file) = tokens[i]
-                {
+                if i >= tokens.len() {
+                    return Err("expected filename after >|".to_string());
+                }
+                if let Token::Word(ref file) = tokens[i] {
                     current_cmd
                         .redirections
                         .push(Redirection::OutputClobber(file.clone()));
+                } else {
+                    return Err("expected filename after >|".to_string());
                 }
             }
             Token::RedirAppend => {
@@ -3697,5 +3712,52 @@ mod tests {
         } else {
             panic!("Expected Negation, got: {:?}", result);
         }
+    }
+
+    #[test]
+    fn test_redirclobber_without_filename() {
+        // Test that >| without a filename returns an error
+        let tokens = vec![
+            Token::Word("echo".to_string()),
+            Token::Word("hello".to_string()),
+            Token::RedirOutClobber,
+        ];
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "expected filename after >|");
+    }
+
+    #[test]
+    fn test_redirclobber_with_non_word_token() {
+        // Test that >| followed by a non-Word token returns an error
+        let tokens = vec![
+            Token::Word("echo".to_string()),
+            Token::Word("hello".to_string()),
+            Token::RedirOutClobber,
+            Token::Pipe,
+        ];
+        let result = parse(tokens);
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "expected filename after >|");
+    }
+
+    #[test]
+    fn test_redirclobber_with_valid_filename() {
+        // Test that >| with a valid filename works correctly
+        let tokens = vec![
+            Token::Word("echo".to_string()),
+            Token::Word("hello".to_string()),
+            Token::RedirOutClobber,
+            Token::Word("output.txt".to_string()),
+        ];
+        let result = parse(tokens).unwrap();
+        assert_eq!(
+            result,
+            Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "hello".to_string()],
+                redirections: vec![Redirection::OutputClobber("output.txt".to_string())],
+                compound: None,
+            }])
+        );
     }
 }
