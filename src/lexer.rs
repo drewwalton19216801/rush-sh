@@ -700,7 +700,6 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         Token::Semicolon |
                         Token::And |
                         Token::Or |
-                        Token::Pipe |
                         Token::Then |
                         Token::Else |
                         Token::Elif |
