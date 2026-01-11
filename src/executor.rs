@@ -1617,19 +1617,24 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 }
 
 fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
+    // Check if this is a compound command (subshell)
+    if let Some(ref compound_ast) = cmd.compound {
+        // Check noexec option (-n) for compound commands
+        // Exception: The 'set' builtin must always execute to allow disabling noexec
+        if shell_state.options.noexec {
+            return 0; // Return success without executing
+        }
+        // Execute compound command with redirections
+        return execute_compound_with_redirections(compound_ast, shell_state, &cmd.redirections);
+    }
+
     // Check noexec option (-n): Read commands but don't execute them
     // Exception: The 'set' builtin must always execute to allow disabling noexec
-    // Still perform parsing and expansion, but skip actual execution
+    // IMPORTANT: Check this BEFORE processing redirections to prevent side effects
     let is_set_builtin = !cmd.args.is_empty() && cmd.args[0] == "set";
     
     if shell_state.options.noexec && !is_set_builtin {
-        return 0; // Return success without executing
-    }
-
-    // Check if this is a compound command (subshell)
-    if let Some(ref compound_ast) = cmd.compound {
-        // Execute compound command with redirections
-        return execute_compound_with_redirections(compound_ast, shell_state, &cmd.redirections);
+        return 0; // Return success without executing (no side effects)
     }
 
     if cmd.args.is_empty() {
@@ -1953,6 +1958,17 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 }
 
 fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> i32 {
+    // Check noexec option (-n): Read commands but don't execute them
+    // Exception: The 'set' builtin must always execute to allow disabling noexec
+    // For pipelines, check if any command is 'set', otherwise skip execution
+    let has_set_builtin = commands.iter().any(|cmd| {
+        !cmd.args.is_empty() && cmd.args[0] == "set"
+    });
+    
+    if shell_state.options.noexec && !has_set_builtin {
+        return 0; // Return success without executing (no side effects)
+    }
+
     let mut exit_code = 0;
     let mut previous_stdout: Option<File> = None;
 

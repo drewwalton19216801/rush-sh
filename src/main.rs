@@ -393,7 +393,6 @@ mod tests {
 
     /// Test noexec with complex commands
     #[test]
-    #[ignore]
     fn test_noexec_complex() {
         let mut shell_state = state::ShellState::new();
         shell_state.options.noexec = true;
