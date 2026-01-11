@@ -378,6 +378,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 if just_closed_quote && current.is_empty() {
                     tokens.push(Token::Word("".to_string()));
                     just_closed_quote = false;
+                    was_quoted = false; // Reset after pushing empty quoted string
                 } else {
                     flush_current_token(&mut current, &mut tokens, was_quoted);
                     was_quoted = false; // Reset after flushing
@@ -389,6 +390,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 if just_closed_quote && current.is_empty() {
                     tokens.push(Token::Word("".to_string()));
                     just_closed_quote = false;
+                    was_quoted = false; // Reset after pushing empty quoted string
                 } else {
                     flush_current_token(&mut current, &mut tokens, was_quoted);
                     was_quoted = false; // Reset after flushing
@@ -1118,6 +1120,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 if just_closed_quote && current.is_empty() {
                     tokens.push(Token::Word("".to_string()));
                     just_closed_quote = false;
+                    was_quoted = false; // Reset after pushing empty quoted string
                 } else {
                     flush_current_token(&mut current, &mut tokens, false);
                 }
