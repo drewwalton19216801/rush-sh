@@ -973,7 +973,23 @@ fn apply_output_redirection(
         }
     } else {
         // Current process redirection (builtins, command groups)
-        // We MUST update the file descriptor table for ALL FDs including 1 and 2
+        // Check noclobber before opening in fd_table
+        if shell_state.options.noclobber && !force_clobber && !append {
+            // Check if file exists before opening
+            if std::path::Path::new(&expanded_file).exists() {
+                let error_msg = if shell_state.colors_enabled {
+                    format!(
+                        "{}cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                        shell_state.color_scheme.error, expanded_file
+                    )
+                } else {
+                    format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file)
+                };
+                return Err(error_msg);
+            }
+        }
+        
+        // Now safe to open - we MUST update the file descriptor table for ALL FDs including 1 and 2
         shell_state.fd_table.borrow_mut().open_fd(
             fd,
             &expanded_file,
