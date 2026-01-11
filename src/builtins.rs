@@ -252,6 +252,7 @@ pub fn execute_builtin(
                     false, // write
                     false, // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::Output(_) | Redirection::OutputClobber(_) => {
@@ -261,6 +262,7 @@ pub fn execute_builtin(
                     true,  // write
                     false, // append
                     true,  // truncate
+                    false, // create_new
                 )
             }
             Redirection::Append(_) => {
@@ -270,6 +272,7 @@ pub fn execute_builtin(
                     true,  // write
                     true,  // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdInput(fd, _) => {
@@ -279,6 +282,7 @@ pub fn execute_builtin(
                     false, // write
                     false, // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdOutput(fd, _) | Redirection::FdOutputClobber(fd, _) => {
@@ -288,6 +292,7 @@ pub fn execute_builtin(
                     true,  // write
                     false, // append
                     true,  // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdAppend(fd, _) => {
@@ -297,6 +302,7 @@ pub fn execute_builtin(
                     true,  // write
                     true,  // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             Redirection::FdDuplicate(target_fd, source_fd) => shell_state
@@ -311,6 +317,7 @@ pub fn execute_builtin(
                     true,  // write
                     false, // append
                     false, // truncate
+                    false, // create_new
                 )
             }
             // Here-documents and here-strings are handled differently for builtins
