@@ -484,6 +484,7 @@ impl ShellOptions {
     /// assert_eq!(opts.get_by_short_name('e'), Some(false)); // errexit is false by default
     /// assert_eq!(opts.get_by_short_name('?'), None); // unknown short name
     /// ```
+    #[allow(dead_code)]
     pub fn get_by_short_name(&self, name: char) -> Option<bool> {
         match name {
             'e' => Some(self.errexit),
