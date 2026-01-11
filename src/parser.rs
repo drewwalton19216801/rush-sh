@@ -63,6 +63,11 @@ pub enum Ast {
     CommandGroup {
         body: Box<Ast>,
     },
+    /// Command negation: ! command
+    /// Inverts the exit code and exempts from errexit
+    Negation {
+        command: Box<Ast>,
+    },
 }
 
 /// Represents a single redirection operation
@@ -401,6 +406,19 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
         }
     }
 
+    // Check if it's a negation
+    if let Token::Bang = tokens[0] {
+        if tokens.len() < 2 {
+            return Err("Expected command after !".to_string());
+        }
+        
+        // Parse the rest as a command
+        let negated_ast = parse_slice(&tokens[1..])?;
+        return Ok(Ast::Negation {
+            command: Box::new(negated_ast),
+        });
+    }
+
     // Check if it's an if statement
     if let Token::If = tokens[0] {
         return parse_if(tokens);
@@ -486,6 +504,107 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
 
         // Find the end of this command
         let start = i;
+
+        // Check for negation: Bang at start of command
+        if tokens[i] == Token::Bang {
+            i += 1; // Skip the bang
+            
+            // Skip any newlines after the bang
+            while i < tokens.len() && tokens[i] == Token::Newline {
+                i += 1;
+            }
+            
+            if i >= tokens.len() {
+                return Err("Expected command after !".to_string());
+            }
+            
+            // Find the end of the negated command
+            let mut end = i;
+            let mut brace_depth = 0;
+            let mut paren_depth = 0;
+            
+            while end < tokens.len() {
+                match &tokens[end] {
+                    Token::LeftBrace => brace_depth += 1,
+                    Token::RightBrace => {
+                        if brace_depth > 0 {
+                            brace_depth -= 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    Token::LeftParen => paren_depth += 1,
+                    Token::RightParen => {
+                        if paren_depth > 0 {
+                            paren_depth -= 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    Token::Newline | Token::Semicolon => {
+                        if brace_depth == 0 && paren_depth == 0 {
+                            break;
+                        }
+                    }
+                    Token::And | Token::Or => {
+                        if brace_depth == 0 && paren_depth == 0 {
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                end += 1;
+            }
+            
+            // Parse the negated command
+            let negated_tokens = &tokens[i..end];
+            let negated_ast = parse_commands_sequentially(negated_tokens)?;
+            
+            let negation_ast = Ast::Negation {
+                command: Box::new(negated_ast),
+            };
+            
+            i = end;
+            
+            // Handle operators after negation (&&, ||, ;, newline)
+            if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
+                let operator = tokens[i].clone();
+                i += 1; // Skip the operator
+                
+                // Skip any newlines after the operator
+                while i < tokens.len() && tokens[i] == Token::Newline {
+                    i += 1;
+                }
+                
+                // Parse the right side recursively
+                let remaining_tokens = &tokens[i..];
+                let right_ast = parse_commands_sequentially(remaining_tokens)?;
+                
+                // Create And or Or node
+                let combined_ast = match operator {
+                    Token::And => Ast::And {
+                        left: Box::new(negation_ast),
+                        right: Box::new(right_ast),
+                    },
+                    Token::Or => Ast::Or {
+                        left: Box::new(negation_ast),
+                        right: Box::new(right_ast),
+                    },
+                    _ => unreachable!(),
+                };
+                
+                commands.push(combined_ast);
+                break; // We've consumed the rest of the tokens
+            }
+            
+            commands.push(negation_ast);
+            
+            // Skip semicolon or newline after negation
+            if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                i += 1;
+            }
+            continue;
+        }
 
         // Check for subshell: LeftParen at start of command
         // Must check BEFORE function definition to avoid ambiguity

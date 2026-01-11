@@ -274,6 +274,9 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
         Ast::CommandGroup { body } => {
             format!("{{ {}; }}", format_ast_body(body, 0).trim())
         }
+        Ast::Negation { command } => {
+            format!("! {}", format_ast_body(command, 0).trim())
+        }
     }
 }
 

@@ -46,6 +46,7 @@ pub enum Token {
     Continue, // continue
     And,      // &&
     Or,       // ||
+    Bang,     // ! (negation operator)
 }
 
 fn is_keyword(word: &str) -> Option<Token> {
@@ -646,6 +647,13 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     // Single & is not supported, treat as part of word
                     current.push('&');
                 }
+            }
+            '!' if !in_double_quote && !in_single_quote => {
+                flush_current_token(&mut current, &mut tokens, false);
+                chars.next(); // consume !
+                tokens.push(Token::Bang);
+                // Skip any whitespace after the bang
+                skip_whitespace(&mut chars);
             }
             '>' if !in_double_quote && !in_single_quote => {
                 // Check if this is a file descriptor redirection like 2>&1 or 2>file

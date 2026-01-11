@@ -1939,3 +1939,140 @@ mod subshell_errexit_tests {
         assert!(!shell_state.exit_requested);
     }
 }
+
+// ========================================================================
+// Negation with errexit Tests
+// ========================================================================
+
+#[cfg(test)]
+mod negation_errexit_tests {
+    use super::*;
+
+    /// Test that ! false doesn't trigger errexit
+    #[test]
+    fn test_negation_false_no_errexit() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // ! false should succeed (exit code 0) and not trigger errexit
+        script_engine::execute_line("! false", &mut shell_state);
+        
+        // Should not exit
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test that ! true doesn't trigger errexit
+    #[test]
+    fn test_negation_true_no_errexit() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // ! true should fail (exit code 1) but not trigger errexit
+        script_engine::execute_line("! true", &mut shell_state);
+        
+        // Should not exit even though exit code is 1
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.last_exit_code, 1);
+    }
+
+    /// Test negated command with errexit enabled
+    #[test]
+    fn test_negation_with_errexit_enabled() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        shell_state.set_var("MARKER", "initial".to_string());
+        
+        // ! false succeeds, so next command should run
+        script_engine::execute_line("! false; MARKER=after", &mut shell_state);
+        
+        // Should not exit
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.get_var("MARKER"), Some("after".to_string()));
+    }
+
+    /// Test negation in pipeline
+    #[test]
+    fn test_negation_in_pipeline() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // ! false | true should not trigger errexit
+        script_engine::execute_line("! false | true", &mut shell_state);
+        
+        // Should not exit
+        assert!(!shell_state.exit_requested);
+    }
+
+    /// Test negation in conditional
+    #[test]
+    fn test_negation_in_conditional() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        shell_state.set_var("RESULT", "none".to_string());
+        
+        // ! false in if condition should work
+        script_engine::execute_line("if ! false; then RESULT=success; fi", &mut shell_state);
+        
+        // Should not exit and condition should succeed
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.get_var("RESULT"), Some("success".to_string()));
+    }
+
+    /// Test negation with logical operators
+    #[test]
+    fn test_negation_with_logical_operators() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // ! false && true should not trigger errexit
+        script_engine::execute_line("! false && echo success", &mut shell_state);
+        
+        // Should not exit
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test negation exit code inversion
+    #[test]
+    fn test_negation_exit_code_inversion() {
+        let mut shell_state = state::ShellState::new();
+        
+        // ! false should return 0
+        script_engine::execute_line("! false", &mut shell_state);
+        assert_eq!(shell_state.last_exit_code, 0);
+        
+        // ! true should return 1
+        script_engine::execute_line("! true", &mut shell_state);
+        assert_eq!(shell_state.last_exit_code, 1);
+    }
+
+    /// Test negation with external commands
+    #[test]
+    fn test_negation_with_external_command() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // ! /bin/false should not trigger errexit
+        script_engine::execute_line("! /bin/false", &mut shell_state);
+        
+        // Should not exit
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test negation preserves errexit exemption in sequences
+    #[test]
+    fn test_negation_sequence_no_errexit() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        shell_state.set_var("COUNT", "0".to_string());
+        
+        // Multiple negated commands in sequence
+        script_engine::execute_line("! false; COUNT=1; ! true; COUNT=2", &mut shell_state);
+        
+        // Should not exit and all commands should execute
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.get_var("COUNT"), Some("2".to_string()));
+    }
+}

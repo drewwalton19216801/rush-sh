@@ -678,6 +678,10 @@ pub struct ShellState {
     pub in_condition: bool,
     /// Context tracking for errexit option - true when executing commands in && or || chains
     pub in_logical_chain: bool,
+    /// Context tracking for errexit option - true when executing negated commands (!)
+    pub in_negation: bool,
+    /// Track if the last command executed was a negation (to skip errexit check on inverted code)
+    pub last_was_negation: bool,
 }
 
 impl ShellState {
@@ -747,6 +751,8 @@ impl ShellState {
             options: ShellOptions::default(),
             in_condition: false,
             in_logical_chain: false,
+            in_negation: false,
+            last_was_negation: false,
         }
     }
 

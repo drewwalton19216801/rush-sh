@@ -1080,6 +1080,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         Ast::Sequence(asts) => {
             let mut exit_code = 0;
             for ast in asts {
+                // Reset last_was_negation flag before executing each command
+                shell_state.last_was_negation = false;
+                
                 exit_code = execute(ast, shell_state);
 
                 // Check if we got an early return from a function
@@ -1101,10 +1104,14 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // POSIX: Don't exit in these contexts:
                 // 1. Inside if/while/until condition (tracked by in_condition flag)
                 // 2. Part of && or || chain (tracked by in_logical_chain flag)
+                // 3. Negated command (tracked by in_negation flag)
+                // 4. Last command was a negation (tracked by last_was_negation flag)
                 if shell_state.options.errexit
                     && exit_code != 0
                     && !shell_state.in_condition
-                    && !shell_state.in_logical_chain {
+                    && !shell_state.in_logical_chain
+                    && !shell_state.in_negation
+                    && !shell_state.last_was_negation {
                     // Set exit_requested flag to trigger shell exit
                     shell_state.exit_requested = true;
                     shell_state.exit_code = exit_code;
@@ -1560,6 +1567,27 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             shell_state.in_logical_chain = false;
             result
         }
+        Ast::Negation { command } => {
+            // Mark that we're in a negation (for errexit)
+            shell_state.in_negation = true;
+            
+            // Execute the negated command
+            let exit_code = execute(*command, shell_state);
+            
+            // Reset negation flag
+            shell_state.in_negation = false;
+            
+            // Mark that this command was a negation (for errexit exemption)
+            shell_state.last_was_negation = true;
+            
+            // Invert the exit code: 0 becomes 1, non-zero becomes 0
+            let inverted_code = if exit_code == 0 { 1 } else { 0 };
+            
+            // Update last_exit_code so $? reflects the inverted code
+            shell_state.last_exit_code = inverted_code;
+            
+            inverted_code
+        }
         Ast::Subshell { body } => {
             let exit_code = execute_subshell(*body, shell_state);
             
@@ -1567,10 +1595,12 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             // POSIX: Don't exit in these contexts:
             // 1. Inside if/while/until condition (tracked by in_condition flag)
             // 2. Part of && or || chain (tracked by in_logical_chain flag)
+            // 3. Negated command (tracked by in_negation flag)
             if shell_state.options.errexit
                 && exit_code != 0
                 && !shell_state.in_condition
-                && !shell_state.in_logical_chain {
+                && !shell_state.in_logical_chain
+                && !shell_state.in_negation {
                 // Set exit_requested flag to trigger shell exit
                 shell_state.exit_requested = true;
                 shell_state.exit_code = exit_code;
@@ -1692,11 +1722,12 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         // 1. Inside if/while/until condition (tracked by in_condition flag)
         // 2. Part of && or || chain (tracked by in_logical_chain flag)
         // 3. Pipeline (except last command) - handled by pipeline executor
-        // 4. Command with ! prefix - handled by negation in parser
+        // 4. Negated command (tracked by in_negation flag)
         if shell_state.options.errexit
             && exit_code != 0
             && !shell_state.in_condition
-            && !shell_state.in_logical_chain {
+            && !shell_state.in_logical_chain
+            && !shell_state.in_negation {
             // Set exit_requested flag to trigger shell exit
             shell_state.exit_requested = true;
             shell_state.exit_code = exit_code;
@@ -1889,11 +1920,12 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                 // 1. Inside if/while/until condition (tracked by in_condition flag)
                 // 2. Part of && or || chain (tracked by in_logical_chain flag)
                 // 3. Pipeline (except last command) - handled by pipeline executor
-                // 4. Command with ! prefix - handled by negation in parser
+                // 4. Negated command (tracked by in_negation flag)
                 if shell_state.options.errexit
                     && exit_code != 0
                     && !shell_state.in_condition
-                    && !shell_state.in_logical_chain {
+                    && !shell_state.in_logical_chain
+                    && !shell_state.in_negation {
                     // Set exit_requested flag to trigger shell exit
                     shell_state.exit_requested = true;
                     shell_state.exit_code = exit_code;
