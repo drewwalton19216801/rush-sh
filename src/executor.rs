@@ -1601,8 +1601,13 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             // Execute left side first
             let left_exit = execute(*left, shell_state);
 
-            // Check if we got an early return from a function
-            if shell_state.is_returning() {
+            // Check ALL control-flow flags after executing left side
+            // If ANY control-flow is active, reset flag and return immediately
+            if shell_state.is_returning()
+                || shell_state.exit_requested
+                || shell_state.is_breaking()
+                || shell_state.is_continuing()
+            {
                 shell_state.in_logical_chain = false;
                 return left_exit;
             }
@@ -1624,8 +1629,13 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             // Execute left side first
             let left_exit = execute(*left, shell_state);
 
-            // Check if we got an early return from a function
-            if shell_state.is_returning() {
+            // Check ALL control-flow flags after executing left side
+            // If ANY control-flow is active, reset flag and return immediately
+            if shell_state.is_returning()
+                || shell_state.exit_requested
+                || shell_state.is_breaking()
+                || shell_state.is_continuing()
+            {
                 shell_state.in_logical_chain = false;
                 return left_exit;
             }
@@ -2450,6 +2460,35 @@ fn execute_compound_with_redirections(
                     match redir {
                         Redirection::Output(file) => {
                             let expanded_file = expand_variables_in_string(file, shell_state);
+                            
+                            // Check noclobber option: prevent overwriting existing files with >
+                            if shell_state.options.noclobber && std::path::Path::new(&expanded_file).exists() {
+                                if shell_state.colors_enabled {
+                                    eprintln!(
+                                        "{}Redirection error: cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                                        shell_state.color_scheme.error, expanded_file
+                                    );
+                                } else {
+                                    eprintln!("Redirection error: cannot overwrite existing file '{}' (noclobber is set)", expanded_file);
+                                }
+                                return 1;
+                            }
+                            
+                            if let Err(e) = std::fs::write(&expanded_file, &output) {
+                                if shell_state.colors_enabled {
+                                    eprintln!(
+                                        "{}Redirection error: {}\x1b[0m",
+                                        shell_state.color_scheme.error, e
+                                    );
+                                } else {
+                                    eprintln!("Redirection error: {}", e);
+                                }
+                                return 1;
+                            }
+                        }
+                        Redirection::OutputClobber(file) => {
+                            let expanded_file = expand_variables_in_string(file, shell_state);
+                            // >| always overwrites, even with noclobber set
                             if let Err(e) = std::fs::write(&expanded_file, &output) {
                                 if shell_state.colors_enabled {
                                     eprintln!(
@@ -2521,7 +2560,7 @@ fn execute_compound_with_redirections(
 fn has_stdout_redirection(redirections: &[Redirection]) -> bool {
     redirections.iter().any(|r| match r {
         // Default output redirections affect stdout (FD 1)
-        Redirection::Output(_) | Redirection::Append(_) => true,
+        Redirection::Output(_) | Redirection::OutputClobber(_) | Redirection::Append(_) => true,
         // Explicit FD 1 redirections
         Redirection::FdOutput(1, _) | Redirection::FdAppend(1, _) => true,
         // FD 1 duplication or closure
@@ -4526,5 +4565,320 @@ mod tests {
         let exit_code = execute(ast, &mut shell_state);
         // Last command in body was false (exit 1), so loop should return 1
         assert_eq!(exit_code, 1);
+    }
+
+    // ========================================================================
+    // Control-Flow in Logical Chains Tests (&&, ||)
+    // ========================================================================
+
+    #[test]
+    fn test_and_with_return_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("executed", "no".to_string());
+        
+        // Define a function that returns early
+        shell_state.define_function(
+            "early_return".to_string(),
+            Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "executed".to_string(),
+                    value: "yes".to_string(),
+                },
+                Ast::Return { value: Some("5".to_string()) },
+            ]),
+        );
+        
+        // Call function in && chain: early_return && echo "should not execute"
+        let ast = Ast::FunctionCall {
+            name: "early_return".to_string(),
+            args: vec![],
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 5);
+        assert_eq!(shell_state.get_var("executed"), Some("yes".to_string()));
+    }
+
+    #[test]
+    fn test_and_with_exit_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("rhs_executed", "no".to_string());
+        
+        // exit 42 && rhs_executed=yes
+        let ast = Ast::And {
+            left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["exit".to_string(), "42".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            right: Box::new(Ast::Assignment {
+                var: "rhs_executed".to_string(),
+                value: "yes".to_string(),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 42);
+        assert_eq!(shell_state.get_var("rhs_executed"), Some("no".to_string()));
+        assert!(shell_state.exit_requested);
+    }
+
+    #[test]
+    fn test_and_with_break_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   (break && output="${output}bad") && output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::And {
+                left: Box::new(Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["break".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Assignment {
+                        var: "output".to_string(),
+                        value: "${output}bad".to_string(),
+                    }),
+                }),
+                right: Box::new(Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                }),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // RHS should not execute after break
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_and_with_continue_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   continue && output="${output}bad"
+        //   output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["continue".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Assignment {
+                        var: "output".to_string(),
+                        value: "${output}bad".to_string(),
+                    }),
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // RHS of && should not execute, and subsequent assignment should not execute either
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_or_with_return_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("executed", "no".to_string());
+        
+        // Define a function that returns early with non-zero
+        shell_state.define_function(
+            "early_return".to_string(),
+            Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "executed".to_string(),
+                    value: "yes".to_string(),
+                },
+                Ast::Return { value: Some("5".to_string()) },
+            ]),
+        );
+        
+        // Call function in || chain: early_return || echo "should not execute"
+        let ast = Ast::FunctionCall {
+            name: "early_return".to_string(),
+            args: vec![],
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 5);
+        assert_eq!(shell_state.get_var("executed"), Some("yes".to_string()));
+    }
+
+    #[test]
+    fn test_or_with_exit_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("rhs_executed", "no".to_string());
+        
+        // exit 42 || rhs_executed=yes
+        let ast = Ast::Or {
+            left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["exit".to_string(), "42".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            right: Box::new(Ast::Assignment {
+                var: "rhs_executed".to_string(),
+                value: "yes".to_string(),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 42);
+        assert_eq!(shell_state.get_var("rhs_executed"), Some("no".to_string()));
+        assert!(shell_state.exit_requested);
+    }
+
+    #[test]
+    fn test_or_with_break_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   (false || break) || output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Or {
+                left: Box::new(Ast::Or {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["false".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["break".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                }),
+                right: Box::new(Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                }),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // RHS should not execute after break
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_or_with_continue_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   (false || continue) || output="${output}bad"
+        //   output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Or {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["false".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["continue".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // Both RHS of || and subsequent assignment should not execute
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_logical_chain_flag_cleanup() {
+        let mut shell_state = ShellState::new();
+        
+        // Verify in_logical_chain is false initially
+        assert!(!shell_state.in_logical_chain);
+        
+        // Execute a simple && chain
+        let ast = Ast::And {
+            left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+        };
+        
+        execute(ast, &mut shell_state);
+        
+        // Verify in_logical_chain is reset to false after execution
+        assert!(!shell_state.in_logical_chain);
+    }
+
+    #[test]
+    fn test_logical_chain_flag_cleanup_with_return() {
+        let mut shell_state = ShellState::new();
+        
+        // Define a function that returns
+        shell_state.define_function(
+            "test_return".to_string(),
+            Ast::Return { value: Some("0".to_string()) },
+        );
+        
+        // Execute && chain with return in LHS
+        let ast = Ast::And {
+            left: Box::new(Ast::FunctionCall {
+                name: "test_return".to_string(),
+                args: vec![],
+            }),
+            right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "should not execute".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+        };
+        
+        // Execute in function context
+        shell_state.enter_function();
+        execute(ast, &mut shell_state);
+        shell_state.exit_function();
+        
+        // Verify in_logical_chain is reset even with early return
+        assert!(!shell_state.in_logical_chain);
     }
 }
