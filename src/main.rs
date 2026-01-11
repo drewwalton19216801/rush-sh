@@ -1427,16 +1427,17 @@ mod set_builtin_error_handling {
         assert_ne!(shell_state.last_exit_code, 0);
     }
 
-    /// Test missing argument to -o
+    /// Test -o without argument displays options (POSIX compliance)
     #[test]
-    fn test_missing_argument_to_dash_o() {
+    fn test_dash_o_without_argument_displays_options() {
         let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
         
-        // -o without argument should fail
+        // -o without argument should display all options (POSIX behavior)
         script_engine::execute_line("set -o", &mut shell_state);
         
-        // Should fail
-        assert_ne!(shell_state.last_exit_code, 0);
+        // Should succeed
+        assert_eq!(shell_state.last_exit_code, 0);
     }
 
     /// Test malformed option syntax

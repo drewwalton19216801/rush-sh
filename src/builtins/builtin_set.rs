@@ -40,17 +40,9 @@ impl super::Builtin for SetBuiltin {
                     return display_all_options(shell_state, output_writer);
                 }
 
-                // Apply short option changes (set with -)
-                for opt in &parsed.options_to_set {
-                    if let Err(e) = shell_state.options.set_by_short_name(*opt, true) {
-                        print_error(shell_state, &e);
-                        return 1;
-                    }
-                }
-
-                // Apply short option changes (unset with +)
-                for opt in &parsed.options_to_unset {
-                    if let Err(e) = shell_state.options.set_by_short_name(*opt, false) {
+                // Apply short option changes in order (preserves last-wins semantics)
+                for (opt, enable) in &parsed.options_in_order {
+                    if let Err(e) = shell_state.options.set_by_short_name(*opt, *enable) {
                         print_error(shell_state, &e);
                         return 1;
                     }
@@ -90,8 +82,8 @@ enum DisplayMode {
 /// Parsed arguments from set command
 #[derive(Debug)]
 struct ParsedArgs {
-    options_to_set: Vec<char>,
-    options_to_unset: Vec<char>,
+    // Store options in order with their enable/disable state
+    options_in_order: Vec<(char, bool)>,
     named_options: Vec<(String, bool)>,
     positional_args: Vec<String>,
     display_mode: DisplayMode,
@@ -107,8 +99,7 @@ struct ParsedArgs {
 /// * `Ok(ParsedArgs)` on success
 /// * `Err(String)` with error message on failure
 fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
-    let mut options_to_set = Vec::new();
-    let mut options_to_unset = Vec::new();
+    let mut options_in_order = Vec::new();
     let mut named_options = Vec::new();
     let mut positional_args = Vec::new();
     let mut display_mode = DisplayMode::None;
@@ -133,16 +124,12 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
             // Handle -o or +o (named option)
             if chars[0] == 'o' {
                 if chars.len() == 1 {
-                    // -o requires an argument, +o with argument disables option
+                    // -o and +o without argument display all options (POSIX compliance)
                     i += 1;
                     if i >= args.len() {
-                        if enable {
-                            return Err("set: -o: option name required".to_string());
-                        } else {
-                            // +o with no argument displays all options
-                            display_mode = DisplayMode::AllOptions;
-                            i -= 1; // Back up since we didn't consume an argument
-                        }
+                        // Both -o and +o with no argument display all options
+                        display_mode = DisplayMode::AllOptions;
+                        i -= 1; // Back up since we didn't consume an argument
                     } else {
                         // Both -o and +o with argument set/unset the option
                         named_options.push((args[i].clone(), enable));
@@ -154,12 +141,9 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
                 }
             } else {
                 // Handle short options (can be combined like -eux)
+                // Store them in order to preserve last-wins semantics
                 for ch in chars {
-                    if enable {
-                        options_to_set.push(ch);
-                    } else {
-                        options_to_unset.push(ch);
-                    }
+                    options_in_order.push((ch, enable));
                 }
             }
         } else {
@@ -177,8 +161,7 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
     }
 
     Ok(ParsedArgs {
-        options_to_set,
-        options_to_unset,
+        options_in_order,
         named_options,
         positional_args,
         display_mode,
@@ -468,46 +451,49 @@ mod tests {
     }
 
     #[test]
-    fn test_set_builtin_missing_option_name() {
+    fn test_set_builtin_dash_o_displays_options() {
         let cmd = ShellCommand {
             args: vec!["set".to_string(), "-o".to_string()],
             redirections: Vec::new(),
             compound: None,
         };
         let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
 
         let builtin = SetBuiltin;
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 1);
+        // POSIX: set -o without argument displays all options
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        assert!(output_str.contains("on"));
     }
 
     #[test]
     fn test_parse_arguments_empty() {
         let result = parse_arguments(&[]).unwrap();
         assert_eq!(result.display_mode, DisplayMode::AllVariables);
-        assert!(result.options_to_set.is_empty());
-        assert!(result.options_to_unset.is_empty());
+        assert!(result.options_in_order.is_empty());
     }
 
     #[test]
     fn test_parse_arguments_single_option() {
         let result = parse_arguments(&["-e".to_string()]).unwrap();
-        assert_eq!(result.options_to_set, vec!['e']);
-        assert!(result.options_to_unset.is_empty());
+        assert_eq!(result.options_in_order, vec![('e', true)]);
     }
 
     #[test]
     fn test_parse_arguments_combined_options() {
         let result = parse_arguments(&["-eux".to_string()]).unwrap();
-        assert_eq!(result.options_to_set, vec!['e', 'u', 'x']);
+        assert_eq!(result.options_in_order, vec![('e', true), ('u', true), ('x', true)]);
     }
 
     #[test]
     fn test_parse_arguments_disable_option() {
         let result = parse_arguments(&["+e".to_string()]).unwrap();
-        assert_eq!(result.options_to_unset, vec!['e']);
+        assert_eq!(result.options_in_order, vec![('e', false)]);
     }
 
     #[test]
@@ -535,9 +521,8 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_arguments_missing_option_name() {
-        let result = parse_arguments(&["-o".to_string()]);
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("option name required"));
+    fn test_parse_arguments_dash_o_displays_options() {
+        let result = parse_arguments(&["-o".to_string()]).unwrap();
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
     }
 }
