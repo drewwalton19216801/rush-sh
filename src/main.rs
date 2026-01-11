@@ -1763,3 +1763,179 @@ mod set_builtin_performance {
         assert_eq!(shell_state.last_exit_code, 0);
     }
 }
+
+// ========================================================================
+// Subshell errexit Tests
+// ========================================================================
+
+#[cfg(test)]
+mod subshell_errexit_tests {
+    use super::*;
+
+    /// Test that subshells inherit errexit from parent
+    #[test]
+    fn test_subshell_inherits_errexit() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Enable errexit in parent
+        shell_state.options.errexit = true;
+        
+        // Execute a subshell with a failing command
+        // The subshell will exit early due to errexit, returning exit code 1
+        // The parent's errexit will then trigger on the subshell's non-zero exit
+        script_engine::execute_line("(false; echo should_not_print)", &mut shell_state);
+        
+        // Parent errexit should trigger because subshell returned non-zero
+        assert!(shell_state.exit_requested);
+        
+        // Parent option should be unchanged
+        assert!(shell_state.options.errexit);
+    }
+
+    /// Test that errexit triggers exit within subshell only
+    #[test]
+    fn test_errexit_triggers_in_subshell_only() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // Set a marker variable
+        shell_state.set_var("MARKER", "initial".to_string());
+        
+        // Subshell with failing command, then parent command
+        // With errexit, the sequence should stop after subshell fails (just like false; would)
+        script_engine::execute_line("(false); MARKER=after_subshell", &mut shell_state);
+        
+        // Parent errexit should trigger, stopping the sequence
+        assert!(shell_state.exit_requested);
+        // MARKER should still be "initial" because the assignment didn't run
+        assert_eq!(shell_state.get_var("MARKER"), Some("initial".to_string()));
+    }
+
+    /// Test that subshell exit code propagates to parent
+    #[test]
+    fn test_subshell_exit_code_propagation() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Execute subshell that exits with specific code
+        script_engine::execute_line("(exit 42)", &mut shell_state);
+        
+        // Parent should see the subshell's exit code
+        assert_eq!(shell_state.last_exit_code, 42);
+    }
+
+    /// Test that parent errexit can trigger on subshell failure
+    #[test]
+    fn test_parent_errexit_on_subshell_failure() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // Subshell that fails
+        script_engine::execute_line("(false)", &mut shell_state);
+        
+        // Parent errexit should trigger because subshell returned non-zero
+        assert!(shell_state.exit_requested);
+        assert_ne!(shell_state.exit_code, 0);
+    }
+
+    /// Test nested subshells with errexit
+    #[test]
+    fn test_nested_subshells_errexit() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // Nested subshells with failure in innermost
+        script_engine::execute_line("((false))", &mut shell_state);
+        
+        // Parent should have exit_requested set
+        assert!(shell_state.exit_requested);
+    }
+
+    /// Test that errexit changes within subshell don't affect parent
+    #[test]
+    fn test_subshell_errexit_changes_isolated() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parent has errexit disabled
+        shell_state.options.errexit = false;
+        
+        // Subshell enables errexit
+        script_engine::execute_line("(set -e; false)", &mut shell_state);
+        
+        // Parent errexit should still be disabled
+        assert!(!shell_state.options.errexit);
+        assert!(!shell_state.exit_requested);
+    }
+
+    /// Test subshell with errexit and successful commands
+    #[test]
+    fn test_subshell_errexit_with_success() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // Subshell with successful commands
+        script_engine::execute_line("(true; echo test)", &mut shell_state);
+        
+        // Should not trigger errexit
+        assert!(!shell_state.exit_requested);
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test subshell errexit with conditionals (should not trigger)
+    #[test]
+    fn test_subshell_errexit_with_conditionals() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // Subshell with false in conditional
+        script_engine::execute_line("(if false; then echo fail; fi)", &mut shell_state);
+        
+        // Should not trigger errexit (conditionals are exempt)
+        assert!(!shell_state.exit_requested);
+    }
+
+    /// Test subshell errexit with logical operators
+    #[test]
+    fn test_subshell_errexit_with_logical_operators() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // Subshell with false in && chain
+        // Inside the subshell, errexit doesn't trigger (logical operator exemption)
+        // The subshell returns the exit code of the && chain (1)
+        // The parent's errexit then triggers on the subshell's non-zero exit
+        script_engine::execute_line("(false && echo should_not_print)", &mut shell_state);
+        
+        // Parent errexit should trigger because subshell returned non-zero
+        assert!(shell_state.exit_requested);
+    }
+
+    /// Test multiple subshells with errexit
+    #[test]
+    fn test_multiple_subshells_errexit() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.errexit = true;
+        
+        // First subshell succeeds
+        script_engine::execute_line("(true)", &mut shell_state);
+        assert!(!shell_state.exit_requested);
+        
+        // Second subshell fails
+        script_engine::execute_line("(false)", &mut shell_state);
+        assert!(shell_state.exit_requested);
+    }
+
+    /// Test subshell with errexit disabled in parent
+    #[test]
+    fn test_subshell_no_errexit_in_parent() {
+        let mut shell_state = state::ShellState::new();
+        
+        // Parent has errexit disabled
+        shell_state.options.errexit = false;
+        
+        // Subshell with failing command
+        script_engine::execute_line("(false; echo should_print)", &mut shell_state);
+        
+        // Should not trigger exit
+        assert!(!shell_state.exit_requested);
+    }
+}

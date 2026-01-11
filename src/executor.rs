@@ -1096,6 +1096,20 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 if shell_state.is_breaking() || shell_state.is_continuing() {
                     return exit_code;
                 }
+                
+                // Check errexit option (-e): Exit immediately if command fails
+                // POSIX: Don't exit in these contexts:
+                // 1. Inside if/while/until condition (tracked by in_condition flag)
+                // 2. Part of && or || chain (tracked by in_logical_chain flag)
+                if shell_state.options.errexit
+                    && exit_code != 0
+                    && !shell_state.in_condition
+                    && !shell_state.in_logical_chain {
+                    // Set exit_requested flag to trigger shell exit
+                    shell_state.exit_requested = true;
+                    shell_state.exit_code = exit_code;
+                    return exit_code;
+                }
             }
             exit_code
         }
@@ -1546,7 +1560,24 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             shell_state.in_logical_chain = false;
             result
         }
-        Ast::Subshell { body } => execute_subshell(*body, shell_state),
+        Ast::Subshell { body } => {
+            let exit_code = execute_subshell(*body, shell_state);
+            
+            // Check errexit option (-e): Exit immediately if subshell fails
+            // POSIX: Don't exit in these contexts:
+            // 1. Inside if/while/until condition (tracked by in_condition flag)
+            // 2. Part of && or || chain (tracked by in_logical_chain flag)
+            if shell_state.options.errexit
+                && exit_code != 0
+                && !shell_state.in_condition
+                && !shell_state.in_logical_chain {
+                // Set exit_requested flag to trigger shell exit
+                shell_state.exit_requested = true;
+                shell_state.exit_code = exit_code;
+            }
+            
+            exit_code
+        }
         Ast::CommandGroup { body } => execute(*body, shell_state),
     }
 }
