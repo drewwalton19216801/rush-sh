@@ -1335,9 +1335,10 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
         } else {
             // Sanity check: we shouldn't be starting a command with an operator
             if matches!(tokens[i], Token::And | Token::Or | Token::Semicolon) {
-                // Skip this token and continue to next iteration
-                i += 1;
-                continue;
+                return Err(format!(
+                    "Unexpected operator at command start: {:?}",
+                    tokens[i]
+                ));
             }
 
             // For simple commands, stop at newline, semicolon, &&, or ||
