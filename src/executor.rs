@@ -12,8 +12,18 @@ use super::state::ShellState;
 /// Maximum allowed subshell nesting depth to prevent stack overflow
 const MAX_SUBSHELL_DEPTH: usize = 100;
 
-/// Execute a command and capture its output as a string
-/// This is used for command substitution $(...)
+/// Execute the given AST and return its standard output (as produced to stdout) with trailing newlines removed.
+///
+/// The function runs the AST in the provided shell state and captures whatever would be written to stdout
+/// (including results from pipelines, builtins, functions, subshells, and external commands). If the executed
+/// AST exits with a non-zero status or fails to spawn/execute, an `Err(String)` describing the failure is returned.
+///
+/// # Examples
+///
+/// ```
+/// // Note: execute_and_capture_output is a private function
+/// // This example is for documentation only
+/// ```
 fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
     // Create a pipe to capture stdout
     let (reader, writer) = pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
@@ -38,7 +48,7 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
 
                 // Expand variables and wildcards
                 let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-                let expanded_args = expand_wildcards(&var_expanded_args)
+                let expanded_args = expand_wildcards(&var_expanded_args, shell_state)
                     .map_err(|e| format!("Wildcard expansion failed: {}", e))?;
 
                 if expanded_args.is_empty() {
@@ -203,6 +213,22 @@ fn expand_variables_in_args(args: &[String], shell_state: &mut ShellState) -> Ve
     expanded_args
 }
 
+/// Expands shell-style variables, command substitutions, arithmetic expressions, and backtick substitutions inside a string.
+///
+/// This function processes `$VAR` and positional/special parameters (`$1`, `$?`, `$#`, `$*`, `$@`, `$$`, `$0`), command substitutions using `$(...)` and backticks, and arithmetic expansions using `$((...))`, producing the resulting string with substitutions applied. Undefined numeric positional parameters and the documented special parameters expand to an empty string; other undefined variable names are left as literal `$NAME`. Arithmetic evaluation errors are rendered as an error message (colorized when the shell state enables colors). Command substitutions are parsed and executed using the current shell state; on failure the original substitution text is preserved.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rush_sh::ShellState;
+/// use rush_sh::executor::expand_variables_in_string;
+/// // assume `shell_state` is a mutable ShellState with VAR=hello
+/// let mut shell_state = ShellState::new();
+/// shell_state.set_var("VAR", "hello".to_string());
+/// let input = "Value:$VAR";
+/// let out = expand_variables_in_string(input, &mut shell_state);
+/// assert_eq!(out, "Value:hello");
+/// ```
 pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> String {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
@@ -529,10 +555,26 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
     result
 }
 
-fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
+/// Expand shell-style wildcard patterns in a list of arguments unless the `noglob` option is set.
+///
+/// Patterns containing `*`, `?`, or `[` are replaced by the sorted list of matching filesystem paths. If a pattern has no matches or is an invalid pattern, the original literal argument is kept. If the shell state's `noglob` option is enabled, all arguments are returned unchanged.
+///
+/// # Examples
+///
+/// ```
+/// // Note: expand_wildcards is a private function
+/// // This example is for documentation only
+/// ```
+fn expand_wildcards(args: &[String], shell_state: &ShellState) -> Result<Vec<String>, String> {
     let mut expanded_args = Vec::new();
 
     for arg in args {
+        // Skip wildcard expansion if noglob option (-f) is enabled
+        if shell_state.options.noglob {
+            expanded_args.push(arg.clone());
+            continue;
+        }
+        
         if arg.contains('*') || arg.contains('?') || arg.contains('[') {
             // Try to expand wildcard
             match glob::glob(arg) {
@@ -560,6 +602,76 @@ fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
         }
     }
     Ok(expanded_args)
+}
+
+/// Atomically write data to a file, respecting noclobber settings
+///
+/// When noclobber is enabled and force_clobber is false, uses create_new()
+/// to atomically fail if file exists. Otherwise allows overwriting.
+fn write_file_with_noclobber(
+    path: &str,
+    data: &[u8],
+    noclobber: bool,
+    force_clobber: bool,
+    shell_state: &ShellState,
+) -> Result<(), String> {
+    use std::fs::OpenOptions;
+    
+    if noclobber && !force_clobber {
+        // Atomic check-and-create: fails if file exists
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                            shell_state.color_scheme.error, path
+                        )
+                    } else {
+                        format!("cannot overwrite existing file '{}' (noclobber is set)", path)
+                    }
+                } else {
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}Cannot create {}: {}\x1b[0m",
+                            shell_state.color_scheme.error, path, e
+                        )
+                    } else {
+                        format!("Cannot create {}: {}", path, e)
+                    }
+                }
+            })?;
+        
+        file.write_all(data)
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!(
+                        "{}Failed to write to {}: {}\x1b[0m",
+                        shell_state.color_scheme.error, path, e
+                    )
+                } else {
+                    format!("Failed to write to {}: {}", path, e)
+                }
+            })?;
+    } else {
+        // Allow overwriting (normal behavior or force_clobber)
+        std::fs::write(path, data)
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!(
+                        "{}Cannot write to {}: {}\x1b[0m",
+                        shell_state.color_scheme.error, path, e
+                    )
+                } else {
+                    format!("Cannot write to {}: {}", path, e)
+                }
+            })?;
+    }
+    
+    Ok(())
 }
 
 /// Collect here-document content from stdin until the specified delimiter is found
@@ -612,16 +724,28 @@ fn collect_here_document_content(delimiter: &str, shell_state: &mut ShellState) 
     content
 }
 
-/// Apply all redirections for a command in left-to-right order (POSIX requirement)
+/// Apply a sequence of redirections to a command or to the current process in left-to-right order.
 ///
-/// # Arguments
-/// * `redirections` - List of redirections to apply
-/// * `shell_state` - Mutable reference to shell state
-/// * `command` - Optional mutable reference to Command (for external commands)
+/// Applies each redirection in the provided slice to the optional `Command` (when executing an external
+/// command) or to the shell's file descriptor table for the current process. Redirections are processed
+/// left-to-right to match POSIX semantics; on the first failure no further redirections are applied.
 ///
-/// # Returns
-/// * `Ok(())` on success
-/// * `Err(String)` with error message on failure
+/// # Errors
+///
+/// Returns `Err(String)` with a diagnostic message if any redirection fails; returns `Ok(())` on success.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rush_sh::ShellState;
+/// use rush_sh::parser::Redirection;
+/// use std::process::Command;
+/// // Example showing the function signature
+/// let mut shell_state = ShellState::new();
+/// let mut cmd = Command::new("cat");
+/// let reds = vec![Redirection::Output("out.txt".into())];
+/// // apply_redirections(&reds, &mut shell_state, Some(&mut cmd))?;
+/// ```
 fn apply_redirections(
     redirections: &[Redirection],
     shell_state: &mut ShellState,
@@ -634,19 +758,22 @@ fn apply_redirections(
                 apply_input_redirection(0, file, shell_state, command.as_deref_mut())?;
             }
             Redirection::Output(file) => {
-                apply_output_redirection(1, file, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(1, file, false, false, shell_state, command.as_deref_mut())?;
+            }
+            Redirection::OutputClobber(file) => {
+                apply_output_redirection(1, file, false, true, shell_state, command.as_deref_mut())?;
             }
             Redirection::Append(file) => {
-                apply_output_redirection(1, file, true, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(1, file, true, false, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdInput(fd, file) => {
                 apply_input_redirection(*fd, file, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdOutput(fd, file) => {
-                apply_output_redirection(*fd, file, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(*fd, file, false, false, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdAppend(fd, file) => {
-                apply_output_redirection(*fd, file, true, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(*fd, file, true, false, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdDuplicate(target_fd, source_fd) => {
                 apply_fd_duplication(*target_fd, *source_fd, shell_state, command.as_deref_mut())?;
@@ -764,21 +891,60 @@ fn apply_output_redirection(
     fd: i32,
     file: &str,
     append: bool,
+    force_clobber: bool,
     shell_state: &mut ShellState,
     command: Option<&mut Command>,
 ) -> Result<(), String> {
     let expanded_file = expand_variables_in_string(file, shell_state);
 
     // Open file for writing or appending
+    // For noclobber with > (not append, not force_clobber), use atomic create_new()
     let file_handle = if append {
         OpenOptions::new()
             .append(true)
             .create(true)
             .open(&expanded_file)
-            .map_err(|e| format!("Cannot open {}: {}", expanded_file, e))?
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!("{}Cannot open {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                } else {
+                    format!("Cannot open {}: {}", expanded_file, e)
+                }
+            })?
+    } else if shell_state.options.noclobber && !force_clobber {
+        // Atomic check-and-create: fails if file exists
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&expanded_file)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::AlreadyExists {
+                    if shell_state.colors_enabled {
+                        format!(
+                            "{}cannot overwrite existing file '{}' (noclobber is set)\x1b[0m",
+                            shell_state.color_scheme.error, expanded_file
+                        )
+                    } else {
+                        format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file)
+                    }
+                } else {
+                    if shell_state.colors_enabled {
+                        format!("{}Cannot create {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                    } else {
+                        format!("Cannot create {}: {}", expanded_file, e)
+                    }
+                }
+            })?
     } else {
+        // Normal create (truncate) or force_clobber
         File::create(&expanded_file)
-            .map_err(|e| format!("Cannot create {}: {}", expanded_file, e))?
+            .map_err(|e| {
+                if shell_state.colors_enabled {
+                    format!("{}Cannot create {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                } else {
+                    format!("Cannot create {}: {}", expanded_file, e)
+                }
+            })?
     };
 
     if let Some(cmd) = command {
@@ -1023,15 +1189,51 @@ pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32
     result
 }
 
+/// Evaluate an AST node within the provided shell state and return its exit code.
+///
+/// Executes the given `ast`, updating `shell_state` (variables, loop/function/subshell state,
+/// file descriptor and redirection effects, traps, etc.) as the AST semantics require.
+/// The function returns the final exit code for the executed AST node (0 for success,
+/// non-zero for failure). Side effects on `shell_state` follow the shell semantics
+/// implemented by the executor (variable assignment, function definition/call, loops,
+/// pipelines, redirections, subshell isolation, errexit behavior, traps, etc.).
+///
+/// # Examples
+///
+/// ```
+/// use rush_sh::{Ast, ShellState};
+/// use rush_sh::executor::execute;
+///
+/// let mut state = ShellState::new();
+/// let ast = Ast::Assignment { var: "X".into(), value: "1".into() };
+/// let code = execute(ast, &mut state);
+/// assert_eq!(code, 0);
+/// assert_eq!(state.get_var("X").as_deref(), Some("1"));
+/// ```
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
+            // Check noexec option (-n): Read commands but don't execute them
+            if shell_state.options.noexec {
+                return 0; // Return success without executing
+            }
+            
             // Expand variables and command substitutions in the value
             let expanded_value = expand_variables_in_string(&value, shell_state);
-            shell_state.set_var(&var, expanded_value);
+            shell_state.set_var(&var, expanded_value.clone());
+            
+            // Auto-export if allexport option (-a) is enabled
+            if shell_state.options.allexport {
+                shell_state.export_var(&var);
+            }
             0
         }
         Ast::LocalAssignment { var, value } => {
+            // Check noexec option (-n): Read commands but don't execute them
+            if shell_state.options.noexec {
+                return 0; // Return success without executing
+            }
+            
             // Expand variables and command substitutions in the value
             let expanded_value = expand_variables_in_string(&value, shell_state);
             shell_state.set_local_var(&var, expanded_value);
@@ -1053,6 +1255,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         Ast::Sequence(asts) => {
             let mut exit_code = 0;
             for ast in asts {
+                // Reset last_was_negation flag before executing each command
+                shell_state.last_was_negation = false;
+                
                 exit_code = execute(ast, shell_state);
 
                 // Check if we got an early return from a function
@@ -1069,6 +1274,24 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 if shell_state.is_breaking() || shell_state.is_continuing() {
                     return exit_code;
                 }
+                
+                // Check errexit option (-e): Exit immediately if command fails
+                // POSIX: Don't exit in these contexts:
+                // 1. Inside if/while/until condition (tracked by in_condition flag)
+                // 2. Part of && or || chain (tracked by in_logical_chain flag)
+                // 3. Negated command (tracked by in_negation flag)
+                // 4. Last command was a negation (tracked by last_was_negation flag)
+                if shell_state.options.errexit
+                    && exit_code != 0
+                    && !shell_state.in_condition
+                    && !shell_state.in_logical_chain
+                    && !shell_state.in_negation
+                    && !shell_state.last_was_negation {
+                    // Set exit_requested flag to trigger shell exit
+                    shell_state.exit_requested = true;
+                    shell_state.exit_code = exit_code;
+                    return exit_code;
+                }
             }
             exit_code
         }
@@ -1077,7 +1300,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             else_branch,
         } => {
             for (condition, then_branch) in branches {
+                // Mark that we're in a condition (for errexit)
+                shell_state.in_condition = true;
                 let cond_exit = execute(*condition, shell_state);
+                shell_state.in_condition = false;
+                
                 if cond_exit == 0 {
                     let exit_code = execute(*then_branch, shell_state);
 
@@ -1240,8 +1467,10 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
             // Execute the loop while condition is true (exit code 0)
             loop {
-                // Evaluate the condition
+                // Mark that we're in a condition (for errexit)
+                shell_state.in_condition = true;
                 let cond_exit = execute(*condition.clone(), shell_state);
+                shell_state.in_condition = false;
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
@@ -1315,8 +1544,10 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
             // Execute the loop until condition is true (exit code 0)
             loop {
-                // Evaluate the condition
+                // Mark that we're in a condition (for errexit)
+                shell_state.in_condition = true;
                 let cond_exit = execute(*condition.clone(), shell_state);
+                shell_state.in_condition = false;
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
@@ -1466,47 +1697,140 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             exit_code
         }
         Ast::And { left, right } => {
+            // Mark that we're in a logical chain (for errexit)
+            shell_state.in_logical_chain = true;
+            
             // Execute left side first
             let left_exit = execute(*left, shell_state);
 
-            // Check if we got an early return from a function
-            if shell_state.is_returning() {
+            // Check ALL control-flow flags after executing left side
+            // If ANY control-flow is active, reset flag and return immediately
+            if shell_state.is_returning()
+                || shell_state.exit_requested
+                || shell_state.is_breaking()
+                || shell_state.is_continuing()
+            {
+                shell_state.in_logical_chain = false;
                 return left_exit;
             }
 
             // Only execute right side if left succeeded (exit code 0)
-            if left_exit == 0 {
+            let result = if left_exit == 0 {
                 execute(*right, shell_state)
             } else {
                 left_exit
-            }
+            };
+            
+            shell_state.in_logical_chain = false;
+            result
         }
         Ast::Or { left, right } => {
+            // Mark that we're in a logical chain (for errexit)
+            shell_state.in_logical_chain = true;
+            
             // Execute left side first
             let left_exit = execute(*left, shell_state);
 
-            // Check if we got an early return from a function
-            if shell_state.is_returning() {
+            // Check ALL control-flow flags after executing left side
+            // If ANY control-flow is active, reset flag and return immediately
+            if shell_state.is_returning()
+                || shell_state.exit_requested
+                || shell_state.is_breaking()
+                || shell_state.is_continuing()
+            {
+                shell_state.in_logical_chain = false;
                 return left_exit;
             }
 
             // Only execute right side if left failed (exit code != 0)
-            if left_exit != 0 {
+            let result = if left_exit != 0 {
                 execute(*right, shell_state)
             } else {
                 left_exit
-            }
+            };
+            
+            shell_state.in_logical_chain = false;
+            result
         }
-        Ast::Subshell { body } => execute_subshell(*body, shell_state),
+        Ast::Negation { command } => {
+            // Mark that we're in a negation (for errexit)
+            shell_state.in_negation = true;
+            
+            // Execute the negated command
+            let exit_code = execute(*command, shell_state);
+            
+            // Reset negation flag
+            shell_state.in_negation = false;
+            
+            // Mark that this command was a negation (for errexit exemption)
+            shell_state.last_was_negation = true;
+            
+            // Invert the exit code: 0 becomes 1, non-zero becomes 0
+            let inverted_code = if exit_code == 0 { 1 } else { 0 };
+            
+            // Update last_exit_code so $? reflects the inverted code
+            shell_state.last_exit_code = inverted_code;
+            
+            inverted_code
+        }
+        Ast::Subshell { body } => {
+            let exit_code = execute_subshell(*body, shell_state);
+            
+            // Check errexit option (-e): Exit immediately if subshell fails
+            // POSIX: Don't exit in these contexts:
+            // 1. Inside if/while/until condition (tracked by in_condition flag)
+            // 2. Part of && or || chain (tracked by in_logical_chain flag)
+            // 3. Negated command (tracked by in_negation flag)
+            if shell_state.options.errexit
+                && exit_code != 0
+                && !shell_state.in_condition
+                && !shell_state.in_logical_chain
+                && !shell_state.in_negation {
+                // Set exit_requested flag to trigger shell exit
+                shell_state.exit_requested = true;
+                shell_state.exit_code = exit_code;
+            }
+            
+            exit_code
+        }
         Ast::CommandGroup { body } => execute(*body, shell_state),
     }
 }
 
+/// Execute a single shell command (builtin, external command, function, or compound),
+/// applying redirections, per-command environment assignments, wildcard and variable
+/// expansion, xtrace printing, capture behavior, and errexit semantics as reflected
+/// in `shell_state`.
+///
+/// The function returns the command's exit code and updates `shell_state` (fd table,
+/// variables, capture buffer, exit request flags, etc.) as required by the executed
+/// command and the current shell options.
+///
+/// # Examples
+///
+/// ```
+/// // Note: execute_single_command is a private function
+/// // This example is for documentation only
+/// ```
 fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
     // Check if this is a compound command (subshell)
     if let Some(ref compound_ast) = cmd.compound {
+        // Check noexec option (-n) for compound commands
+        // Exception: The 'set' builtin must always execute to allow disabling noexec
+        if shell_state.options.noexec {
+            return 0; // Return success without executing
+        }
         // Execute compound command with redirections
         return execute_compound_with_redirections(compound_ast, shell_state, &cmd.redirections);
+    }
+
+    // Check noexec option (-n): Read commands but don't execute them
+    // Exception: The 'set' builtin must always execute to allow disabling noexec
+    // IMPORTANT: Check this BEFORE processing redirections to prevent side effects
+    let is_set_builtin = !cmd.args.is_empty() && cmd.args[0] == "set";
+    
+    if shell_state.options.noexec && !is_set_builtin {
+        return 0; // Return success without executing (no side effects)
     }
 
     if cmd.args.is_empty() {
@@ -1529,13 +1853,32 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
     // First expand variables, then wildcards
     let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-    let expanded_args = match expand_wildcards(&var_expanded_args) {
+    let expanded_args = match expand_wildcards(&var_expanded_args, shell_state) {
         Ok(args) => args,
         Err(_) => return 1,
     };
 
     if expanded_args.is_empty() {
         return 0;
+    }
+
+    // Print command if xtrace is enabled (-x)
+    if shell_state.options.xtrace {
+        // Get PS4 prompt (default: "+ ")
+        let ps4 = shell_state.get_var("PS4").unwrap_or_else(|| "+ ".to_string());
+        
+        // Print the command with expanded arguments to stderr
+        let command_str = expanded_args.join(" ");
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}{}{}\x1b[0m",
+                shell_state.color_scheme.builtin,
+                ps4,
+                command_str
+            );
+        } else {
+            eprintln!("{}{}", ps4, command_str);
+        }
     }
 
     // Check if this is a function call
@@ -1557,7 +1900,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         };
 
         // If we're capturing output, create a writer for it
-        if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
+        let exit_code = if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
             // Create a writer that writes to our capture buffer
             struct CaptureWriter {
                 buffer: Rc<RefCell<Vec<u8>>>,
@@ -1577,7 +1920,25 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             crate::builtins::execute_builtin(&temp_cmd, shell_state, Some(Box::new(writer)))
         } else {
             crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
+        };
+
+        // Check errexit option (-e): Exit immediately if command fails
+        // POSIX: Don't exit in these contexts:
+        // 1. Inside if/while/until condition (tracked by in_condition flag)
+        // 2. Part of && or || chain (tracked by in_logical_chain flag)
+        // 3. Pipeline (except last command) - handled by pipeline executor
+        // 4. Negated command (tracked by in_negation flag)
+        if shell_state.options.errexit
+            && exit_code != 0
+            && !shell_state.in_condition
+            && !shell_state.in_logical_chain
+            && !shell_state.in_negation {
+            // Set exit_requested flag to trigger shell exit
+            shell_state.exit_requested = true;
+            shell_state.exit_code = exit_code;
         }
+
+        exit_code
     } else {
         // Separate environment variable assignments from the actual command
         // Environment vars must come before the command and have the form VAR=value
@@ -1618,6 +1979,11 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     let var_name = &assignment[..eq_pos];
                     let var_value = &assignment[eq_pos + 1..];
                     shell_state.set_var(var_name, var_value.to_string());
+                    
+                    // Auto-export if allexport option (-a) is enabled
+                    if shell_state.options.allexport {
+                        shell_state.export_var(var_name);
+                    }
                 }
             }
 
@@ -1739,7 +2105,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     }
                 }
 
-                match child.wait() {
+                let exit_code = match child.wait() {
                     Ok(status) => status.code().unwrap_or(0),
                     Err(e) => {
                         if shell_state.colors_enabled {
@@ -1752,7 +2118,25 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                         }
                         1
                     }
+                };
+
+                // Check errexit option (-e): Exit immediately if command fails
+                // POSIX: Don't exit in these contexts:
+                // 1. Inside if/while/until condition (tracked by in_condition flag)
+                // 2. Part of && or || chain (tracked by in_logical_chain flag)
+                // 3. Pipeline (except last command) - handled by pipeline executor
+                // 4. Negated command (tracked by in_negation flag)
+                if shell_state.options.errexit
+                    && exit_code != 0
+                    && !shell_state.in_condition
+                    && !shell_state.in_logical_chain
+                    && !shell_state.in_negation {
+                    // Set exit_requested flag to trigger shell exit
+                    shell_state.exit_requested = true;
+                    shell_state.exit_code = exit_code;
                 }
+
+                exit_code
             }
             Err(e) => {
                 if shell_state.colors_enabled {
@@ -1769,7 +2153,34 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
     }
 }
 
+/// Execute a sequence of shell commands connected by pipes and return the pipeline's exit code.
+///
+/// This runs the provided commands as a pipeline: arguments are expanded (variables then wildcards),
+/// redirections are applied per command, builtins are executed inline where supported, and external
+/// commands are spawned as child processes. If `shell_state.options.noexec` is set the pipeline is
+/// not executed (no side effects) unless a `set` builtin appears in the pipeline. When
+/// `shell_state.capture_output` is active, the last command's stdout is captured into that buffer.
+/// On success returns the exit status of the final pipeline stage; on spawn, wait, or redirection
+/// failures returns `1`.
+///
+/// # Examples
+///
+/// ```
+/// // Note: execute_pipeline is a private function
+/// // This example is for documentation only
+/// ```
 fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> i32 {
+    // Check noexec option (-n): Read commands but don't execute them
+    // Exception: The 'set' builtin must always execute to allow disabling noexec
+    // For pipelines, check if any command is 'set', otherwise skip execution
+    let has_set_builtin = commands.iter().any(|cmd| {
+        !cmd.args.is_empty() && cmd.args[0] == "set"
+    });
+    
+    if shell_state.options.noexec && !has_set_builtin {
+        return 0; // Return success without executing (no side effects)
+    }
+
     let mut exit_code = 0;
     let mut previous_stdout: Option<File> = None;
 
@@ -1797,7 +2208,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
         // First expand variables, then wildcards
         let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-        let expanded_args = match expand_wildcards(&var_expanded_args) {
+        let expanded_args = match expand_wildcards(&var_expanded_args, shell_state) {
             Ok(args) => args,
             Err(_) => return 1,
         };
@@ -2151,15 +2562,30 @@ fn execute_compound_with_redirections(
                     match redir {
                         Redirection::Output(file) => {
                             let expanded_file = expand_variables_in_string(file, shell_state);
-                            if let Err(e) = std::fs::write(&expanded_file, &output) {
-                                if shell_state.colors_enabled {
-                                    eprintln!(
-                                        "{}Redirection error: {}\x1b[0m",
-                                        shell_state.color_scheme.error, e
-                                    );
-                                } else {
-                                    eprintln!("Redirection error: {}", e);
-                                }
+                            
+                            // Use atomic write helper to prevent TOCTOU race condition
+                            if let Err(e) = write_file_with_noclobber(
+                                &expanded_file,
+                                &output,
+                                shell_state.options.noclobber,
+                                false, // not force_clobber
+                                shell_state,
+                            ) {
+                                eprintln!("Redirection error: {}", e);
+                                return 1;
+                            }
+                        }
+                        Redirection::OutputClobber(file) => {
+                            let expanded_file = expand_variables_in_string(file, shell_state);
+                            // >| always overwrites, even with noclobber set
+                            if let Err(e) = write_file_with_noclobber(
+                                &expanded_file,
+                                &output,
+                                false, // noclobber doesn't apply
+                                true,  // force_clobber
+                                shell_state,
+                            ) {
+                                eprintln!("Redirection error: {}", e);
                                 return 1;
                             }
                         }
@@ -2222,7 +2648,7 @@ fn execute_compound_with_redirections(
 fn has_stdout_redirection(redirections: &[Redirection]) -> bool {
     redirections.iter().any(|r| match r {
         // Default output redirections affect stdout (FD 1)
-        Redirection::Output(_) | Redirection::Append(_) => true,
+        Redirection::Output(_) | Redirection::OutputClobber(_) | Redirection::Append(_) => true,
         // Explicit FD 1 redirections
         Redirection::FdOutput(1, _) | Redirection::FdAppend(1, _) => true,
         // FD 1 duplication or closure
@@ -4227,5 +4653,320 @@ mod tests {
         let exit_code = execute(ast, &mut shell_state);
         // Last command in body was false (exit 1), so loop should return 1
         assert_eq!(exit_code, 1);
+    }
+
+    // ========================================================================
+    // Control-Flow in Logical Chains Tests (&&, ||)
+    // ========================================================================
+
+    #[test]
+    fn test_and_with_return_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("executed", "no".to_string());
+        
+        // Define a function that returns early
+        shell_state.define_function(
+            "early_return".to_string(),
+            Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "executed".to_string(),
+                    value: "yes".to_string(),
+                },
+                Ast::Return { value: Some("5".to_string()) },
+            ]),
+        );
+        
+        // Call function in && chain: early_return && echo "should not execute"
+        let ast = Ast::FunctionCall {
+            name: "early_return".to_string(),
+            args: vec![],
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 5);
+        assert_eq!(shell_state.get_var("executed"), Some("yes".to_string()));
+    }
+
+    #[test]
+    fn test_and_with_exit_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("rhs_executed", "no".to_string());
+        
+        // exit 42 && rhs_executed=yes
+        let ast = Ast::And {
+            left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["exit".to_string(), "42".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            right: Box::new(Ast::Assignment {
+                var: "rhs_executed".to_string(),
+                value: "yes".to_string(),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 42);
+        assert_eq!(shell_state.get_var("rhs_executed"), Some("no".to_string()));
+        assert!(shell_state.exit_requested);
+    }
+
+    #[test]
+    fn test_and_with_break_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   (break && output="${output}bad") && output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::And {
+                left: Box::new(Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["break".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Assignment {
+                        var: "output".to_string(),
+                        value: "${output}bad".to_string(),
+                    }),
+                }),
+                right: Box::new(Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                }),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // RHS should not execute after break
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_and_with_continue_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   continue && output="${output}bad"
+        //   output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["continue".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Assignment {
+                        var: "output".to_string(),
+                        value: "${output}bad".to_string(),
+                    }),
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // RHS of && should not execute, and subsequent assignment should not execute either
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_or_with_return_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("executed", "no".to_string());
+        
+        // Define a function that returns early with non-zero
+        shell_state.define_function(
+            "early_return".to_string(),
+            Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "executed".to_string(),
+                    value: "yes".to_string(),
+                },
+                Ast::Return { value: Some("5".to_string()) },
+            ]),
+        );
+        
+        // Call function in || chain: early_return || echo "should not execute"
+        let ast = Ast::FunctionCall {
+            name: "early_return".to_string(),
+            args: vec![],
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 5);
+        assert_eq!(shell_state.get_var("executed"), Some("yes".to_string()));
+    }
+
+    #[test]
+    fn test_or_with_exit_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("rhs_executed", "no".to_string());
+        
+        // exit 42 || rhs_executed=yes
+        let ast = Ast::Or {
+            left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["exit".to_string(), "42".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            right: Box::new(Ast::Assignment {
+                var: "rhs_executed".to_string(),
+                value: "yes".to_string(),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 42);
+        assert_eq!(shell_state.get_var("rhs_executed"), Some("no".to_string()));
+        assert!(shell_state.exit_requested);
+    }
+
+    #[test]
+    fn test_or_with_break_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   (false || break) || output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Or {
+                left: Box::new(Ast::Or {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["false".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["break".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                }),
+                right: Box::new(Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                }),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // RHS should not execute after break
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_or_with_continue_in_lhs() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   (false || continue) || output="${output}bad"
+        //   output="${output}$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Or {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["false".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["continue".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "${output}$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // Both RHS of || and subsequent assignment should not execute
+        assert_eq!(shell_state.get_var("output"), Some("".to_string()));
+    }
+
+    #[test]
+    fn test_logical_chain_flag_cleanup() {
+        let mut shell_state = ShellState::new();
+        
+        // Verify in_logical_chain is false initially
+        assert!(!shell_state.in_logical_chain);
+        
+        // Execute a simple && chain
+        let ast = Ast::And {
+            left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+        };
+        
+        execute(ast, &mut shell_state);
+        
+        // Verify in_logical_chain is reset to false after execution
+        assert!(!shell_state.in_logical_chain);
+    }
+
+    #[test]
+    fn test_logical_chain_flag_cleanup_with_return() {
+        let mut shell_state = ShellState::new();
+        
+        // Define a function that returns
+        shell_state.define_function(
+            "test_return".to_string(),
+            Ast::Return { value: Some("0".to_string()) },
+        );
+        
+        // Execute && chain with return in LHS
+        let ast = Ast::And {
+            left: Box::new(Ast::FunctionCall {
+                name: "test_return".to_string(),
+                args: vec![],
+            }),
+            right: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["echo".to_string(), "should not execute".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+        };
+        
+        // Execute in function context
+        shell_state.enter_function();
+        execute(ast, &mut shell_state);
+        shell_state.exit_function();
+        
+        // Verify in_logical_chain is reset even with early return
+        assert!(!shell_state.in_logical_chain);
     }
 }

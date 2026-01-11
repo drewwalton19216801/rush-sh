@@ -351,7 +351,23 @@ fn collect_variable_names_with_prefix(prefix: &str, shell_state: &ShellState) ->
     result
 }
 
-/// Expand a parameter expression using the given shell state
+/// Expand a parameter expression according to the shell state and parameter modifier.
+///
+/// On success returns the resulting expansion string. On error returns a diagnostic message
+/// (e.g., when nounset is enabled and an unset variable is expanded or when `${var:?msg}` fails).
+///
+/// # Examples
+///
+/// ```
+/// use rush_sh::parameter_expansion::{ParameterExpansion, ParameterModifier, expand_parameter};
+/// use rush_sh::ShellState;
+///
+/// let exp = ParameterExpansion { var_name: "VAR".to_string(), modifier: ParameterModifier::None };
+/// let mut state = ShellState::new();
+/// state.set_var("VAR", "value".to_string());
+/// let result = expand_parameter(&exp, &state).unwrap();
+/// assert_eq!(result, "value");
+/// ```
 pub fn expand_parameter(
     expansion: &ParameterExpansion,
     shell_state: &ShellState,
@@ -359,7 +375,14 @@ pub fn expand_parameter(
     let value = match expansion.modifier {
         ParameterModifier::None => {
             // Simple variable expansion
-            shell_state.get_var(&expansion.var_name)
+            let var_value = shell_state.get_var(&expansion.var_name);
+            
+            // Check nounset option (-u): Treat unset variables as an error
+            if shell_state.options.nounset && var_value.is_none() {
+                return Err(format!("{}: unbound variable", expansion.var_name));
+            }
+            
+            var_value
         }
         ParameterModifier::Indirect => {
             // ${!name} - indirect expansion

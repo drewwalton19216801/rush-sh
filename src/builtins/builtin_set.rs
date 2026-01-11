@@ -1,0 +1,716 @@
+use std::io::Write;
+
+use crate::parser::ShellCommand;
+use crate::state::ShellState;
+
+pub struct SetBuiltin;
+
+impl super::Builtin for SetBuiltin {
+    /// Primary name of the builtin.
+    ///
+    /// # Returns
+    ///
+    /// `'set'` — the primary name for this builtin.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Note: SetBuiltin is in a private module
+    /// // Use the public builtins API instead
+    /// use rush_sh::builtins::is_builtin;
+    /// assert!(is_builtin("set"));
+    /// ```
+    fn name(&self) -> &'static str {
+        "set"
+    }
+
+    /// Canonical names under which the builtin is registered.
+    ///
+    /// # Returns
+    ///
+    /// A vector of `'static` string slices containing the builtin's public names; currently contains only the primary name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Note: SetBuiltin is in a private module
+    /// // This example is for documentation only
+    /// ```
+    fn names(&self) -> Vec<&'static str> {
+        vec![self.name()]
+    }
+
+    /// Short help text for the `set` builtin: what it does.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Note: SetBuiltin is in a private module
+    /// // Use the public builtins API instead
+    /// use rush_sh::builtins::is_builtin;
+    /// assert!(is_builtin("set"));
+    /// ```
+    fn description(&self) -> &'static str {
+        "Set or unset shell options and positional parameters"
+    }
+
+    /// Execute the `set` builtin: display variables/options or apply option and positional-parameter changes.
+    ///
+    /// If invoked with no additional arguments, writes all shell variables to `output_writer`. If arguments request
+    /// display of options, writes all options. Otherwise parses and applies short and named option changes (preserving
+    /// last-wins semantics for combined short options) and updates the shell state's positional parameters when a
+    /// double-dash (`--`) or explicit positional arguments are provided. On parse or option-application errors, an error
+    /// message is written and a non-zero exit code is returned.
+    ///
+    /// # Parameters
+    ///
+    /// - `cmd`: the parsed command containing arguments (first argument is the command name).
+    /// - `shell_state`: mutable shell state that may be modified (options and positional parameters).
+    /// - `output_writer`: writer used for command output.
+    ///
+    /// # Returns
+    ///
+    /// `0` on success, `1` if parsing fails or applying an option fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // Note: SetBuiltin is in a private module
+    /// // This example is for documentation only
+    /// ```
+    fn run(
+        &self,
+        cmd: &ShellCommand,
+        shell_state: &mut ShellState,
+        output_writer: &mut dyn Write,
+    ) -> i32 {
+        // If no arguments, display all variables
+        if cmd.args.len() == 1 {
+            return display_all_variables(shell_state, output_writer);
+        }
+
+        // Parse arguments
+        match parse_arguments(&cmd.args[1..]) {
+            Ok(parsed) => {
+                // Apply short option changes in order (preserves last-wins semantics)
+                for (opt, enable) in &parsed.options_in_order {
+                    if let Err(e) = shell_state.options.set_by_short_name(*opt, *enable) {
+                        print_error(shell_state, &e);
+                        return 1;
+                    }
+                }
+
+                // Apply named option changes
+                for (name, value) in &parsed.named_options {
+                    if let Err(e) = shell_state.options.set_by_long_name(name, *value) {
+                        print_error(shell_state, &e);
+                        return 1;
+                    }
+                }
+
+                // Update positional parameters if provided
+                if parsed.found_double_dash || !parsed.positional_args.is_empty() {
+                    shell_state.set_positional_params(parsed.positional_args);
+                }
+
+                // Handle display mode after applying options
+                if parsed.display_mode == DisplayMode::AllOptions {
+                    return display_all_options(shell_state, output_writer);
+                }
+
+                0
+            }
+            Err(e) => {
+                print_error(shell_state, &e);
+                1
+            }
+        }
+    }
+}
+
+/// Display mode for set command
+#[derive(Debug, PartialEq)]
+enum DisplayMode {
+    None,
+    AllOptions,
+}
+
+/// Parsed arguments from set command
+#[derive(Debug)]
+struct ParsedArgs {
+    // Store options in order with their enable/disable state
+    options_in_order: Vec<(char, bool)>,
+    named_options: Vec<(String, bool)>,
+    positional_args: Vec<String>,
+    display_mode: DisplayMode,
+    found_double_dash: bool,
+}
+
+/// Parse command-line arguments for the `set` builtin and classify flags, named options, positional parameters, and display mode.
+///
+/// Recognizes short flags (e.g., `-e`, combined `-eux`) and records them in order with their enable/disable state; recognizes named options via `-oNAME`, `-o NAME`, `+oNAME`, or `+o NAME`; treats `-o`/`+o` with no following argument as a request to display all options; and treats `--` as the end-of-options marker so remaining arguments become positional parameters.
+///
+/// # Arguments
+///
+/// * `args` - command arguments excluding the command name
+///
+/// # Returns
+///
+/// `Ok(ParsedArgs)` with parsed flags, named options, positional args, display mode, and `found_double_dash`; `Err(String)` on parse failure.
+///
+/// # Examples
+///
+/// ```
+/// // Note: parse_arguments is a private function
+/// // This example is for documentation only
+/// ```
+fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
+    let mut options_in_order = Vec::new();
+    let mut named_options = Vec::new();
+    let mut positional_args = Vec::new();
+    let mut display_mode = DisplayMode::None;
+    let mut found_double_dash = false;
+    let mut i = 0;
+
+    while i < args.len() {
+        let arg = &args[i];
+
+        // Check for end of options marker
+        if arg == "--" {
+            found_double_dash = true;
+            positional_args.extend_from_slice(&args[i + 1..]);
+            break;
+        }
+
+        // Check for option flag (starts with - or +)
+        if (arg.starts_with('-') || arg.starts_with('+')) && arg.len() > 1 {
+            let enable = arg.starts_with('-');
+            let chars: Vec<char> = arg.chars().skip(1).collect();
+
+            // Handle -o or +o (named option)
+            if chars[0] == 'o' {
+                if chars.len() == 1 {
+                    // -o and +o: check if next arg exists and is not a flag (doesn't start with '-' or '+')
+                    if i + 1 < args.len() {
+                        let next_char = args[i + 1].chars().next();
+                        if next_char != Some('-') && next_char != Some('+') {
+                            // Next arg is an option name, consume it
+                            named_options.push((args[i + 1].clone(), enable));
+                            i += 1; // Advance to consume the option name
+                        } else {
+                            // Next arg is a flag: display all options
+                            display_mode = DisplayMode::AllOptions;
+                        }
+                    } else {
+                        // No next arg: display all options
+                        display_mode = DisplayMode::AllOptions;
+                    }
+                } else {
+                    // -oOPTION format (no space)
+                    let option_name: String = chars[1..].iter().collect();
+                    named_options.push((option_name, enable));
+                }
+            } else {
+                // Handle short options (can be combined like -eux)
+                // Store them in order to preserve last-wins semantics
+                for ch in chars {
+                    options_in_order.push((ch, enable));
+                }
+            }
+        } else {
+            // Not an option, treat as positional parameter
+            positional_args.extend_from_slice(&args[i..]);
+            break;
+        }
+
+        i += 1;
+    }
+
+    Ok(ParsedArgs {
+        options_in_order,
+        named_options,
+        positional_args,
+        display_mode,
+        found_double_dash,
+    })
+}
+
+/// Writes all shell variables to the given writer as lines in the form `NAME=value`, sorted by variable name.
+///
+/// Each variable from `shell_state` is emitted on its own line in alphabetical order by name.
+///
+/// # Returns
+/// `0` on success.
+///
+/// # Examples
+///
+/// ```
+/// // Note: display_all_variables is a private function
+/// // This example is for documentation only
+/// ```
+fn display_all_variables(shell_state: &ShellState, output_writer: &mut dyn Write) -> i32 {
+    // Get all variables sorted by name
+    let mut vars: Vec<(&String, &String)> = shell_state.variables.iter().collect();
+    vars.sort_by_key(|(name, _)| *name);
+
+    for (name, value) in vars {
+        let _ = writeln!(output_writer, "{}={}", name, value);
+    }
+
+    0
+}
+
+/// Prints all shell options with their current on/off state to the given writer.
+///
+/// Each option is written on its own line. Options with a short name are formatted as
+/// `set -<short> -o <long-name> <status>`; options without a short name are formatted as
+/// `set -o <long-name> <status>`. `<status>` is `on` when the option is enabled and `off` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // Note: display_all_options is a private function
+/// // This example is for documentation only
+/// ```
+///
+/// Returns 0 on success.
+fn display_all_options(shell_state: &ShellState, output_writer: &mut dyn Write) -> i32 {
+    let options = shell_state.options.get_all_options();
+
+    for (long_name, short_name, value) in options {
+        let status = if value { "on" } else { "off" };
+        
+        if short_name == '\0' {
+            // No short option (e.g., ignoreeof)
+            let _ = writeln!(output_writer, "set -o {:<15} {}", long_name, status);
+        } else {
+            let _ = writeln!(
+                output_writer,
+                "set -{} -o {:<15} {}",
+                short_name, long_name, status
+            );
+        }
+    }
+
+    0
+}
+
+/// Write an error message to standard error, using the shell's error color when enabled.
+///
+/// If `shell_state.colors_enabled` is true, the message is prefixed with `shell_state.color_scheme.error`
+/// and terminated with an ANSI reset sequence; otherwise the message is written plainly. No value is returned.
+fn print_error(shell_state: &ShellState, msg: &str) {
+    if shell_state.colors_enabled {
+        eprintln!("{}{}\x1b[0m", shell_state.color_scheme.error, msg);
+    } else {
+        eprintln!("{}", msg);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::builtins::Builtin;
+
+    #[test]
+    fn test_set_builtin_no_args_displays_variables() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("TEST_VAR", "test_value".to_string());
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("TEST_VAR=test_value"));
+    }
+
+    #[test]
+    fn test_set_builtin_enable_single_option() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-e".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.options.errexit);
+    }
+
+    #[test]
+    fn test_set_builtin_disable_single_option() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "+e".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(!shell_state.options.errexit);
+    }
+
+    #[test]
+    fn test_set_builtin_combined_options() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-eux".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.options.errexit);
+        assert!(shell_state.options.nounset);
+        assert!(shell_state.options.xtrace);
+    }
+
+    #[test]
+    fn test_set_builtin_named_option() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string(), "errexit".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.options.errexit);
+    }
+
+    #[test]
+    fn test_set_builtin_disable_named_option() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "+o".to_string(), "errexit".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(!shell_state.options.errexit);
+    }
+
+    #[test]
+    fn test_set_builtin_display_all_options() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "+o".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        assert!(output_str.contains("on"));
+    }
+
+    #[test]
+    fn test_set_builtin_positional_params() {
+        let cmd = ShellCommand {
+            args: vec![
+                "set".to_string(),
+                "--".to_string(),
+                "arg1".to_string(),
+                "arg2".to_string(),
+                "arg3".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("1"), Some("arg1".to_string()));
+        assert_eq!(shell_state.get_var("2"), Some("arg2".to_string()));
+        assert_eq!(shell_state.get_var("3"), Some("arg3".to_string()));
+        assert_eq!(shell_state.get_var("#"), Some("3".to_string()));
+    }
+
+    #[test]
+    fn test_set_builtin_clear_positional_params() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "--".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.set_positional_params(vec!["old1".to_string(), "old2".to_string()]);
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("1"), None);
+        assert_eq!(shell_state.get_var("#"), Some("0".to_string()));
+    }
+
+    #[test]
+    fn test_set_builtin_options_and_positional_params() {
+        let cmd = ShellCommand {
+            args: vec![
+                "set".to_string(),
+                "-e".to_string(),
+                "--".to_string(),
+                "arg1".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.options.errexit);
+        assert_eq!(shell_state.get_var("1"), Some("arg1".to_string()));
+    }
+
+    #[test]
+    fn test_set_builtin_invalid_option() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-Z".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_set_builtin_invalid_named_option() {
+        let cmd = ShellCommand {
+            args: vec![
+                "set".to_string(),
+                "-o".to_string(),
+                "invalid_option".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_set_builtin_dash_o_displays_options() {
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // POSIX: set -o without argument displays all options
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        assert!(output_str.contains("on"));
+    }
+
+    #[test]
+    fn test_parse_arguments_empty() {
+        let result = parse_arguments(&[]).unwrap();
+        assert_eq!(result.display_mode, DisplayMode::None);
+        assert!(result.options_in_order.is_empty());
+    }
+
+    #[test]
+    fn test_parse_arguments_single_option() {
+        let result = parse_arguments(&["-e".to_string()]).unwrap();
+        assert_eq!(result.options_in_order, vec![('e', true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_combined_options() {
+        let result = parse_arguments(&["-eux".to_string()]).unwrap();
+        assert_eq!(result.options_in_order, vec![('e', true), ('u', true), ('x', true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_disable_option() {
+        let result = parse_arguments(&["+e".to_string()]).unwrap();
+        assert_eq!(result.options_in_order, vec![('e', false)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_named_option() {
+        let result = parse_arguments(&["-o".to_string(), "errexit".to_string()]).unwrap();
+        assert_eq!(result.named_options, vec![("errexit".to_string(), true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_display_options() {
+        let result = parse_arguments(&["+o".to_string()]).unwrap();
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
+    }
+
+    #[test]
+    fn test_parse_arguments_positional_params() {
+        let result = parse_arguments(&[
+            "--".to_string(),
+            "arg1".to_string(),
+            "arg2".to_string(),
+        ])
+        .unwrap();
+        assert!(result.found_double_dash);
+        assert_eq!(result.positional_args, vec!["arg1", "arg2"]);
+    }
+
+    #[test]
+    fn test_parse_arguments_dash_o_displays_options() {
+        let result = parse_arguments(&["-o".to_string()]).unwrap();
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
+    }
+
+    #[test]
+    fn test_set_dash_o_followed_by_flag() {
+        // Test that "set -o -e" correctly interprets -e as a separate flag
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string(), "-e".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        // -o displays options (because -e starts with '-')
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        // -e should enable errexit as a separate flag
+        assert!(shell_state.options.errexit);
+    }
+
+    #[test]
+    fn test_set_dash_o_with_option_name() {
+        // Test that "set -o errexit" correctly sets the errexit option
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string(), "errexit".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.options.errexit);
+        // Should not display options
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.is_empty());
+    }
+
+    #[test]
+    fn test_set_dash_o_alone_displays_options() {
+        // Test that "set -o" displays all options
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        assert!(output_str.contains("on"));
+    }
+
+    #[test]
+    fn test_parse_arguments_dash_o_followed_by_flag() {
+        // Test parsing "set -o -e"
+        let result = parse_arguments(&["-o".to_string(), "-e".to_string()]).unwrap();
+        // -o should trigger display mode since next arg starts with '-'
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
+        // -e should be parsed as a separate option
+        assert_eq!(result.options_in_order, vec![('e', true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_dash_o_with_option_name() {
+        // Test parsing "set -o errexit"
+        let result = parse_arguments(&["-o".to_string(), "errexit".to_string()]).unwrap();
+        // Should not trigger display mode
+        assert_eq!(result.display_mode, DisplayMode::None);
+        // Should have named option
+        assert_eq!(result.named_options, vec![("errexit".to_string(), true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_plus_o_followed_by_flag() {
+        // Test parsing "set +o +e"
+        let result = parse_arguments(&["+o".to_string(), "+e".to_string()]).unwrap();
+        // +o should trigger display mode since next arg starts with '-' (or '+')
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
+        // +e should be parsed as a separate option
+        assert_eq!(result.options_in_order, vec![('e', false)]);
+    }
+}

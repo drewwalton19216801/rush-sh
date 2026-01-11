@@ -52,6 +52,7 @@ mod builtin_popd;
 mod builtin_pushd;
 mod builtin_pwd;
 mod builtin_return;
+mod builtin_set;
 mod builtin_set_color_scheme;
 mod builtin_set_colors;
 mod builtin_set_condensed;
@@ -75,6 +76,20 @@ pub trait Builtin {
     ) -> i32;
 }
 
+/// Provides a vector of all builtin command implementations in registration order.
+///
+/// Each element is a boxed implementation of `Builtin` representing one builtin command
+/// available to the shell.
+///
+/// # Examples
+///
+/// ```
+/// // Note: get_builtins is a private function
+/// // Use is_builtin() or get_builtin_commands() instead for public API
+/// use rush_sh::builtins::is_builtin;
+/// assert!(is_builtin("cd"));
+/// assert!(is_builtin("pwd"));
+/// ```
 fn get_builtins() -> Vec<Box<dyn Builtin>> {
     vec![
         Box::new(builtin_cd::CdBuiltin),
@@ -91,6 +106,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_alias::AliasBuiltin),
         Box::new(builtin_unalias::UnaliasBuiltin),
         Box::new(builtin_test::TestBuiltin),
+        Box::new(builtin_set::SetBuiltin),
         Box::new(builtin_set_colors::SetColorsBuiltin),
         Box::new(builtin_set_color_scheme::SetColorSchemeBuiltin),
         Box::new(builtin_set_condensed::SetCondensedBuiltin),
@@ -119,6 +135,28 @@ pub fn get_builtin_commands() -> Vec<String> {
     commands
 }
 
+/// Execute a builtin command, applying redirections and selecting the appropriate output writer.
+///
+/// This function locates and runs the builtin named by `cmd.args[0]`, applying any redirections
+/// from `cmd.redirections` in left-to-right order, expanding filenames using `shell_state`,
+/// saving and restoring file descriptors around the builtin invocation, and selecting stdout
+/// from the shell's file-descriptor table (or using a sink writer if stdout is closed).
+/// If `output_override` is provided, it is used directly as the builtin's output writer and
+/// redirections are not applied. Colored error messages are printed according to `shell_state`'s
+/// color settings. On success it returns the builtin's exit code; on failure it returns `1`.
+///
+/// # Examples
+///
+/// ```no_run
+/// use rush_sh::builtins::execute_builtin;
+/// use rush_sh::parser::ShellCommand;
+/// use rush_sh::ShellState;
+/// // Construct a ShellCommand and ShellState appropriately in real code.
+/// let cmd = ShellCommand { args: vec!["pwd".into()], redirections: vec![], compound: None };
+/// let mut state = ShellState::new();
+/// let exit_code = execute_builtin(&cmd, &mut state, None);
+/// println!("exit code: {}", exit_code);
+/// ```
 pub fn execute_builtin(
     cmd: &ShellCommand,
     shell_state: &mut ShellState,
@@ -162,6 +200,7 @@ pub fn execute_builtin(
         match redir {
             Redirection::Input(file)
             | Redirection::Output(file)
+            | Redirection::OutputClobber(file)
             | Redirection::Append(file)
             | Redirection::FdInput(_, file)
             | Redirection::FdOutput(_, file)
@@ -214,7 +253,7 @@ pub fn execute_builtin(
                     false, // truncate
                 )
             }
-            Redirection::Output(_) => {
+            Redirection::Output(_) | Redirection::OutputClobber(_) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
                     1, file, false, // read
@@ -397,6 +436,7 @@ mod tests {
         assert!(commands.contains(&"return".to_string()));
         assert!(commands.contains(&"break".to_string()));
         assert!(commands.contains(&"continue".to_string()));
-        assert_eq!(commands.len(), 26);
+        assert!(commands.contains(&"set".to_string()));
+        assert_eq!(commands.len(), 27);
     }
 }

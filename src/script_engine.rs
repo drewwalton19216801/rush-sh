@@ -91,7 +91,17 @@ pub fn contains_keyword(line: &str, keyword: &str) -> bool {
     current_word == keyword
 }
 
-/// Check if a line starts with a specific keyword
+/// Determine whether the first token of a line equals the given keyword, ignoring leading spaces and tabs.
+///
+/// Returns `true` if the first token is equal to `keyword`, `false` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// use rush_sh::script_engine::starts_with_keyword;
+/// assert!(starts_with_keyword("  if condition", "if"));
+/// assert!(!starts_with_keyword("echo if", "if"));
+/// ```
 pub fn starts_with_keyword(line: &str, keyword: &str) -> bool {
     let mut chars = line.chars().peekable();
     let mut current_word = String::new();
@@ -117,7 +127,36 @@ pub fn starts_with_keyword(line: &str, keyword: &str) -> bool {
     current_word == keyword
 }
 
+/// Process and execute a single shell command line.
+///
+/// This performs lexical analysis, alias expansion, brace expansion, parsing, and execution
+/// in sequence; prints errors (using the configured color scheme when enabled) and updates
+/// the shell state (including the last exit code and, on certain lex errors, exit request).
+///
+/// # Parameters
+///
+/// - `line`: the input command line to process.
+/// - `shell_state`: mutable shell state used for options (e.g., verbose, colors), color output,
+///   and to store execution results such as the last exit code and exit-request flag.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Example usage (requires a configured ShellState):
+/// let mut shell_state = state::ShellState::new();
+/// execute_line("echo hello", &mut shell_state);
+/// assert_eq!(shell_state.last_exit_code(), 0);
+/// ```
 pub fn execute_line(line: &str, shell_state: &mut state::ShellState) {
+    // Print input line if verbose option (-v) is enabled
+    if shell_state.options.verbose {
+        if shell_state.colors_enabled {
+            eprintln!("{}{}\x1b[0m", shell_state.color_scheme.builtin, line);
+        } else {
+            eprintln!("{}", line);
+        }
+    }
+    
     match lexer::lex(line, shell_state) {
         Ok(tokens) => match lexer::expand_aliases(tokens, shell_state, &mut HashSet::new()) {
             Ok(expanded_tokens) => match brace_expansion::expand_braces(expanded_tokens) {
@@ -169,6 +208,12 @@ pub fn execute_line(line: &str, shell_state: &mut state::ShellState) {
                 eprintln!("Lex error: {}", e);
             }
             shell_state.set_last_exit_code(1);
+            
+            // Check if this is a nounset error - if so, request shell exit
+            if e.contains("unbound variable") {
+                shell_state.exit_requested = true;
+                shell_state.exit_code = 1;
+            }
         }
     }
 }

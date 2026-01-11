@@ -9,6 +9,7 @@ pub enum Token {
     Word(String),
     Pipe,
     RedirOut,
+    RedirOutClobber, // >| operator (noclobber override)
     RedirIn,
     RedirAppend,
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
@@ -46,8 +47,23 @@ pub enum Token {
     Continue, // continue
     And,      // &&
     Or,       // ||
+    Bang,     // ! (negation operator)
 }
 
+/// Map a keyword string to its corresponding shell Token.
+///
+/// # Returns
+///
+/// `Some(Token::X)` if `word` matches a recognized shell keyword (for example: `if`, `then`,
+/// `else`, `elif`, `fi`, `case`, `in`, `esac`, `local`, `return`, `for`, `while`, `until`,
+/// `break`, `continue`, `do`, `done`), `None` otherwise.
+///
+/// # Examples
+///
+/// ```
+/// // Note: is_keyword is a private function
+/// // This example is for documentation only
+/// ```
 fn is_keyword(word: &str) -> Option<Token> {
     match word {
         "if" => Some(Token::If),
@@ -381,6 +397,28 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
     }
 }
 
+/// Tokenizes a shell-like input string into a sequence of lexer `Token`s.
+///
+/// The lexer recognizes words, quoting (single/double), parameter and arithmetic
+/// expansions (kept as literals for runtime expansion), command substitutions,
+/// pipes and logical operators, parentheses and braces (including brace expansion
+/// detection), tilde expansion, a wide range of redirection forms (including
+/// file-descriptor-aware redirections, here-documents/strings, and the `>|`
+/// noclobber override), aliases, and control-flow keywords. Returns `Err` with a
+/// diagnostic string for syntax errors (for example, invalid redirection forms
+/// or missing filenames).
+///
+/// # Examples
+///
+/// ```
+/// use rush_sh::lexer::{lex, Token};
+/// use rush_sh::state::ShellState;
+///
+/// let state = ShellState::default();
+/// let toks = lex("echo hello | cat > out.txt", &state).unwrap();
+/// assert!(matches!(toks[0], Token::Word(ref s) if s == "echo"));
+/// assert_eq!(toks.last().unwrap(), &Token::Word("out.txt".to_string()));
+/// ```
 pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> {
     let mut tokens = Vec::new();
     let mut chars = input.chars().peekable();
@@ -647,6 +685,42 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     current.push('&');
                 }
             }
+            '!' if !in_double_quote && !in_single_quote => {
+                // Only emit Token::Bang if ! appears at command start position
+                // Command start is: beginning of input, after whitespace/newline/semicolon, or after operators
+                let is_command_start = current.is_empty() && (
+                    tokens.is_empty() ||
+                    matches!(tokens.last(), Some(
+                        Token::Newline |
+                        Token::Semicolon |
+                        Token::And |
+                        Token::Or |
+                        Token::Pipe |
+                        Token::Then |
+                        Token::Else |
+                        Token::Elif |
+                        Token::Do |
+                        Token::While |
+                        Token::Until |
+                        Token::If |
+                        Token::LeftParen |
+                        Token::LeftBrace
+                    ))
+                );
+                
+                if is_command_start {
+                    flush_current_token(&mut current, &mut tokens, false);
+                    chars.next(); // consume !
+                    tokens.push(Token::Bang);
+                    // Skip any whitespace after the bang
+                    skip_whitespace(&mut chars);
+                } else {
+                    // Not at command start - treat as regular character
+                    just_closed_quote = false;
+                    current.push(ch);
+                    chars.next();
+                }
+            }
             '>' if !in_double_quote && !in_single_quote => {
                 // Check if this is a file descriptor redirection like 2>&1 or 2>file
                 // Look back to see if current ends with a digit
@@ -674,7 +748,49 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 chars.next(); // consume >
 
                 // Check what follows the >
-                if let Some(&'&') = chars.peek() {
+                if let Some(&'|') = chars.peek() {
+                    // This is >| (noclobber override)
+                    chars.next(); // consume |
+                    
+                    skip_whitespace(&mut chars);
+                    
+                    // Collect the filename (handle quotes)
+                    let mut filename = String::new();
+                    let mut in_filename_quote = false;
+                    let mut filename_quote_char = ' ';
+                    
+                    while let Some(&ch) = chars.peek() {
+                        if !in_filename_quote && (ch == '"' || ch == '\'') {
+                            in_filename_quote = true;
+                            filename_quote_char = ch;
+                            chars.next(); // consume quote but don't add to filename
+                        } else if in_filename_quote && ch == filename_quote_char {
+                            in_filename_quote = false;
+                            chars.next(); // consume quote but don't add to filename
+                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
+                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        {
+                            break;
+                        } else {
+                            filename.push(ch);
+                            chars.next();
+                        }
+                    }
+                    
+                    if !filename.is_empty() {
+                        if let Some(fd) = fd_num {
+                            // With fd number, use RedirectFdOut (clobber is implied by >|)
+                            tokens.push(Token::RedirectFdOut(fd, filename));
+                        } else {
+                            // Without fd number, use RedirOutClobber
+                            tokens.push(Token::RedirOutClobber);
+                            tokens.push(Token::Word(filename));
+                        }
+                    } else {
+                        // No filename provided - error
+                        return Err("Invalid redirection: expected filename after >|".to_string());
+                    }
+                } else if let Some(&'&') = chars.peek() {
                     chars.next(); // consume &
 
                     // Collect the target fd or '-'
@@ -3107,5 +3223,409 @@ mod tests {
         let result = lex("command 2>>", &shell_state);
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expected filename after >>"));
+    }
+
+    // ===== Bang (!) Context-Aware Tests =====
+
+    #[test]
+    fn test_bang_as_argument() {
+        // ! should be treated as a regular word when not at command start
+        let shell_state = ShellState::new();
+        let result = lex("echo !", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("!".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_as_argument_middle() {
+        let shell_state = ShellState::new();
+        let result = lex("echo hello !", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string()),
+                Token::Word("!".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_as_argument_multiple() {
+        let shell_state = ShellState::new();
+        let result = lex("echo ! ! !", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("!".to_string()),
+                Token::Word("!".to_string()),
+                Token::Word("!".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_at_command_start() {
+        // ! at command start should be Token::Bang for negation
+        let shell_state = ShellState::new();
+        let result = lex("! echo hello", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Bang,
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_after_semicolon() {
+        let shell_state = ShellState::new();
+        let result = lex("echo hello; ! false", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string()),
+                Token::Semicolon,
+                Token::Bang,
+                Token::Word("false".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_after_newline() {
+        let shell_state = ShellState::new();
+        let result = lex("echo hello\n! false", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello".to_string()),
+                Token::Newline,
+                Token::Bang,
+                Token::Word("false".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_after_and_operator() {
+        let shell_state = ShellState::new();
+        let result = lex("true && ! false", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("true".to_string()),
+                Token::And,
+                Token::Bang,
+                Token::Word("false".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_after_or_operator() {
+        let shell_state = ShellState::new();
+        let result = lex("false || ! false", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("false".to_string()),
+                Token::Or,
+                Token::Bang,
+                Token::Word("false".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_after_pipe() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test | ! grep test", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::Pipe,
+                Token::Bang,
+                Token::Word("grep".to_string()),
+                Token::Word("test".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_in_single_quotes() {
+        let shell_state = ShellState::new();
+        let result = lex("echo '!'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("!".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_in_double_quotes() {
+        let shell_state = ShellState::new();
+        let result = lex("echo \"!\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("!".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_mixed_contexts() {
+        // Test both negation and argument usage in same line
+        let shell_state = ShellState::new();
+        let result = lex("! echo ! && echo !", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Bang,
+                Token::Word("echo".to_string()),
+                Token::Word("!".to_string()),
+                Token::And,
+                Token::Word("echo".to_string()),
+                Token::Word("!".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_after_then() {
+        let shell_state = ShellState::new();
+        let result = lex("if true; then ! false; fi", &shell_state).unwrap();
+        assert!(result.contains(&Token::Bang));
+        // Verify Bang comes after Then
+        let then_pos = result.iter().position(|t| t == &Token::Then).unwrap();
+        let bang_pos = result.iter().position(|t| t == &Token::Bang).unwrap();
+        assert!(bang_pos > then_pos);
+    }
+
+    #[test]
+    fn test_bang_after_else() {
+        let shell_state = ShellState::new();
+        let result = lex("if false; then echo a; else ! true; fi", &shell_state).unwrap();
+        assert!(result.contains(&Token::Bang));
+        // Verify Bang comes after Else
+        let else_pos = result.iter().position(|t| t == &Token::Else).unwrap();
+        let bang_pos = result.iter().position(|t| t == &Token::Bang).unwrap();
+        assert!(bang_pos > else_pos);
+    }
+
+    #[test]
+    fn test_bang_after_do() {
+        let shell_state = ShellState::new();
+        let result = lex("while true; do ! false; done", &shell_state).unwrap();
+        assert!(result.contains(&Token::Bang));
+        // Verify Bang comes after Do
+        let do_pos = result.iter().position(|t| t == &Token::Do).unwrap();
+        let bang_pos = result.iter().position(|t| t == &Token::Bang).unwrap();
+        assert!(bang_pos > do_pos);
+    }
+
+    #[test]
+    fn test_bang_in_subshell() {
+        let shell_state = ShellState::new();
+        let result = lex("(! echo test)", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::LeftParen,
+                Token::Bang,
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RightParen
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_in_command_group() {
+        let shell_state = ShellState::new();
+        let result = lex("{ ! echo test; }", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::LeftBrace,
+                Token::Bang,
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::Semicolon,
+                Token::RightBrace
+            ]
+        );
+    }
+
+    #[test]
+    fn test_bang_as_part_of_word() {
+        // When ! is part of a word (no space before it), it should be included in the word
+        let shell_state = ShellState::new();
+        let result = lex("echo hello!", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("hello!".to_string())
+            ]
+        );
+    }
+
+    // ===== OutputClobber (>|) Tests =====
+
+    #[test]
+    fn test_output_clobber_basic() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >| output.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("output.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_fd_number() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test 2>| errors.log", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirectFdOut(2, "errors.log".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_fd_number_no_space() {
+        let shell_state = ShellState::new();
+        let result = lex("command 3>|file.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(3, "file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_missing_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >|", &shell_state);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected filename after >|"));
+    }
+
+    #[test]
+    fn test_output_clobber_with_quoted_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >| \"output file.txt\"", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("output file.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_fd_and_quoted_filename() {
+        let shell_state = ShellState::new();
+        let result = lex("command 2>| 'error log.txt'", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirectFdOut(2, "error log.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_multiple_fds() {
+        let shell_state = ShellState::new();
+        let result = lex("command >| out.txt 2>| err.txt", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("command".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("out.txt".to_string()),
+                Token::RedirectFdOut(2, "err.txt".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_with_pipe() {
+        let shell_state = ShellState::new();
+        let result = lex("echo test >| output.txt | cat", &shell_state).unwrap();
+        assert_eq!(
+            result,
+            vec![
+                Token::Word("echo".to_string()),
+                Token::Word("test".to_string()),
+                Token::RedirOutClobber,
+                Token::Word("output.txt".to_string()),
+                Token::Pipe,
+                Token::Word("cat".to_string())
+            ]
+        );
+    }
+
+    #[test]
+    fn test_output_clobber_fd_0_through_9() {
+        let shell_state = ShellState::new();
+        
+        // Test fd 0 (unusual but valid)
+        let result = lex("cmd 0>| file", &shell_state).unwrap();
+        assert_eq!(result[1], Token::RedirectFdOut(0, "file".to_string()));
+        
+        // Test fd 9
+        let result = lex("cmd 9>| file", &shell_state).unwrap();
+        assert_eq!(result[1], Token::RedirectFdOut(9, "file".to_string()));
+    }
+
+    #[test]
+    fn test_output_clobber_consistency_with_regular_redirect() {
+        let shell_state = ShellState::new();
+        
+        // Regular redirect without fd
+        let result1 = lex("echo test > output.txt", &shell_state).unwrap();
+        // Clobber redirect without fd
+        let result2 = lex("echo test >| output.txt", &shell_state).unwrap();
+        
+        // Both should have same structure, just different redirect token
+        assert_eq!(result1.len(), result2.len());
+        assert_eq!(result1[0], result2[0]); // echo
+        assert_eq!(result1[1], result2[1]); // test
+        assert_eq!(result1[3], result2[3]); // output.txt
     }
 }

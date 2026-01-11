@@ -112,7 +112,16 @@ fn format_function_definition(name: &str, ast: &Ast) -> String {
     format!("{}() {{\n    {}\n}}", name, format_ast_body(ast, 1))
 }
 
-/// Recursively format an AST node with proper indentation
+/// Format an AST node into an indented shell-like string.
+///
+/// The `indent_level` controls indentation depth in multiples of four spaces.
+///
+/// # Examples
+///
+/// ```
+/// // Note: format_ast_body is a private function
+/// // This example is for documentation only
+/// ```
 fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
     let indent = "    ".repeat(indent_level);
 
@@ -274,10 +283,23 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
         Ast::CommandGroup { body } => {
             format!("{{ {}; }}", format_ast_body(body, 0).trim())
         }
+        Ast::Negation { command } => {
+            format!("! {}", format_ast_body(command, 0).trim())
+        }
     }
 }
 
-/// Format a shell command for display
+/// Format a ShellCommand into a single-line shell syntax string.
+///
+/// Joins command arguments with spaces and appends any redirections using
+/// their shell operators (e.g. `>`, `>>`, `<`, `<<`, `>|`, `<<<`, and fd-style forms).
+///
+/// # Examples
+///
+/// ```
+/// // Note: format_command is a private function
+/// // This example is for documentation only
+/// ```
 fn format_command(cmd: &crate::parser::ShellCommand) -> String {
     let mut result = cmd.args.join(" ");
 
@@ -287,6 +309,7 @@ fn format_command(cmd: &crate::parser::ShellCommand) -> String {
         match redir {
             Redirection::Input(file) => result.push_str(&format!(" < {}", file)),
             Redirection::Output(file) => result.push_str(&format!(" > {}", file)),
+            Redirection::OutputClobber(file) => result.push_str(&format!(" >| {}", file)),
             Redirection::Append(file) => result.push_str(&format!(" >> {}", file)),
             Redirection::FdInput(fd, file) => result.push_str(&format!(" {}<{}", fd, file)),
             Redirection::FdOutput(fd, file) => result.push_str(&format!(" {}>{}", fd, file)),

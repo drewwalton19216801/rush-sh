@@ -6,7 +6,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 24 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 25 built-in commands.
 
 ## Table of Contents
 
@@ -47,7 +47,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
   - Depth limit protection (max 100 levels)
   - 60+ comprehensive test cases
 - **Pipes**: Chain commands using the `|` operator.
-- **Redirections**: Input (`<`) and output (`>`, `>>`) redirections, here-documents (`<<`), and here-strings (`<<<`).
+- **Redirections**: Input (`<`) and output (`>`, `>>`, `>|`) redirections, here-documents (`<<`), and here-strings (`<<<`).
+  - **Noclobber Override**: Use `>|` to force overwrite files even when noclobber (`set -C`) is enabled
 - **File Descriptor Operations**: Full POSIX-compliant file descriptor management
   - FD output redirection: `2>errors.log`, `3>output.txt`
   - FD input redirection: `3<input.txt`, `4<data.txt`
@@ -116,7 +117,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (24 total):
+- **Built-in Commands** (25 total):
   - `alias`: Define or display aliases
   - `break`: Exit from for, while, or until loops with optional [n] for nested loops
   - `cd`: Change directory
@@ -131,6 +132,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
   - `pushd`: Push directory onto stack and change to it
   - `pwd`: Print working directory
   - `return`: Return from a function with an optional exit code
+  - `set`: Set or unset shell options and positional parameters
   - `set_color_scheme`: Switch between color themes (default/dark/light)
   - `set_colors`: Enable/disable color output dynamically
   - `set_condensed`: Enable/disable condensed cwd display in prompt
@@ -1828,6 +1830,71 @@ set_color_scheme light     # Light theme
 ```
 
 The color system is designed to be both powerful and unobtrusive, providing visual enhancements while respecting user preferences and accessibility needs.
+
+### Set Built-in - Shell Options and Positional Parameters
+
+Rush now provides comprehensive support for the POSIX `set` built-in command, enabling control over shell behavior through option flags and management of positional parameters:
+
+- **Shell Option Management**: Enable/disable shell behavior flags with `-` (enable) and `+` (disable) syntax
+- **Named Options**: Use `-o optname` or `+o optname` for long option names
+- **Positional Parameters**: Set or clear positional parameters with `set -- args`
+- **Display Modes**: View all variables with `set` or all options with `set +o`
+- **8 POSIX Options Supported**:
+  - `-e` (errexit): Exit immediately if a command fails
+  - `-u` (nounset): Treat unset variables as errors
+  - `-x` (xtrace): Print commands before execution (with PS4 prefix)
+  - `-v` (verbose): Print shell input lines as read
+  - `-n` (noexec): Read commands but don't execute (syntax check mode)
+  - `-f` (noglob): Disable pathname expansion (globbing)
+  - `-C` (noclobber): Prevent output redirection from overwriting existing files (use `>|` to override)
+  - `-a` (allexport): Automatically export all variables
+
+**Basic Usage:**
+
+```bash
+# Enable multiple options at once
+set -eu                    # Enable errexit and nounset
+
+# Display all shell options with their current state
+set +o                     # Shows all options (on/off)
+
+# Set positional parameters
+set -- arg1 arg2 arg3      # Sets $1=arg1, $2=arg2, $3=arg3
+
+# Clear positional parameters
+set --                     # Clears all positional parameters
+
+# Named option syntax
+set -o errexit            # Enable errexit using long name
+set +o nounset            # Disable nounset using long name
+
+# Display all shell variables
+set                        # Shows all variables (NAME=value format)
+```
+
+
+**Key Features:**
+
+- **POSIX Compliance**: Full compatibility with POSIX sh `set` command
+- **Option Combinations**: Multiple short options can be combined (e.g., `-eux`)
+- **Named Options**: Both short (`-e`) and long (`-o errexit`) forms supported
+- **Positional Parameters**: Complete management of script arguments
+- **Display Modes**: View current shell state and option settings
+- **Error Handling**: Comprehensive validation and error messages
+- **Integration**: Options affect shell behavior throughout execution
+
+**Implementation Details:**
+
+- Options are stored in [`ShellState.options`](src/state.rs:738) structure
+- errexit checks occur after each command execution
+- nounset validation happens during variable expansion
+- xtrace prints to stderr before command execution
+- noexec mode parses but skips execution
+- noglob disables wildcard expansion in pathname expansion
+- noclobber prevents `>` from overwriting (use `>|` to override)
+- allexport automatically exports variables when set
+
+The `set` built-in provides essential control over shell behavior, making scripts more robust and debugging easier while maintaining full POSIX compatibility.
 
 ### .rushrc Configuration File
 
