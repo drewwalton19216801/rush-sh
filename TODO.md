@@ -1,6 +1,6 @@
 # POSIX Compliance Progress for Rush Shell
 
-**Current Version**: 0.6.7
+**Current Version**: 0.7.0
 **POSIX Compliance Level**: ~91%
 **Test Coverage**: 413+ test functions across all components
 
