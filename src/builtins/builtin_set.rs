@@ -92,12 +92,9 @@ impl super::Builtin for SetBuiltin {
         // Parse arguments
         match parse_arguments(&cmd.args[1..]) {
             Ok(parsed) => {
-                // Handle display modes
+                // Handle display-only modes (no options to apply)
                 if parsed.display_mode == DisplayMode::AllVariables {
                     return display_all_variables(shell_state, output_writer);
-                }
-                if parsed.display_mode == DisplayMode::AllOptions {
-                    return display_all_options(shell_state, output_writer);
                 }
 
                 // Apply short option changes in order (preserves last-wins semantics)
@@ -119,6 +116,11 @@ impl super::Builtin for SetBuiltin {
                 // Update positional parameters if provided
                 if parsed.found_double_dash || !parsed.positional_args.is_empty() {
                     shell_state.set_positional_params(parsed.positional_args);
+                }
+
+                // Handle display mode after applying options
+                if parsed.display_mode == DisplayMode::AllOptions {
+                    return display_all_options(shell_state, output_writer);
                 }
 
                 0
@@ -194,15 +196,20 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
             // Handle -o or +o (named option)
             if chars[0] == 'o' {
                 if chars.len() == 1 {
-                    // -o and +o without argument display all options (POSIX compliance)
-                    i += 1;
-                    if i >= args.len() {
-                        // Both -o and +o with no argument display all options
-                        display_mode = DisplayMode::AllOptions;
-                        i -= 1; // Back up since we didn't consume an argument
+                    // -o and +o: check if next arg exists and is not a flag (doesn't start with '-' or '+')
+                    if i + 1 < args.len() {
+                        let next_char = args[i + 1].chars().next();
+                        if next_char != Some('-') && next_char != Some('+') {
+                            // Next arg is an option name, consume it
+                            named_options.push((args[i + 1].clone(), enable));
+                            i += 1; // Advance to consume the option name
+                        } else {
+                            // Next arg is a flag: display all options
+                            display_mode = DisplayMode::AllOptions;
+                        }
                     } else {
-                        // Both -o and +o with argument set/unset the option
-                        named_options.push((args[i].clone(), enable));
+                        // No next arg: display all options
+                        display_mode = DisplayMode::AllOptions;
                     }
                 } else {
                     // -oOPTION format (no space)
@@ -622,5 +629,99 @@ mod tests {
     fn test_parse_arguments_dash_o_displays_options() {
         let result = parse_arguments(&["-o".to_string()]).unwrap();
         assert_eq!(result.display_mode, DisplayMode::AllOptions);
+    }
+
+    #[test]
+    fn test_set_dash_o_followed_by_flag() {
+        // Test that "set -o -e" correctly interprets -e as a separate flag
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string(), "-e".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        // -o displays options (because -e starts with '-')
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        // -e should enable errexit as a separate flag
+        assert!(shell_state.options.errexit);
+    }
+
+    #[test]
+    fn test_set_dash_o_with_option_name() {
+        // Test that "set -o errexit" correctly sets the errexit option
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string(), "errexit".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        assert!(shell_state.options.errexit);
+        // Should not display options
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.is_empty());
+    }
+
+    #[test]
+    fn test_set_dash_o_alone_displays_options() {
+        // Test that "set -o" displays all options
+        let cmd = ShellCommand {
+            args: vec!["set".to_string(), "-o".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        shell_state.options.errexit = true;
+
+        let builtin = SetBuiltin;
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("errexit"));
+        assert!(output_str.contains("on"));
+    }
+
+    #[test]
+    fn test_parse_arguments_dash_o_followed_by_flag() {
+        // Test parsing "set -o -e"
+        let result = parse_arguments(&["-o".to_string(), "-e".to_string()]).unwrap();
+        // -o should trigger display mode since next arg starts with '-'
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
+        // -e should be parsed as a separate option
+        assert_eq!(result.options_in_order, vec![('e', true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_dash_o_with_option_name() {
+        // Test parsing "set -o errexit"
+        let result = parse_arguments(&["-o".to_string(), "errexit".to_string()]).unwrap();
+        // Should not trigger display mode
+        assert_eq!(result.display_mode, DisplayMode::None);
+        // Should have named option
+        assert_eq!(result.named_options, vec![("errexit".to_string(), true)]);
+    }
+
+    #[test]
+    fn test_parse_arguments_plus_o_followed_by_flag() {
+        // Test parsing "set +o +e"
+        let result = parse_arguments(&["+o".to_string(), "+e".to_string()]).unwrap();
+        // +o should trigger display mode since next arg starts with '-' (or '+')
+        assert_eq!(result.display_mode, DisplayMode::AllOptions);
+        // +e should be parsed as a separate option
+        assert_eq!(result.options_in_order, vec![('e', false)]);
     }
 }
