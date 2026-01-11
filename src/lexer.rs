@@ -3514,7 +3514,7 @@ mod tests {
             vec![
                 Token::Word("echo".to_string()),
                 Token::Word("test".to_string()),
-                Token::RedirectFdOut(2, "errors.log".to_string())
+                Token::RedirectFdOutClobber(2, "errors.log".to_string())
             ]
         );
     }
@@ -3527,7 +3527,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirectFdOut(3, "file.txt".to_string())
+                Token::RedirectFdOutClobber(3, "file.txt".to_string())
             ]
         );
     }
@@ -3563,7 +3563,7 @@ mod tests {
             result,
             vec![
                 Token::Word("command".to_string()),
-                Token::RedirectFdOut(2, "error log.txt".to_string())
+                Token::RedirectFdOutClobber(2, "error log.txt".to_string())
             ]
         );
     }
@@ -3578,7 +3578,7 @@ mod tests {
                 Token::Word("command".to_string()),
                 Token::RedirOutClobber,
                 Token::Word("out.txt".to_string()),
-                Token::RedirectFdOut(2, "err.txt".to_string())
+                Token::RedirectFdOutClobber(2, "err.txt".to_string())
             ]
         );
     }
@@ -3606,11 +3606,11 @@ mod tests {
         
         // Test fd 0 (unusual but valid)
         let result = lex("cmd 0>| file", &shell_state).unwrap();
-        assert_eq!(result[1], Token::RedirectFdOut(0, "file".to_string()));
+        assert_eq!(result[1], Token::RedirectFdOutClobber(0, "file".to_string()));
         
         // Test fd 9
         let result = lex("cmd 9>| file", &shell_state).unwrap();
-        assert_eq!(result[1], Token::RedirectFdOut(9, "file".to_string()));
+        assert_eq!(result[1], Token::RedirectFdOutClobber(9, "file".to_string()));
     }
 
     #[test]
