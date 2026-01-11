@@ -317,11 +317,14 @@ pub fn execute_script(
                 if_depth -= 1;
                 if if_depth == 0 {
                     in_if_block = false;
-                    execute_line(&current_block, shell_state);
-                    current_block.clear();
+                    // Only execute if we're not inside a loop or other block
+                    if !in_for_block && !in_while_block && !in_function_block && !in_group_block && !in_case_block {
+                        execute_line(&current_block, shell_state);
+                        current_block.clear();
 
-                    if shell_state.exit_requested {
-                        break;
+                        if shell_state.exit_requested {
+                            break;
+                        }
                     }
                 }
             } else if in_for_block && contains_keyword(line, "done") {

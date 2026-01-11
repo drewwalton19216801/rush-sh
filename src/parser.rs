@@ -1361,6 +1361,12 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             Token::Return => {
                 current_cmd.args.push("return".to_string());
             }
+            Token::Break => {
+                current_cmd.args.push("break".to_string());
+            }
+            Token::Continue => {
+                current_cmd.args.push("continue".to_string());
+            }
             // Handle keywords as command arguments
             // When keywords appear in pipeline context (not at start of command),
             // they should be treated as regular word arguments
@@ -1498,6 +1504,11 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 } else {
                     break;
                 }
+            }
+            Token::And | Token::Or | Token::Semicolon => {
+                // These tokens end the current pipeline
+                // They will be handled by parse_commands_sequentially
+                break;
             }
             _ => {
                 return Err(format!("Unexpected token in pipeline: {:?}", token));
