@@ -1158,8 +1158,21 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             // Enter loop context
             shell_state.enter_loop();
 
-            // Execute the loop body for each item
+            // Expand variables in items and perform word splitting
+            let mut expanded_items = Vec::new();
             for item in items {
+                // Expand variables in the item
+                let expanded = expand_variables_in_string(&item, shell_state);
+                
+                // Perform word splitting on the expanded result
+                // Split on whitespace (space, tab, newline)
+                for word in expanded.split_whitespace() {
+                    expanded_items.push(word.to_string());
+                }
+            }
+
+            // Execute the loop body for each expanded item
+            for item in expanded_items {
                 // Process any pending signals before executing the body
                 crate::state::process_pending_signals(shell_state);
 

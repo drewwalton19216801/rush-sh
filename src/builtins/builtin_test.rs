@@ -43,6 +43,18 @@ impl super::Builtin for TestBuiltin {
             return 1;
         }
 
+        // Check for negation operator
+        let (negate, args) = if args[0] == "!" {
+            // Negation operator found - remove it and set flag
+            if args.len() < 2 {
+                // Just "!" with no expression - error
+                return 2;
+            }
+            (true, &args[1..])
+        } else {
+            (false, args)
+        };
+
         // Parse the first argument as an option
         if let Some(option) = args[0].strip_prefix('-') {
             match option {
@@ -51,21 +63,23 @@ impl super::Builtin for TestBuiltin {
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    if args[1].is_empty() { 0 } else { 1 }
+                    let result = if args[1].is_empty() { 0 } else { 1 };
+                    if negate { 1 - result } else { result }
                 }
                 "n" => {
                     // Test if string is not empty
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    if !args[1].is_empty() { 0 } else { 1 }
+                    let result = if !args[1].is_empty() { 0 } else { 1 };
+                    if negate { 1 - result } else { result }
                 }
                 "f" => {
                     // Test if file exists and is regular file
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    match fs::metadata(&args[1]) {
+                    let result = match fs::metadata(&args[1]) {
                         Ok(metadata) => {
                             if metadata.is_file() {
                                 0
@@ -74,14 +88,15 @@ impl super::Builtin for TestBuiltin {
                             }
                         }
                         Err(_) => 1, // File doesn't exist
-                    }
+                    };
+                    if negate { 1 - result } else { result }
                 }
                 "d" => {
                     // Test if file exists and is directory
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    match fs::metadata(&args[1]) {
+                    let result = match fs::metadata(&args[1]) {
                         Ok(metadata) => {
                             if metadata.is_dir() {
                                 0
@@ -90,17 +105,19 @@ impl super::Builtin for TestBuiltin {
                             }
                         }
                         Err(_) => 1, // File doesn't exist
-                    }
+                    };
+                    if negate { 1 - result } else { result }
                 }
                 "e" => {
                     // Test if file exists
                     if args.len() < 2 {
                         return 2; // Invalid usage
                     }
-                    match fs::metadata(&args[1]) {
+                    let result = match fs::metadata(&args[1]) {
                         Ok(_) => 0,
                         Err(_) => 1,
-                    }
+                    };
+                    if negate { 1 - result } else { result }
                 }
                 _ => {
                     // Invalid option
@@ -112,9 +129,11 @@ impl super::Builtin for TestBuiltin {
             if args.len() >= 3 {
                 // Check for string comparison operators first (=, !=)
                 if args[1] == "=" {
-                    return if args[0] == args[2] { 0 } else { 1 };
+                    let result = if args[0] == args[2] { 0 } else { 1 };
+                    return if negate { 1 - result } else { result };
                 } else if args[1] == "!=" {
-                    return if args[0] != args[2] { 0 } else { 1 };
+                    let result = if args[0] != args[2] { 0 } else { 1 };
+                    return if negate { 1 - result } else { result };
                 }
 
                 // Check for numeric comparison operators
@@ -124,7 +143,10 @@ impl super::Builtin for TestBuiltin {
                             let left = args[0].parse::<i32>();
                             let right = args[2].parse::<i32>();
                             match (left, right) {
-                                (Ok(l), Ok(r)) => return if l == r { 0 } else { 1 },
+                                (Ok(l), Ok(r)) => {
+                                    let result = if l == r { 0 } else { 1 };
+                                    return if negate { 1 - result } else { result };
+                                }
                                 _ => return 2, // Invalid numeric arguments
                             }
                         }
@@ -132,7 +154,10 @@ impl super::Builtin for TestBuiltin {
                             let left = args[0].parse::<i32>();
                             let right = args[2].parse::<i32>();
                             match (left, right) {
-                                (Ok(l), Ok(r)) => return if l != r { 0 } else { 1 },
+                                (Ok(l), Ok(r)) => {
+                                    let result = if l != r { 0 } else { 1 };
+                                    return if negate { 1 - result } else { result };
+                                }
                                 _ => return 2, // Invalid numeric arguments
                             }
                         }
@@ -140,7 +165,10 @@ impl super::Builtin for TestBuiltin {
                             let left = args[0].parse::<i32>();
                             let right = args[2].parse::<i32>();
                             match (left, right) {
-                                (Ok(l), Ok(r)) => return if l < r { 0 } else { 1 },
+                                (Ok(l), Ok(r)) => {
+                                    let result = if l < r { 0 } else { 1 };
+                                    return if negate { 1 - result } else { result };
+                                }
                                 _ => return 2, // Invalid numeric arguments
                             }
                         }
@@ -148,7 +176,10 @@ impl super::Builtin for TestBuiltin {
                             let left = args[0].parse::<i32>();
                             let right = args[2].parse::<i32>();
                             match (left, right) {
-                                (Ok(l), Ok(r)) => return if l <= r { 0 } else { 1 },
+                                (Ok(l), Ok(r)) => {
+                                    let result = if l <= r { 0 } else { 1 };
+                                    return if negate { 1 - result } else { result };
+                                }
                                 _ => return 2, // Invalid numeric arguments
                             }
                         }
@@ -156,7 +187,10 @@ impl super::Builtin for TestBuiltin {
                             let left = args[0].parse::<i32>();
                             let right = args[2].parse::<i32>();
                             match (left, right) {
-                                (Ok(l), Ok(r)) => return if l > r { 0 } else { 1 },
+                                (Ok(l), Ok(r)) => {
+                                    let result = if l > r { 0 } else { 1 };
+                                    return if negate { 1 - result } else { result };
+                                }
                                 _ => return 2, // Invalid numeric arguments
                             }
                         }
@@ -164,7 +198,10 @@ impl super::Builtin for TestBuiltin {
                             let left = args[0].parse::<i32>();
                             let right = args[2].parse::<i32>();
                             match (left, right) {
-                                (Ok(l), Ok(r)) => return if l >= r { 0 } else { 1 },
+                                (Ok(l), Ok(r)) => {
+                                    let result = if l >= r { 0 } else { 1 };
+                                    return if negate { 1 - result } else { result };
+                                }
                                 _ => return 2, // Invalid numeric arguments
                             }
                         }
@@ -741,5 +778,165 @@ mod tests {
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
         assert_eq!(exit_code, 2); // Invalid operator should return error (2)
+    }
+
+    #[test]
+    fn test_negation_with_f_option_nonexistent() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec![
+                "[".to_string(),
+                "!".to_string(),
+                "-f".to_string(),
+                "/non/existing/file".to_string(),
+                "]".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // ! -f nonexistent should return true (0)
+    }
+
+    #[test]
+    fn test_negation_with_f_option_existing() {
+        let builtin = TestBuiltin;
+        // Create a temporary file
+        let temp_path = "/tmp/test_negation_file.txt";
+        File::create(temp_path).unwrap();
+
+        let cmd = ShellCommand {
+            args: vec![
+                "[".to_string(),
+                "!".to_string(),
+                "-f".to_string(),
+                temp_path.to_string(),
+                "]".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // ! -f existing_file should return false (1)
+
+        // Clean up
+        std::fs::remove_file(temp_path).unwrap();
+    }
+
+    #[test]
+    fn test_negation_with_d_option() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec![
+                "[".to_string(),
+                "!".to_string(),
+                "-d".to_string(),
+                "/tmp".to_string(),
+                "]".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 1); // ! -d /tmp should return false (1) since /tmp exists
+    }
+
+    #[test]
+    fn test_negation_with_z_option() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec![
+                "test".to_string(),
+                "!".to_string(),
+                "-z".to_string(),
+                "hello".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // ! -z "hello" should return true (0)
+    }
+
+    #[test]
+    fn test_negation_with_n_option() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec![
+                "test".to_string(),
+                "!".to_string(),
+                "-n".to_string(),
+                "".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // ! -n "" should return true (0)
+    }
+
+    #[test]
+    fn test_negation_with_eq_operator() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec![
+                "test".to_string(),
+                "!".to_string(),
+                "2".to_string(),
+                "-eq".to_string(),
+                "3".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // ! 2 -eq 3 should return true (0)
+    }
+
+    #[test]
+    fn test_negation_with_string_equality() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec![
+                "[".to_string(),
+                "!".to_string(),
+                "abc".to_string(),
+                "=".to_string(),
+                "def".to_string(),
+                "]".to_string(),
+            ],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 0); // ! "abc" = "def" should return true (0)
+    }
+
+    #[test]
+    fn test_negation_only() {
+        let builtin = TestBuiltin;
+        let cmd = ShellCommand {
+            args: vec!["test".to_string(), "!".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+        assert_eq!(exit_code, 2); // Just "!" with no expression should return error (2)
     }
 }
