@@ -459,6 +459,16 @@ pub struct ShellState {
     pub returning: bool,
     /// Return value when returning from a function
     pub return_value: Option<i32>,
+    /// Loop nesting depth for break/continue
+    pub loop_depth: usize,
+    /// Flag to indicate if we're breaking out of a loop
+    pub breaking: bool,
+    /// Number of loop levels to break out of
+    pub break_level: usize,
+    /// Flag to indicate if we're continuing to next loop iteration
+    pub continuing: bool,
+    /// Number of loop levels to continue from
+    pub continue_level: usize,
     /// Output capture buffer for command substitution
     pub capture_output: Option<Rc<RefCell<Vec<u8>>>>,
     /// Whether to use condensed cwd display in prompt
@@ -534,6 +544,11 @@ impl ShellState {
             max_recursion_depth: 500, // Default recursion limit (reduced to avoid Rust stack overflow)
             returning: false,
             return_value: None,
+            loop_depth: 0,
+            breaking: false,
+            break_level: 0,
+            continuing: false,
+            continue_level: 0,
             capture_output: None,
             condensed_cwd,
             trap_handlers: Arc::new(Mutex::new(HashMap::new())),
@@ -877,6 +892,82 @@ impl ShellState {
     /// Get return value if returning
     pub fn get_return_value(&self) -> Option<i32> {
         self.return_value
+    }
+
+    /// Enter a loop context (increment loop depth)
+    pub fn enter_loop(&mut self) {
+        self.loop_depth += 1;
+    }
+
+    /// Exit a loop context (decrement loop depth)
+    pub fn exit_loop(&mut self) {
+        if self.loop_depth > 0 {
+            self.loop_depth -= 1;
+        }
+    }
+
+    /// Set break state for loop control
+    pub fn set_break(&mut self, level: usize) {
+        self.breaking = true;
+        self.break_level = level;
+    }
+
+    /// Clear break state
+    pub fn clear_break(&mut self) {
+        self.breaking = false;
+        self.break_level = 0;
+    }
+
+    /// Check if currently breaking
+    pub fn is_breaking(&self) -> bool {
+        self.breaking
+    }
+
+    /// Get break level
+    pub fn get_break_level(&self) -> usize {
+        self.break_level
+    }
+
+    /// Decrement break level (when exiting a loop level)
+    pub fn decrement_break_level(&mut self) {
+        if self.break_level > 0 {
+            self.break_level -= 1;
+        }
+        if self.break_level == 0 {
+            self.breaking = false;
+        }
+    }
+
+    /// Set continue state for loop control
+    pub fn set_continue(&mut self, level: usize) {
+        self.continuing = true;
+        self.continue_level = level;
+    }
+
+    /// Clear continue state
+    pub fn clear_continue(&mut self) {
+        self.continuing = false;
+        self.continue_level = 0;
+    }
+
+    /// Check if currently continuing
+    pub fn is_continuing(&self) -> bool {
+        self.continuing
+    }
+
+    /// Get continue level
+    pub fn get_continue_level(&self) -> usize {
+        self.continue_level
+    }
+
+    /// Decrement continue level (when exiting a loop level)
+    pub fn decrement_continue_level(&mut self) {
+        if self.continue_level > 0 {
+            self.continue_level -= 1;
+        }
+        if self.continue_level == 0 {
+            self.continuing = false;
+        }
     }
 
     /// Set a trap handler for a signal

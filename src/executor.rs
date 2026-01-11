@@ -1064,6 +1064,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 if shell_state.exit_requested {
                     return shell_state.exit_code;
                 }
+
+                // Check for break/continue signals - stop executing remaining statements
+                if shell_state.is_breaking() || shell_state.is_continuing() {
+                    return exit_code;
+                }
             }
             exit_code
         }
@@ -1150,6 +1155,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         } => {
             let mut exit_code = 0;
 
+            // Enter loop context
+            shell_state.enter_loop();
+
             // Execute the loop body for each item
             for item in items {
                 // Process any pending signals before executing the body
@@ -1157,6 +1165,7 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
+                    shell_state.exit_loop();
                     return shell_state.exit_code;
                 }
 
@@ -1168,19 +1177,53 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
+                    shell_state.exit_loop();
                     return exit_code;
                 }
 
                 // Check if exit was requested after executing the body
                 if shell_state.exit_requested {
+                    shell_state.exit_loop();
                     return shell_state.exit_code;
                 }
+
+                // Check for break signal
+                if shell_state.is_breaking() {
+                    if shell_state.get_break_level() == 1 {
+                        // Break out of this loop
+                        shell_state.clear_break();
+                        break;
+                    } else {
+                        // Decrement level and propagate to outer loop
+                        shell_state.decrement_break_level();
+                        break;
+                    }
+                }
+
+                // Check for continue signal
+                if shell_state.is_continuing() {
+                    if shell_state.get_continue_level() == 1 {
+                        // Continue to next iteration of this loop
+                        shell_state.clear_continue();
+                        continue;
+                    } else {
+                        // Decrement level and propagate to outer loop
+                        shell_state.decrement_continue_level();
+                        break; // Exit this loop to continue outer loop
+                    }
+                }
             }
+
+            // Exit loop context
+            shell_state.exit_loop();
 
             exit_code
         }
         Ast::While { condition, body } => {
             let mut exit_code = 0;
+
+            // Enter loop context
+            shell_state.enter_loop();
 
             // Execute the loop while condition is true (exit code 0)
             loop {
@@ -1189,11 +1232,13 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
+                    shell_state.exit_loop();
                     return cond_exit;
                 }
 
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
+                    shell_state.exit_loop();
                     return shell_state.exit_code;
                 }
 
@@ -1207,14 +1252,45 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
+                    shell_state.exit_loop();
                     return exit_code;
                 }
 
                 // Check if exit was requested (e.g., from trap handler)
                 if shell_state.exit_requested {
+                    shell_state.exit_loop();
                     return shell_state.exit_code;
                 }
+
+                // Check for break signal
+                if shell_state.is_breaking() {
+                    if shell_state.get_break_level() == 1 {
+                        // Break out of this loop
+                        shell_state.clear_break();
+                        break;
+                    } else {
+                        // Decrement level and propagate to outer loop
+                        shell_state.decrement_break_level();
+                        break;
+                    }
+                }
+
+                // Check for continue signal
+                if shell_state.is_continuing() {
+                    if shell_state.get_continue_level() == 1 {
+                        // Continue to next iteration of this loop
+                        shell_state.clear_continue();
+                        continue;
+                    } else {
+                        // Decrement level and propagate to outer loop
+                        shell_state.decrement_continue_level();
+                        break; // Exit this loop to continue outer loop
+                    }
+                }
             }
+
+            // Exit loop context
+            shell_state.exit_loop();
 
             exit_code
         }
@@ -3063,5 +3139,471 @@ mod tests {
 
         // Cleanup
         let _ = std::fs::remove_file(&temp_file);
+    }
+
+    // ========================================================================
+    // Break and Continue Integration Tests
+    // ========================================================================
+
+    #[test]
+    fn test_break_in_for_loop() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3 4 5; do
+        //   output="$output$i"
+        //   if [ $i = "3" ]; then break; fi
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["break".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("123".to_string()));
+    }
+
+    #[test]
+    fn test_continue_in_for_loop() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3 4 5; do
+        //   if [ $i = "3" ]; then continue; fi
+        //   output="$output$i"
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string(), "4".to_string(), "5".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["continue".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("1245".to_string()));
+    }
+
+    #[test]
+    fn test_break_in_while_loop() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        // i=0
+        // while [ $i -lt 10 ]; do
+        //   i=$((i + 1))
+        //   output="$output$i"
+        //   if [ $i = "5" ]; then break; fi
+        // done
+        let ast = Ast::While {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "-lt".to_string(), "10".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "5".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["break".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("12345".to_string()));
+    }
+
+    #[test]
+    fn test_continue_in_while_loop() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        // i=0
+        // while [ $i -lt 5 ]; do
+        //   i=$((i + 1))
+        //   if [ $i = "3" ]; then continue; fi
+        //   output="$output$i"
+        // done
+        let ast = Ast::While {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "-lt".to_string(), "5".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["continue".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("1245".to_string()));
+    }
+
+    #[test]
+    fn test_break_nested_loops() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   for j in a b c; do
+        //     output="$output$i$j"
+        //     if [ $j = "b" ]; then break; fi
+        //   done
+        // done
+        let inner_loop = Ast::For {
+            variable: "j".to_string(),
+            items: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "b".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["break".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+            ])),
+        };
+        
+        let outer_loop = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(inner_loop),
+        };
+        
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("1a1b2a2b3a3b".to_string()));
+    }
+
+    #[test]
+    fn test_break_2_nested_loops() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   for j in a b c; do
+        //     output="$output$i$j"
+        //     if [ $i = "2" ] && [ $j = "b" ]; then break 2; fi
+        //   done
+        // done
+        let inner_loop = Ast::For {
+            variable: "j".to_string(),
+            items: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::If {
+                        branches: vec![(
+                            Box::new(Ast::Pipeline(vec![ShellCommand {
+                                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "b".to_string()],
+                                redirections: vec![],
+                                compound: None,
+                            }])),
+                            Box::new(Ast::Pipeline(vec![ShellCommand {
+                                args: vec!["break".to_string(), "2".to_string()],
+                                redirections: vec![],
+                                compound: None,
+                            }])),
+                        )],
+                        else_branch: None,
+                    }),
+                },
+            ])),
+        };
+        
+        let outer_loop = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(inner_loop),
+        };
+        
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("1a1b1c2a2b".to_string()));
+    }
+
+    #[test]
+    fn test_continue_nested_loops() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   for j in a b c; do
+        //     if [ $j = "b" ]; then continue; fi
+        //     output="$output$i$j"
+        //   done
+        // done
+        let inner_loop = Ast::For {
+            variable: "j".to_string(),
+            items: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "b".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["continue".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+            ])),
+        };
+        
+        let outer_loop = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(inner_loop),
+        };
+        
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("1a1c2a2c3a3c".to_string()));
+    }
+
+    #[test]
+    fn test_continue_2_nested_loops() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2 3; do
+        //   for j in a b c; do
+        //     if [ $i = "2" ] && [ $j = "b" ]; then continue 2; fi
+        //     output="$output$i$j"
+        //   done
+        //   output="$output-"
+        // done
+        let inner_loop = Ast::For {
+            variable: "j".to_string(),
+            items: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::If {
+                        branches: vec![(
+                            Box::new(Ast::Pipeline(vec![ShellCommand {
+                                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "b".to_string()],
+                                redirections: vec![],
+                                compound: None,
+                            }])),
+                            Box::new(Ast::Pipeline(vec![ShellCommand {
+                                args: vec!["continue".to_string(), "2".to_string()],
+                                redirections: vec![],
+                                compound: None,
+                            }])),
+                        )],
+                        else_branch: None,
+                    }),
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+            ])),
+        };
+        
+        let outer_loop = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                inner_loop,
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i-".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // After 2a, continue 2 skips rest of inner loop and the "$i-" assignment, goes to next outer iteration
+        assert_eq!(shell_state.get_var("output"), Some("1a1b1c1-2a3a3b3c3-".to_string()));
+    }
+
+    #[test]
+    fn test_break_preserves_exit_code() {
+        let mut shell_state = ShellState::new();
+        
+        // for i in 1 2 3; do
+        //   false
+        //   break
+        // done
+        // echo $?
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string(), "3".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["false".to_string()],
+                    redirections: vec![],
+                    compound: None,
+                }]),
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["break".to_string()],
+                    redirections: vec![],
+                    compound: None,
+                }]),
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        // break returns 0, so the loop's exit code should be 0
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_continue_preserves_exit_code() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("count", "0".to_string());
+        
+        // for i in 1 2; do
+        //   count=$((count + 1))
+        //   false
+        //   continue
+        // done
+        let ast = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "count".to_string(),
+                    value: "$((count + 1))".to_string(),
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["false".to_string()],
+                    redirections: vec![],
+                    compound: None,
+                }]),
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["continue".to_string()],
+                    redirections: vec![],
+                    compound: None,
+                }]),
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        // continue returns 0, so the loop's exit code should be 0
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("count"), Some("2".to_string()));
     }
 }
