@@ -861,14 +861,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             tokens.push(Token::Word(filename));
                         }
                     } else {
-                        // No filename provided
-                        if fd_num.is_some() {
-                            return Err(
-                                "Invalid redirection: expected filename after >>".to_string()
-                            );
-                        } else {
-                            tokens.push(Token::RedirAppend);
-                        }
+                        // No filename provided - error
+                        return Err(
+                            "Invalid redirection: expected filename after >>".to_string()
+                        );
                     }
                 } else {
                     // Regular output redirection: > or N>
@@ -905,14 +901,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             tokens.push(Token::Word(filename));
                         }
                     } else {
-                        // No filename provided
-                        if fd_num.is_some() {
-                            return Err(
-                                "Invalid redirection: expected filename after >".to_string()
-                            );
-                        } else {
-                            tokens.push(Token::RedirOut);
-                        }
+                        // No filename provided - error
+                        return Err(
+                            "Invalid redirection: expected filename after >".to_string()
+                        );
                     }
                 }
             }
@@ -1122,14 +1114,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             tokens.push(Token::Word(filename));
                         }
                     } else {
-                        // No filename provided
-                        if fd_num.is_some() {
-                            return Err(
-                                "Invalid redirection: expected filename after <".to_string()
-                            );
-                        } else {
-                            tokens.push(Token::RedirIn);
-                        }
+                        // No filename provided - error
+                        return Err(
+                            "Invalid redirection: expected filename after <".to_string()
+                        );
                     }
                 }
             }
