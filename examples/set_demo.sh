@@ -224,8 +224,9 @@ echo "8.1: Invalid option handling"
 set -Z 2>&1 || echo "Error: Invalid option -Z (expected)"
 echo
 
-echo "8.2: Missing option name for -o"
-set -o 2>&1 || echo "Error: -o requires option name (expected)"
+echo "8.2: Display options with -o (no argument)"
+set -o | head -3
+echo "(POSIX: set -o without argument displays all options)"
 echo
 
 echo "8.3: Invalid named option"
