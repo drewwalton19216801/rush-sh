@@ -6,7 +6,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 20 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 21 built-in commands.
 
 ## Table of Contents
 
@@ -115,7 +115,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (20 total):
+- **Built-in Commands** (21 total):
   - `cd`: Change directory
   - `exit`: Exit the shell
   - `pwd`: Print working directory
@@ -135,6 +135,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
   - `set_condensed`: Enable/disable condensed cwd display in prompt
   - `declare`: Display function definitions and list function names
   - `trap`: Set or display signal handlers
+  - `type`: Display information about command type (alias, keyword, function, builtin, or external command)
   - `help`: Show available commands
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
@@ -162,7 +163,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of 20 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 21 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 

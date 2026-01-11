@@ -142,9 +142,9 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Current Built-in Status
 
-**Implemented (20):**
+**Implemented (21):**
 
-- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, set_condensed, shift, source, test, trap, unalias, unset
+- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, set_condensed, shift, source, test, trap, type, unalias, unset
 
 **Missing POSIX Built-ins:**
 

@@ -16,7 +16,7 @@
 
 - **Compliance Level**: ~90% POSIX compliant
 - **Test Coverage**: 413+ test functions across all components
-- **Built-in Commands**: 20 implemented commands
+- **Built-in Commands**: 21 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
