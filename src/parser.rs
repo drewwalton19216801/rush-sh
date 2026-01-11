@@ -1361,6 +1361,45 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             Token::Return => {
                 current_cmd.args.push("return".to_string());
             }
+            // Handle keywords as command arguments
+            // When keywords appear in pipeline context (not at start of command),
+            // they should be treated as regular word arguments
+            Token::If => {
+                current_cmd.args.push("if".to_string());
+            }
+            Token::Then => {
+                current_cmd.args.push("then".to_string());
+            }
+            Token::Else => {
+                current_cmd.args.push("else".to_string());
+            }
+            Token::Elif => {
+                current_cmd.args.push("elif".to_string());
+            }
+            Token::Fi => {
+                current_cmd.args.push("fi".to_string());
+            }
+            Token::Case => {
+                current_cmd.args.push("case".to_string());
+            }
+            Token::In => {
+                current_cmd.args.push("in".to_string());
+            }
+            Token::Esac => {
+                current_cmd.args.push("esac".to_string());
+            }
+            Token::For => {
+                current_cmd.args.push("for".to_string());
+            }
+            Token::While => {
+                current_cmd.args.push("while".to_string());
+            }
+            Token::Do => {
+                current_cmd.args.push("do".to_string());
+            }
+            Token::Done => {
+                current_cmd.args.push("done".to_string());
+            }
             Token::Pipe => {
                 if !current_cmd.args.is_empty() || current_cmd.compound.is_some() {
                     commands.push(current_cmd.clone());
@@ -1459,17 +1498,6 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                 } else {
                     break;
                 }
-            }
-            Token::Do
-            | Token::Done
-            | Token::Then
-            | Token::Else
-            | Token::Elif
-            | Token::Fi
-            | Token::Esac => {
-                // These are control flow keywords that should be handled at a higher level
-                // If we encounter them here, it means we've reached the end of the current command
-                break;
             }
             _ => {
                 return Err(format!("Unexpected token in pipeline: {:?}", token));

@@ -65,6 +65,19 @@ fn is_keyword(word: &str) -> Option<Token> {
     }
 }
 
+/// Check if a word is a shell keyword (public API for builtins)
+/// This includes both keywords recognized by the lexer and special tokens
+pub fn is_shell_keyword(word: &str) -> bool {
+    // Check lexer keywords first
+    if is_keyword(word).is_some() {
+        return true;
+    }
+    
+    // Check additional POSIX keywords and special tokens
+    // These are handled as separate tokens but should be recognized as keywords by `type`
+    matches!(word, "until" | "{" | "}" | "!")
+}
+
 /// Skip whitespace characters (space and tab) in the character stream
 fn skip_whitespace(chars: &mut std::iter::Peekable<std::str::Chars>) {
     while let Some(&ch) = chars.peek() {

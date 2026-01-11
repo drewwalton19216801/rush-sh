@@ -56,6 +56,7 @@ mod builtin_shift;
 mod builtin_source;
 mod builtin_test;
 mod builtin_trap;
+mod builtin_type;
 mod builtin_unalias;
 mod builtin_unset;
 
@@ -93,6 +94,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_shift::ShiftBuiltin),
         Box::new(builtin_declare::DeclareBuiltin),
         Box::new(builtin_trap::TrapBuiltin),
+        Box::new(builtin_type::TypeBuiltin),
     ]
 }
 
@@ -386,6 +388,6 @@ mod tests {
         assert!(commands.contains(&"set_colors".to_string()));
         assert!(commands.contains(&"set_color_scheme".to_string()));
         assert!(commands.contains(&"set_condensed".to_string()));
-        assert_eq!(commands.len(), 22);
+        assert_eq!(commands.len(), 23);
     }
 }
