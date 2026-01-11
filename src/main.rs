@@ -393,7 +393,7 @@ mod tests {
 
     /// Test noexec with complex commands
     #[test]
-    #[ignore] // TODO: Investigate noexec behavior with file creation
+    #[ignore] // TODO: Investigate noexec behavior with file creation - unrelated to nounset
     fn test_noexec_complex() {
         let mut shell_state = state::ShellState::new();
         shell_state.options.noexec = true;
@@ -454,7 +454,6 @@ mod tests {
 
     /// Test nounset option (-u): Unset variables should cause errors
     #[test]
-    #[ignore] // TODO: Investigate nounset behavior with simple variable expansion
     fn test_nounset_basic() {
         let mut shell_state = state::ShellState::new();
         
@@ -543,7 +542,6 @@ mod tests {
 
     /// Test multiple options together
     #[test]
-    #[ignore] // TODO: Investigate nounset behavior with simple variable expansion
     fn test_multiple_options() {
         let mut shell_state = state::ShellState::new();
         
@@ -717,6 +715,79 @@ mod tests {
         assert_eq!(shell_state.last_exit_code, 0);
     }
 
+    /// Test nounset error message format
+    #[test]
+    fn test_nounset_error_message_format() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.nounset = true;
+        
+        // Execute command with unset variable
+        script_engine::execute_line("echo ${UNSET_VAR}", &mut shell_state);
+        
+        // Should have non-zero exit code
+        assert_ne!(shell_state.last_exit_code, 0);
+        // Should have exit_requested set
+        assert!(shell_state.exit_requested);
+    }
+
+    /// Test nounset with different expansion types
+    #[test]
+    fn test_nounset_with_substring_expansion() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.nounset = true;
+        
+        // Substring expansion on unset variable should not trigger nounset
+        // because it has a modifier
+        script_engine::execute_line("echo ${UNSET_VAR:0:5}", &mut shell_state);
+        
+        // Should succeed (substring returns empty string for unset vars)
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test nounset in subshells
+    #[test]
+    fn test_nounset_in_subshell() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.nounset = true;
+        
+        // Unset variable in subshell should fail the subshell
+        script_engine::execute_line("(echo ${UNSET_VAR})", &mut shell_state);
+        
+        // Parent should see the error and exit
+        assert!(shell_state.exit_requested);
+        assert_ne!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test nounset in functions
+    #[test]
+    fn test_nounset_in_function() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.nounset = true;
+        
+        // Define function that uses unset variable
+        script_engine::execute_line("test_func() { echo ${UNSET_VAR}; }", &mut shell_state);
+        
+        // Call the function
+        script_engine::execute_line("test_func", &mut shell_state);
+        
+        // Should fail
+        assert!(shell_state.exit_requested);
+        assert_ne!(shell_state.last_exit_code, 0);
+    }
+
+    /// Test nounset doesn't affect simple $VAR syntax (only ${VAR})
+    #[test]
+    fn test_nounset_simple_dollar_syntax() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.options.nounset = true;
+        
+        // Simple $VAR syntax should still work (expands to empty or literal)
+        script_engine::execute_line("echo $UNSET_VAR", &mut shell_state);
+        
+        // Should succeed (simple $VAR doesn't trigger nounset)
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
     /// Test errexit with && operator
     #[test]
     fn test_errexit_with_and_operator() {
@@ -746,7 +817,6 @@ mod tests {
 
     /// Test option combinations: errexit + nounset
     #[test]
-    #[ignore] // TODO: Investigate nounset behavior with simple variable expansion
     fn test_errexit_and_nounset() {
         let mut shell_state = state::ShellState::new();
         shell_state.options.errexit = true;

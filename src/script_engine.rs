@@ -178,6 +178,12 @@ pub fn execute_line(line: &str, shell_state: &mut state::ShellState) {
                 eprintln!("Lex error: {}", e);
             }
             shell_state.set_last_exit_code(1);
+            
+            // Check if this is a nounset error - if so, request shell exit
+            if e.contains("unbound variable") {
+                shell_state.exit_requested = true;
+                shell_state.exit_code = 1;
+            }
         }
     }
 }
