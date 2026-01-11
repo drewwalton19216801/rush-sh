@@ -164,6 +164,7 @@ pub fn execute_builtin(
         match redir {
             Redirection::Input(file)
             | Redirection::Output(file)
+            | Redirection::OutputClobber(file)
             | Redirection::Append(file)
             | Redirection::FdInput(_, file)
             | Redirection::FdOutput(_, file)
@@ -216,7 +217,7 @@ pub fn execute_builtin(
                     false, // truncate
                 )
             }
-            Redirection::Output(_) => {
+            Redirection::Output(_) | Redirection::OutputClobber(_) => {
                 let file = expanded_file.as_ref().unwrap();
                 shell_state.fd_table.borrow_mut().open_fd(
                     1, file, false, // read

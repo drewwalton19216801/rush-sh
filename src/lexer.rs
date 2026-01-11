@@ -9,6 +9,7 @@ pub enum Token {
     Word(String),
     Pipe,
     RedirOut,
+    RedirOutClobber, // >| operator (noclobber override)
     RedirIn,
     RedirAppend,
     RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
@@ -687,7 +688,47 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 chars.next(); // consume >
 
                 // Check what follows the >
-                if let Some(&'&') = chars.peek() {
+                if let Some(&'|') = chars.peek() {
+                    // This is >| (noclobber override)
+                    chars.next(); // consume |
+                    
+                    // Only allow >| without fd number (standard output redirection)
+                    if fd_num.is_some() {
+                        return Err("Invalid redirection: >| cannot be used with file descriptor numbers".to_string());
+                    }
+                    
+                    skip_whitespace(&mut chars);
+                    
+                    // Collect the filename (handle quotes)
+                    let mut filename = String::new();
+                    let mut in_filename_quote = false;
+                    let mut filename_quote_char = ' ';
+                    
+                    while let Some(&ch) = chars.peek() {
+                        if !in_filename_quote && (ch == '"' || ch == '\'') {
+                            in_filename_quote = true;
+                            filename_quote_char = ch;
+                            chars.next(); // consume quote but don't add to filename
+                        } else if in_filename_quote && ch == filename_quote_char {
+                            in_filename_quote = false;
+                            chars.next(); // consume quote but don't add to filename
+                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
+                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        {
+                            break;
+                        } else {
+                            filename.push(ch);
+                            chars.next();
+                        }
+                    }
+                    
+                    if !filename.is_empty() {
+                        tokens.push(Token::RedirOutClobber);
+                        tokens.push(Token::Word(filename));
+                    } else {
+                        tokens.push(Token::RedirOutClobber);
+                    }
+                } else if let Some(&'&') = chars.peek() {
                     chars.next(); // consume &
 
                     // Collect the target fd or '-'

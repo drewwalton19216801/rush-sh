@@ -77,6 +77,8 @@ pub enum Redirection {
     Input(String),
     /// Output to file: > file or N> file
     Output(String),
+    /// Output to file with noclobber override: >| file
+    OutputClobber(String),
     /// Append to file: >> file or N>> file
     Append(String),
     /// Input from file with explicit fd: N< file
@@ -1580,6 +1582,16 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     current_cmd
                         .redirections
                         .push(Redirection::Output(file.clone()));
+                }
+            }
+            Token::RedirOutClobber => {
+                i += 1;
+                if i < tokens.len()
+                    && let Token::Word(ref file) = tokens[i]
+                {
+                    current_cmd
+                        .redirections
+                        .push(Redirection::OutputClobber(file.clone()));
                 }
             }
             Token::RedirAppend => {

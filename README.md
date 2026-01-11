@@ -47,7 +47,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
   - Depth limit protection (max 100 levels)
   - 60+ comprehensive test cases
 - **Pipes**: Chain commands using the `|` operator.
-- **Redirections**: Input (`<`) and output (`>`, `>>`) redirections, here-documents (`<<`), and here-strings (`<<<`).
+- **Redirections**: Input (`<`) and output (`>`, `>>`, `>|`) redirections, here-documents (`<<`), and here-strings (`<<<`).
+  - **Noclobber Override**: Use `>|` to force overwrite files even when noclobber (`set -C`) is enabled
 - **File Descriptor Operations**: Full POSIX-compliant file descriptor management
   - FD output redirection: `2>errors.log`, `3>output.txt`
   - FD input redirection: `3<input.txt`, `4<data.txt`
@@ -1845,7 +1846,7 @@ Rush now provides comprehensive support for the POSIX `set` builtin command, ena
   - `-v` (verbose): Print shell input lines as read
   - `-n` (noexec): Read commands but don't execute (syntax check mode)
   - `-f` (noglob): Disable pathname expansion (globbing)
-  - `-C` (noclobber): Prevent output redirection from overwriting existing files
+  - `-C` (noclobber): Prevent output redirection from overwriting existing files (use `>|` to override)
   - `-a` (allexport): Automatically export all variables
 
 **Basic Usage:**
@@ -1899,9 +1900,9 @@ set -n
 
 # Protect against accidental file overwrites
 set -C
-echo "data" > file.txt  # Creates file
-echo "more" > file.txt  # Error: file exists
-echo "more" >| file.txt # Override with >|
+echo "data" > file.txt   # Creates file
+echo "more" > file.txt   # Error: file exists (noclobber prevents overwrite)
+echo "more" >| file.txt  # Override noclobber with >| operator
 
 # Auto-export all variables
 set -a

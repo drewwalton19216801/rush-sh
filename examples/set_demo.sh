@@ -169,11 +169,19 @@ echo "6.5: Prevent file overwrites (noclobber)"
 set -C
 echo "test data" > /tmp/rush_set_demo_test.txt
 echo "File created: /tmp/rush_set_demo_test.txt"
-echo "Attempting to overwrite with noclobber enabled..."
-echo "new data" > /tmp/rush_set_demo_test.txt 2>&1 || echo "Error: noclobber prevented overwrite"
-echo "Using >| to force overwrite:"
-echo "new data" >| /tmp/rush_set_demo_test.txt
-echo "File overwritten successfully"
+echo
+echo "Attempting to overwrite with > (should fail)..."
+echo "new data" > /tmp/rush_set_demo_test.txt 2>&1 || echo "✗ Error: noclobber prevented overwrite (expected)"
+echo
+echo "Using >| operator to force overwrite (noclobber override):"
+echo "overwritten data" >| /tmp/rush_set_demo_test.txt
+cat /tmp/rush_set_demo_test.txt
+echo "✓ File successfully overwritten with >| operator"
+echo
+echo "Appending with >> still works (not affected by noclobber):"
+echo "appended line" >> /tmp/rush_set_demo_test.txt
+cat /tmp/rush_set_demo_test.txt
+echo "✓ Append operation successful"
 set +C
 rm -f /tmp/rush_set_demo_test.txt
 echo

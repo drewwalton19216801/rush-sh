@@ -640,19 +640,22 @@ fn apply_redirections(
                 apply_input_redirection(0, file, shell_state, command.as_deref_mut())?;
             }
             Redirection::Output(file) => {
-                apply_output_redirection(1, file, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(1, file, false, false, shell_state, command.as_deref_mut())?;
+            }
+            Redirection::OutputClobber(file) => {
+                apply_output_redirection(1, file, false, true, shell_state, command.as_deref_mut())?;
             }
             Redirection::Append(file) => {
-                apply_output_redirection(1, file, true, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(1, file, true, false, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdInput(fd, file) => {
                 apply_input_redirection(*fd, file, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdOutput(fd, file) => {
-                apply_output_redirection(*fd, file, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(*fd, file, false, false, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdAppend(fd, file) => {
-                apply_output_redirection(*fd, file, true, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(*fd, file, true, false, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdDuplicate(target_fd, source_fd) => {
                 apply_fd_duplication(*target_fd, *source_fd, shell_state, command.as_deref_mut())?;
@@ -770,6 +773,7 @@ fn apply_output_redirection(
     fd: i32,
     file: &str,
     append: bool,
+    force_clobber: bool,
     shell_state: &mut ShellState,
     command: Option<&mut Command>,
 ) -> Result<(), String> {
@@ -777,7 +781,7 @@ fn apply_output_redirection(
 
     // Check noclobber option (-C): Prevent overwriting existing files with >
     // Note: >> (append) and >| (force overwrite) are not affected by noclobber
-    if shell_state.options.noclobber && !append && std::path::Path::new(&expanded_file).exists() {
+    if shell_state.options.noclobber && !append && !force_clobber && std::path::Path::new(&expanded_file).exists() {
         return Err(format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file));
     }
 

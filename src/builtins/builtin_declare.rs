@@ -290,6 +290,7 @@ fn format_command(cmd: &crate::parser::ShellCommand) -> String {
         match redir {
             Redirection::Input(file) => result.push_str(&format!(" < {}", file)),
             Redirection::Output(file) => result.push_str(&format!(" > {}", file)),
+            Redirection::OutputClobber(file) => result.push_str(&format!(" >| {}", file)),
             Redirection::Append(file) => result.push_str(&format!(" >> {}", file)),
             Redirection::FdInput(fd, file) => result.push_str(&format!(" {}<{}", fd, file)),
             Redirection::FdOutput(fd, file) => result.push_str(&format!(" {}>{}", fd, file)),

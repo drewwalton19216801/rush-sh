@@ -393,7 +393,7 @@ mod tests {
 
     /// Test noexec with complex commands
     #[test]
-    #[ignore] // TODO: Investigate noexec behavior with file creation - unrelated to nounset
+    #[ignore]
     fn test_noexec_complex() {
         let mut shell_state = state::ShellState::new();
         shell_state.options.noexec = true;
@@ -1124,6 +1124,204 @@ mod tests {
         
         script_engine::execute_line("set +o noclobber", &mut shell_state);
         assert!(!shell_state.options.noclobber);
+    }
+
+    #[test]
+    fn test_clobber_override_without_noclobber() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        // Create unique temp file
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_clobber_no_noclobber_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Create initial file
+        std::fs::write(&temp_file, "initial content\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
+        // Test >| without noclobber (should work like >)
+        script_engine::execute_line(&format!("echo 'overwritten' >| {}", temp_file), &mut shell_state);
+        
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "overwritten");
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_clobber_override_with_noclobber() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        // Create unique temp file
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_clobber_with_noclobber_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Enable noclobber
+        script_engine::execute_line("set -C", &mut shell_state);
+        assert!(shell_state.options.noclobber);
+        
+        // Create initial file
+        std::fs::write(&temp_file, "initial content\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
+        // Test >| with noclobber (should override and allow overwrite)
+        script_engine::execute_line(&format!("echo 'overwritten with clobber' >| {}", temp_file), &mut shell_state);
+        
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "overwritten with clobber");
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_clobber_override_creates_new_file() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        // Create unique temp file path (file doesn't exist yet)
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_clobber_new_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Enable noclobber
+        script_engine::execute_line("set -C", &mut shell_state);
+        
+        // Test >| creating new file (should work)
+        script_engine::execute_line(&format!("echo 'new file' >| {}", temp_file), &mut shell_state);
+        
+        assert!(std::path::Path::new(&temp_file).exists());
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "new file");
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_regular_redirect_fails_with_noclobber() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        // Create unique temp file
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_regular_noclobber_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Enable noclobber
+        script_engine::execute_line("set -C", &mut shell_state);
+        
+        // Create initial file
+        std::fs::write(&temp_file, "initial content\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
+        // Test > with noclobber (should fail)
+        script_engine::execute_line(&format!("echo 'should fail' > {}", temp_file), &mut shell_state);
+        
+        // File should still have original content
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "initial content");
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_clobber_override_with_variable_expansion() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        // Create unique temp file
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_clobber_var_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        shell_state.set_var("OUTFILE", temp_file.clone());
+        
+        // Enable noclobber
+        script_engine::execute_line("set -C", &mut shell_state);
+        
+        // Create initial file
+        std::fs::write(&temp_file, "initial\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
+        // Test >| with variable expansion
+        script_engine::execute_line("echo 'expanded' >| $OUTFILE", &mut shell_state);
+        
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "expanded");
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
+    }
+
+    #[test]
+    fn test_clobber_override_multiple_times() {
+        use std::sync::Mutex;
+        static ENV_LOCK: Mutex<()> = Mutex::new(());
+        let _lock = ENV_LOCK.lock().unwrap();
+        
+        // Create unique temp file
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let temp_file = format!("/tmp/rush_test_clobber_multi_{}.txt", timestamp);
+        
+        let mut shell_state = state::ShellState::new();
+        
+        // Enable noclobber
+        script_engine::execute_line("set -C", &mut shell_state);
+        
+        // Create initial file
+        std::fs::write(&temp_file, "first\n").unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
+        // Overwrite multiple times with >|
+        script_engine::execute_line(&format!("echo 'second' >| {}", temp_file), &mut shell_state);
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "second");
+        
+        script_engine::execute_line(&format!("echo 'third' >| {}", temp_file), &mut shell_state);
+        let content = std::fs::read_to_string(&temp_file).unwrap();
+        assert_eq!(content.trim(), "third");
+        
+        // Cleanup
+        let _ = std::fs::remove_file(&temp_file);
     }
 
     // ========================================================================

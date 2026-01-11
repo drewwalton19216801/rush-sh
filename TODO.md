@@ -9,6 +9,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 ## Recently Completed Features (v0.7.0)
 
 - ✅ **Set Builtin**: POSIX-compliant `set` command with 8 shell options (errexit, nounset, xtrace, verbose, noexec, noglob, noclobber, allexport), positional parameter management, named options (-o/+o), and display modes - 86+ comprehensive test cases
+- ✅ **Noclobber Override**: POSIX-compliant `>|` operator to force file overwrite even when noclobber (`set -C`) is enabled - 6 comprehensive test cases
 - ✅ **Loop Control Builtins**: POSIX-compliant `break` and `continue` commands with support for nested loops via optional [n] argument, working with for/while/until loops - 29 comprehensive test cases
 - ✅ **Subshell Support**: Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, and depth limit protection (max 100 levels) - 60+ test cases
 - ✅ **File Descriptor Operations**: Complete FD table management including duplication (N>&M, N<&M), closing (N>&-, N<&-), and read/write (N<>) - 30+ test cases
@@ -76,6 +77,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ File descriptor closing (N>&-, N<&-)
 - ✅ Redirections to specific file descriptors (2>, 2>&1, etc.)
 - ✅ Read/write file descriptor operations (N<>)
+- ✅ Noclobber override (>|) for forcing file overwrites
 
 ### 1.8 Exit Status and Errors
 
