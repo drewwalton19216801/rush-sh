@@ -463,8 +463,8 @@
                         <div class="status-summary">
                             <h3>Implementation Status</h3>
                             <div class="status-badges">
-                                <span class="badge implemented">20 Implemented</span>
-                                <span class="badge missing">9 Missing</span>
+                                <span class="badge implemented">24 Implemented</span>
+                                <span class="badge missing">7 Missing</span>
                             </div>
                         </div>
 
@@ -472,16 +472,16 @@
                             <div class="builtins-column">
                                 <h4>Required Special Built-ins</h4>
                                 <div class="compliance-grid">
-                                    <div class="compliance-item missing">
-                                        <span class="status-icon">❌</span>
+                                    <div class="compliance-item implemented">
+                                        <span class="status-icon">✅</span>
                                         <span class="item-text">break</span>
                                     </div>
                                     <div class="compliance-item missing">
                                         <span class="status-icon">❌</span>
                                         <span class="item-text">: (colon)</span>
                                     </div>
-                                    <div class="compliance-item missing">
-                                        <span class="status-icon">❌</span>
+                                    <div class="compliance-item implemented">
+                                        <span class="status-icon">✅</span>
                                         <span class="item-text">continue</span>
                                     </div>
                                     <div class="compliance-item missing">
@@ -504,8 +504,8 @@
                                         <span class="status-icon">❌</span>
                                         <span class="item-text">readonly</span>
                                     </div>
-                                    <div class="compliance-item missing">
-                                        <span class="status-icon">❌</span>
+                                    <div class="compliance-item implemented">
+                                        <span class="status-icon">✅</span>
                                         <span class="item-text">return</span>
                                     </div>
                                     <div class="compliance-item missing">
@@ -540,10 +540,12 @@
                             </div>
 
                             <div class="builtins-column">
-                                <h4>Currently Implemented (20)</h4>
+                                <h4>Currently Implemented (24)</h4>
                                 <div class="implemented-list">
                                     <div class="builtin-tag">alias</div>
+                                    <div class="builtin-tag">break</div>
                                     <div class="builtin-tag">cd</div>
+                                    <div class="builtin-tag">continue</div>
                                     <div class="builtin-tag">declare</div>
                                     <div class="builtin-tag">dirs</div>
                                     <div class="builtin-tag">env</div>
@@ -553,6 +555,7 @@
                                     <div class="builtin-tag">popd</div>
                                     <div class="builtin-tag">pushd</div>
                                     <div class="builtin-tag">pwd</div>
+                                    <div class="builtin-tag">return</div>
                                     <div class="builtin-tag">set_color_scheme</div>
                                     <div class="builtin-tag">set_colors</div>
                                     <div class="builtin-tag">set_condensed</div>
@@ -560,6 +563,7 @@
                                     <div class="builtin-tag">source</div>
                                     <div class="builtin-tag">test</div>
                                     <div class="builtin-tag">trap</div>
+                                    <div class="builtin-tag">type</div>
                                     <div class="builtin-tag">unalias</div>
                                     <div class="builtin-tag">unset</div>
                                 </div>
@@ -581,7 +585,7 @@
                                         <li>set (options and positional parameters)</li>
                                         <li>eval</li>
                                         <li>exec</li>
-                                        <li>readonly, return, break, continue, etc.</li>
+                                        <li>readonly, : (colon), etc.</li>
                                     </ul>
                                 </li>
                                 </ul>
@@ -631,7 +635,7 @@
                                 <div class="test-label">Core Components Covered</div>
                             </div>
                             <div class="test-stat">
-                                <div class="test-number">20</div>
+                                <div class="test-number">24</div>
                                 <div class="test-label">Built-ins Tested</div>
                             </div>
                         </div>
@@ -692,6 +696,10 @@
                             <div class="compliance-grid">
                                 <div class="compliance-item implemented">
                                     <span class="status-icon">✅</span>
+                                    <span class="item-text">Loop control builtins: break and continue (29 test cases)</span>
+                                </div>
+                                <div class="compliance-item implemented">
+                                    <span class="status-icon">✅</span>
                                     <span class="item-text">Subshells (60+ test cases)</span>
                                 </div>
                                 <div class="compliance-item implemented">
@@ -744,7 +752,7 @@
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Built-in Commands</span>
-                                    <span class="percentage implemented">69%</span>
+                                    <span class="percentage implemented">77%</span>
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Expansions</span>
