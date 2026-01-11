@@ -6,7 +6,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 21 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 22 built-in commands.
 
 ## Table of Contents
 
@@ -115,28 +115,29 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (21 total):
+- **Built-in Commands** (22 total):
+  - `alias`: Define or display aliases
   - `cd`: Change directory
-  - `exit`: Exit the shell
-  - `pwd`: Print working directory
+  - `declare`: Display function definitions and list function names
+  - `dirs`: Display directory stack
   - `env`: List environment variables
+  - `exit`: Exit the shell
   - `export`: Export variables to child processes
-  - `unset`: Remove variables
+  - `help`: Show available commands
+  - `popd`: Pop directory from stack and change to it
+  - `pushd`: Push directory onto stack and change to it
+  - `pwd`: Print working directory
+  - `return`: Return from a function with an optional exit code
+  - `set_color_scheme`: Switch between color themes (default/dark/light)
+  - `set_colors`: Enable/disable color output dynamically
+  - `set_condensed`: Enable/disable condensed cwd display in prompt
   - `shift`: Shift positional parameters
   - `source` / `.`: Execute a script file with rush (bypasses shebang and comment lines)
-  - `pushd`: Push directory onto stack and change to it
-  - `popd`: Pop directory from stack and change to it
-  - `dirs`: Display directory stack
-  - `alias`: Define or display aliases
-  - `unalias`: Remove alias definitions
   - `test` / `[`: POSIX-compatible test builtin with string and file tests
-  - `set_colors`: Enable/disable color output dynamically
-  - `set_color_scheme`: Switch between color themes (default/dark/light)
-  - `set_condensed`: Enable/disable condensed cwd display in prompt
-  - `declare`: Display function definitions and list function names
   - `trap`: Set or display signal handlers
   - `type`: Display information about command type (alias, keyword, function, builtin, or external command)
-  - `help`: Show available commands
+  - `unalias`: Remove alias definitions
+  - `unset`: Remove variables
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
   - **Command Completion**: Built-in commands and executables from PATH
@@ -163,7 +164,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of 21 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 22 built-in commands including directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), function returns (`return`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
@@ -1990,6 +1991,7 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
 - Execute complex example script with command substitution: `source examples/complex_example.sh`
 - Execute positional parameters demo: `source examples/positional_parameters_demo.sh`
 - Execute functions demo (comprehensive): `source examples/functions_demo.sh`
+- Execute return builtin demo: `source examples/return_demo.sh`
 - Alias management:
   - Create aliases: `alias ll='ls -l'; alias la='ls -la'`
   - List aliases: `alias`
@@ -2289,7 +2291,7 @@ This benchmark suite provides a foundation for maintaining optimal shell perform
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (all 20 built-in commands including cd, pwd, env, exit, help, source, export, unset, shift, pushd, popd, dirs, alias, unalias, test, [, set_colors, set_color_scheme, set_condensed, declare, trap)
+- Built-in command functionality (all 22 built-in commands including alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set_color_scheme, set_colors, set_condensed, shift, source, test, [, trap, type, unalias, unset)
 - **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
 - **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
