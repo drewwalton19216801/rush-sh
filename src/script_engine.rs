@@ -118,6 +118,15 @@ pub fn starts_with_keyword(line: &str, keyword: &str) -> bool {
 }
 
 pub fn execute_line(line: &str, shell_state: &mut state::ShellState) {
+    // Print input line if verbose option (-v) is enabled
+    if shell_state.options.verbose {
+        if shell_state.colors_enabled {
+            eprintln!("{}{}\x1b[0m", shell_state.color_scheme.builtin, line);
+        } else {
+            eprintln!("{}", line);
+        }
+    }
+    
     match lexer::lex(line, shell_state) {
         Ok(tokens) => match lexer::expand_aliases(tokens, shell_state, &mut HashSet::new()) {
             Ok(expanded_tokens) => match brace_expansion::expand_braces(expanded_tokens) {

@@ -52,6 +52,7 @@ mod builtin_popd;
 mod builtin_pushd;
 mod builtin_pwd;
 mod builtin_return;
+mod builtin_set;
 mod builtin_set_color_scheme;
 mod builtin_set_colors;
 mod builtin_set_condensed;
@@ -91,6 +92,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_alias::AliasBuiltin),
         Box::new(builtin_unalias::UnaliasBuiltin),
         Box::new(builtin_test::TestBuiltin),
+        Box::new(builtin_set::SetBuiltin),
         Box::new(builtin_set_colors::SetColorsBuiltin),
         Box::new(builtin_set_color_scheme::SetColorSchemeBuiltin),
         Box::new(builtin_set_condensed::SetCondensedBuiltin),
@@ -397,6 +399,7 @@ mod tests {
         assert!(commands.contains(&"return".to_string()));
         assert!(commands.contains(&"break".to_string()));
         assert!(commands.contains(&"continue".to_string()));
-        assert_eq!(commands.len(), 26);
+        assert!(commands.contains(&"set".to_string()));
+        assert_eq!(commands.len(), 27);
     }
 }

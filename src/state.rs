@@ -399,6 +399,183 @@ impl Default for FileDescriptorTable {
     }
 }
 
+/// Shell option flags that control shell behavior
+#[derive(Debug, Clone)]
+pub struct ShellOptions {
+    /// -e: Exit on command failure
+    pub errexit: bool,
+    
+    /// -u: Treat unset variables as error
+    pub nounset: bool,
+    
+    /// -x: Print commands before execution
+    pub xtrace: bool,
+    
+    /// -v: Print input lines as read
+    pub verbose: bool,
+    
+    /// -n: Read but don't execute commands
+    pub noexec: bool,
+    
+    /// -f: Disable pathname expansion
+    pub noglob: bool,
+    
+    /// -C: Prevent overwriting files with redirection
+    pub noclobber: bool,
+    
+    /// -a: Auto-export all variables
+    pub allexport: bool,
+    
+    /// -b: Notify of job completion immediately
+    pub notify: bool,
+    
+    /// Ignore EOF (Ctrl+D) - not a standard POSIX option but commonly supported
+    pub ignoreeof: bool,
+    
+    /// -m: Enable job control (monitor)
+    pub monitor: bool,
+}
+
+impl Default for ShellOptions {
+    fn default() -> Self {
+        Self {
+            errexit: false,
+            nounset: false,
+            xtrace: false,
+            verbose: false,
+            noexec: false,
+            noglob: false,
+            noclobber: false,
+            allexport: false,
+            notify: false,
+            ignoreeof: false,
+            monitor: false,
+        }
+    }
+}
+
+impl ShellOptions {
+    /// Get option value by short name
+    ///
+    /// # Arguments
+    /// * `name` - Single character option name (e.g., 'e', 'u', 'x')
+    ///
+    /// # Returns
+    /// * `Some(bool)` if the option exists
+    /// * `None` if the option name is not recognized
+    pub fn get_by_short_name(&self, name: char) -> Option<bool> {
+        match name {
+            'e' => Some(self.errexit),
+            'u' => Some(self.nounset),
+            'x' => Some(self.xtrace),
+            'v' => Some(self.verbose),
+            'n' => Some(self.noexec),
+            'f' => Some(self.noglob),
+            'C' => Some(self.noclobber),
+            'a' => Some(self.allexport),
+            'b' => Some(self.notify),
+            'm' => Some(self.monitor),
+            _ => None,
+        }
+    }
+    
+    /// Set option value by short name
+    ///
+    /// # Arguments
+    /// * `name` - Single character option name (e.g., 'e', 'u', 'x')
+    /// * `value` - Boolean value to set (true to enable, false to disable)
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message if option name is not recognized
+    pub fn set_by_short_name(&mut self, name: char, value: bool) -> Result<(), String> {
+        match name {
+            'e' => { self.errexit = value; Ok(()) },
+            'u' => { self.nounset = value; Ok(()) },
+            'x' => { self.xtrace = value; Ok(()) },
+            'v' => { self.verbose = value; Ok(()) },
+            'n' => { self.noexec = value; Ok(()) },
+            'f' => { self.noglob = value; Ok(()) },
+            'C' => { self.noclobber = value; Ok(()) },
+            'a' => { self.allexport = value; Ok(()) },
+            'b' => { self.notify = value; Ok(()) },
+            'm' => { self.monitor = value; Ok(()) },
+            _ => Err(format!("Invalid option: -{}", name)),
+        }
+    }
+    
+    /// Get option value by long name
+    ///
+    /// # Arguments
+    /// * `name` - Long option name (e.g., "errexit", "nounset", "xtrace")
+    ///
+    /// # Returns
+    /// * `Some(bool)` if the option exists
+    /// * `None` if the option name is not recognized
+    pub fn get_by_long_name(&self, name: &str) -> Option<bool> {
+        match name {
+            "errexit" => Some(self.errexit),
+            "nounset" => Some(self.nounset),
+            "xtrace" => Some(self.xtrace),
+            "verbose" => Some(self.verbose),
+            "noexec" => Some(self.noexec),
+            "noglob" => Some(self.noglob),
+            "noclobber" => Some(self.noclobber),
+            "allexport" => Some(self.allexport),
+            "notify" => Some(self.notify),
+            "ignoreeof" => Some(self.ignoreeof),
+            "monitor" => Some(self.monitor),
+            _ => None,
+        }
+    }
+    
+    /// Set option value by long name
+    ///
+    /// # Arguments
+    /// * `name` - Long option name (e.g., "errexit", "nounset", "xtrace")
+    /// * `value` - Boolean value to set (true to enable, false to disable)
+    ///
+    /// # Returns
+    /// * `Ok(())` on success
+    /// * `Err(String)` with error message if option name is not recognized
+    pub fn set_by_long_name(&mut self, name: &str, value: bool) -> Result<(), String> {
+        match name {
+            "errexit" => { self.errexit = value; Ok(()) },
+            "nounset" => { self.nounset = value; Ok(()) },
+            "xtrace" => { self.xtrace = value; Ok(()) },
+            "verbose" => { self.verbose = value; Ok(()) },
+            "noexec" => { self.noexec = value; Ok(()) },
+            "noglob" => { self.noglob = value; Ok(()) },
+            "noclobber" => { self.noclobber = value; Ok(()) },
+            "allexport" => { self.allexport = value; Ok(()) },
+            "notify" => { self.notify = value; Ok(()) },
+            "ignoreeof" => { self.ignoreeof = value; Ok(()) },
+            "monitor" => { self.monitor = value; Ok(()) },
+            _ => Err(format!("Invalid option: {}", name)),
+        }
+    }
+    
+    /// Get all option names and their current values
+    ///
+    /// # Returns
+    /// A vector of tuples containing (long_name, short_name, value)
+    pub fn get_all_options(&self) -> Vec<(&'static str, char, bool)> {
+        vec![
+            ("allexport", 'a', self.allexport),
+            ("notify", 'b', self.notify),
+            ("noclobber", 'C', self.noclobber),
+            ("errexit", 'e', self.errexit),
+            ("noglob", 'f', self.noglob),
+            ("monitor", 'm', self.monitor),
+            ("noexec", 'n', self.noexec),
+            ("nounset", 'u', self.nounset),
+            ("verbose", 'v', self.verbose),
+            ("xtrace", 'x', self.xtrace),
+            ("ignoreeof", '\0', self.ignoreeof), // No short option
+        ]
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ColorScheme {
     /// ANSI color code for prompt
@@ -495,6 +672,12 @@ pub struct ShellState {
     pub subshell_depth: usize,
     /// Override for stdin (used for pipeline subshells to avoid process-global fd manipulation)
     pub stdin_override: Option<RawFd>,
+    /// Shell option flags (set builtin)
+    pub options: ShellOptions,
+    /// Context tracking for errexit option - true when executing commands in if/while/until conditions
+    pub in_condition: bool,
+    /// Context tracking for errexit option - true when executing commands in && or || chains
+    pub in_logical_chain: bool,
 }
 
 impl ShellState {
@@ -561,6 +744,9 @@ impl ShellState {
             fd_table: Rc::new(RefCell::new(FileDescriptorTable::new())),
             subshell_depth: 0,
             stdin_override: None,
+            options: ShellOptions::default(),
+            in_condition: false,
+            in_logical_chain: false,
         }
     }
 
@@ -1662,5 +1848,190 @@ mod tests {
 
         // Clean up
         let _ = std::fs::remove_file(temp_file);
+    }
+
+    // ShellOptions Tests
+
+    #[test]
+    fn test_shell_options_default() {
+        let options = ShellOptions::default();
+        assert!(!options.errexit);
+        assert!(!options.nounset);
+        assert!(!options.xtrace);
+        assert!(!options.verbose);
+        assert!(!options.noexec);
+        assert!(!options.noglob);
+        assert!(!options.noclobber);
+        assert!(!options.allexport);
+        assert!(!options.notify);
+        assert!(!options.ignoreeof);
+        assert!(!options.monitor);
+    }
+
+    #[test]
+    fn test_shell_options_get_by_short_name() {
+        let mut options = ShellOptions::default();
+        options.errexit = true;
+        options.nounset = true;
+
+        assert_eq!(options.get_by_short_name('e'), Some(true));
+        assert_eq!(options.get_by_short_name('u'), Some(true));
+        assert_eq!(options.get_by_short_name('x'), Some(false));
+        assert_eq!(options.get_by_short_name('Z'), None);
+    }
+
+    #[test]
+    fn test_shell_options_set_by_short_name() {
+        let mut options = ShellOptions::default();
+
+        assert!(options.set_by_short_name('e', true).is_ok());
+        assert!(options.errexit);
+
+        assert!(options.set_by_short_name('u', true).is_ok());
+        assert!(options.nounset);
+
+        assert!(options.set_by_short_name('x', true).is_ok());
+        assert!(options.xtrace);
+
+        assert!(options.set_by_short_name('e', false).is_ok());
+        assert!(!options.errexit);
+
+        // Invalid option
+        assert!(options.set_by_short_name('Z', true).is_err());
+    }
+
+    #[test]
+    fn test_shell_options_get_by_long_name() {
+        let mut options = ShellOptions::default();
+        options.errexit = true;
+        options.nounset = true;
+
+        assert_eq!(options.get_by_long_name("errexit"), Some(true));
+        assert_eq!(options.get_by_long_name("nounset"), Some(true));
+        assert_eq!(options.get_by_long_name("xtrace"), Some(false));
+        assert_eq!(options.get_by_long_name("invalid"), None);
+    }
+
+    #[test]
+    fn test_shell_options_set_by_long_name() {
+        let mut options = ShellOptions::default();
+
+        assert!(options.set_by_long_name("errexit", true).is_ok());
+        assert!(options.errexit);
+
+        assert!(options.set_by_long_name("nounset", true).is_ok());
+        assert!(options.nounset);
+
+        assert!(options.set_by_long_name("xtrace", true).is_ok());
+        assert!(options.xtrace);
+
+        assert!(options.set_by_long_name("errexit", false).is_ok());
+        assert!(!options.errexit);
+
+        // Invalid option
+        assert!(options.set_by_long_name("invalid", true).is_err());
+    }
+
+    #[test]
+    fn test_shell_options_all_short_options() {
+        let mut options = ShellOptions::default();
+
+        // Test all valid short options
+        let short_opts = vec!['e', 'u', 'x', 'v', 'n', 'f', 'C', 'a', 'b', 'm'];
+        for opt in short_opts {
+            assert!(options.set_by_short_name(opt, true).is_ok());
+            assert_eq!(options.get_by_short_name(opt), Some(true));
+            assert!(options.set_by_short_name(opt, false).is_ok());
+            assert_eq!(options.get_by_short_name(opt), Some(false));
+        }
+    }
+
+    #[test]
+    fn test_shell_options_all_long_options() {
+        let mut options = ShellOptions::default();
+
+        // Test all valid long options
+        let long_opts = vec![
+            "errexit", "nounset", "xtrace", "verbose", "noexec", "noglob", "noclobber",
+            "allexport", "notify", "ignoreeof", "monitor",
+        ];
+        for opt in long_opts {
+            assert!(options.set_by_long_name(opt, true).is_ok());
+            assert_eq!(options.get_by_long_name(opt), Some(true));
+            assert!(options.set_by_long_name(opt, false).is_ok());
+            assert_eq!(options.get_by_long_name(opt), Some(false));
+        }
+    }
+
+    #[test]
+    fn test_shell_options_get_all_options() {
+        let mut options = ShellOptions::default();
+        options.errexit = true;
+        options.xtrace = true;
+
+        let all_options = options.get_all_options();
+        
+        // Should have 11 options
+        assert_eq!(all_options.len(), 11);
+
+        // Find errexit and verify it's on
+        let errexit_opt = all_options.iter().find(|(name, _, _)| *name == "errexit");
+        assert!(errexit_opt.is_some());
+        assert_eq!(errexit_opt.unwrap().2, true);
+
+        // Find xtrace and verify it's on
+        let xtrace_opt = all_options.iter().find(|(name, _, _)| *name == "xtrace");
+        assert!(xtrace_opt.is_some());
+        assert_eq!(xtrace_opt.unwrap().2, true);
+
+        // Find nounset and verify it's off
+        let nounset_opt = all_options.iter().find(|(name, _, _)| *name == "nounset");
+        assert!(nounset_opt.is_some());
+        assert_eq!(nounset_opt.unwrap().2, false);
+    }
+
+    #[test]
+    fn test_shell_state_has_options() {
+        let state = ShellState::new();
+        assert!(!state.options.errexit);
+        assert!(!state.options.nounset);
+        assert!(!state.options.xtrace);
+    }
+
+    #[test]
+    fn test_shell_state_options_modification() {
+        let mut state = ShellState::new();
+        
+        state.options.errexit = true;
+        assert!(state.options.errexit);
+        
+        state.options.set_by_short_name('u', true).unwrap();
+        assert!(state.options.nounset);
+        
+        state.options.set_by_long_name("xtrace", true).unwrap();
+        assert!(state.options.xtrace);
+    }
+
+    #[test]
+    fn test_shell_options_error_messages() {
+        let mut options = ShellOptions::default();
+
+        let result = options.set_by_short_name('Z', true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid option: -Z"));
+
+        let result = options.set_by_long_name("invalid_option", true);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid option: invalid_option"));
+    }
+
+    #[test]
+    fn test_shell_options_case_sensitivity() {
+        let mut options = ShellOptions::default();
+
+        // 'C' is valid (noclobber), 'c' is not
+        assert!(options.set_by_short_name('C', true).is_ok());
+        assert!(options.noclobber);
+        assert!(options.set_by_short_name('c', true).is_err());
     }
 }

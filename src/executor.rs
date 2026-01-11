@@ -38,7 +38,7 @@ fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<
 
                 // Expand variables and wildcards
                 let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-                let expanded_args = expand_wildcards(&var_expanded_args)
+                let expanded_args = expand_wildcards(&var_expanded_args, shell_state)
                     .map_err(|e| format!("Wildcard expansion failed: {}", e))?;
 
                 if expanded_args.is_empty() {
@@ -529,10 +529,16 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
     result
 }
 
-fn expand_wildcards(args: &[String]) -> Result<Vec<String>, String> {
+fn expand_wildcards(args: &[String], shell_state: &ShellState) -> Result<Vec<String>, String> {
     let mut expanded_args = Vec::new();
 
     for arg in args {
+        // Skip wildcard expansion if noglob option (-f) is enabled
+        if shell_state.options.noglob {
+            expanded_args.push(arg.clone());
+            continue;
+        }
+        
         if arg.contains('*') || arg.contains('?') || arg.contains('[') {
             // Try to expand wildcard
             match glob::glob(arg) {
@@ -768,6 +774,12 @@ fn apply_output_redirection(
     command: Option<&mut Command>,
 ) -> Result<(), String> {
     let expanded_file = expand_variables_in_string(file, shell_state);
+
+    // Check noclobber option (-C): Prevent overwriting existing files with >
+    // Note: >> (append) and >| (force overwrite) are not affected by noclobber
+    if shell_state.options.noclobber && !append && std::path::Path::new(&expanded_file).exists() {
+        return Err(format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file));
+    }
 
     // Open file for writing or appending
     let file_handle = if append {
@@ -1026,12 +1038,27 @@ pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
+            // Check noexec option (-n): Read commands but don't execute them
+            if shell_state.options.noexec {
+                return 0; // Return success without executing
+            }
+            
             // Expand variables and command substitutions in the value
             let expanded_value = expand_variables_in_string(&value, shell_state);
-            shell_state.set_var(&var, expanded_value);
+            shell_state.set_var(&var, expanded_value.clone());
+            
+            // Auto-export if allexport option (-a) is enabled
+            if shell_state.options.allexport {
+                shell_state.export_var(&var);
+            }
             0
         }
         Ast::LocalAssignment { var, value } => {
+            // Check noexec option (-n): Read commands but don't execute them
+            if shell_state.options.noexec {
+                return 0; // Return success without executing
+            }
+            
             // Expand variables and command substitutions in the value
             let expanded_value = expand_variables_in_string(&value, shell_state);
             shell_state.set_local_var(&var, expanded_value);
@@ -1077,7 +1104,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             else_branch,
         } => {
             for (condition, then_branch) in branches {
+                // Mark that we're in a condition (for errexit)
+                shell_state.in_condition = true;
                 let cond_exit = execute(*condition, shell_state);
+                shell_state.in_condition = false;
+                
                 if cond_exit == 0 {
                     let exit_code = execute(*then_branch, shell_state);
 
@@ -1240,8 +1271,10 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
             // Execute the loop while condition is true (exit code 0)
             loop {
-                // Evaluate the condition
+                // Mark that we're in a condition (for errexit)
+                shell_state.in_condition = true;
                 let cond_exit = execute(*condition.clone(), shell_state);
+                shell_state.in_condition = false;
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
@@ -1315,8 +1348,10 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
             // Execute the loop until condition is true (exit code 0)
             loop {
-                // Evaluate the condition
+                // Mark that we're in a condition (for errexit)
+                shell_state.in_condition = true;
                 let cond_exit = execute(*condition.clone(), shell_state);
+                shell_state.in_condition = false;
 
                 // Check if we got an early return from a function
                 if shell_state.is_returning() {
@@ -1466,36 +1501,50 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             exit_code
         }
         Ast::And { left, right } => {
+            // Mark that we're in a logical chain (for errexit)
+            shell_state.in_logical_chain = true;
+            
             // Execute left side first
             let left_exit = execute(*left, shell_state);
 
             // Check if we got an early return from a function
             if shell_state.is_returning() {
+                shell_state.in_logical_chain = false;
                 return left_exit;
             }
 
             // Only execute right side if left succeeded (exit code 0)
-            if left_exit == 0 {
+            let result = if left_exit == 0 {
                 execute(*right, shell_state)
             } else {
                 left_exit
-            }
+            };
+            
+            shell_state.in_logical_chain = false;
+            result
         }
         Ast::Or { left, right } => {
+            // Mark that we're in a logical chain (for errexit)
+            shell_state.in_logical_chain = true;
+            
             // Execute left side first
             let left_exit = execute(*left, shell_state);
 
             // Check if we got an early return from a function
             if shell_state.is_returning() {
+                shell_state.in_logical_chain = false;
                 return left_exit;
             }
 
             // Only execute right side if left failed (exit code != 0)
-            if left_exit != 0 {
+            let result = if left_exit != 0 {
                 execute(*right, shell_state)
             } else {
                 left_exit
-            }
+            };
+            
+            shell_state.in_logical_chain = false;
+            result
         }
         Ast::Subshell { body } => execute_subshell(*body, shell_state),
         Ast::CommandGroup { body } => execute(*body, shell_state),
@@ -1503,6 +1552,15 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 }
 
 fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
+    // Check noexec option (-n): Read commands but don't execute them
+    // Exception: The 'set' builtin must always execute to allow disabling noexec
+    // Still perform parsing and expansion, but skip actual execution
+    let is_set_builtin = !cmd.args.is_empty() && cmd.args[0] == "set";
+    
+    if shell_state.options.noexec && !is_set_builtin {
+        return 0; // Return success without executing
+    }
+
     // Check if this is a compound command (subshell)
     if let Some(ref compound_ast) = cmd.compound {
         // Execute compound command with redirections
@@ -1529,13 +1587,32 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
 
     // First expand variables, then wildcards
     let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-    let expanded_args = match expand_wildcards(&var_expanded_args) {
+    let expanded_args = match expand_wildcards(&var_expanded_args, shell_state) {
         Ok(args) => args,
         Err(_) => return 1,
     };
 
     if expanded_args.is_empty() {
         return 0;
+    }
+
+    // Print command if xtrace is enabled (-x)
+    if shell_state.options.xtrace {
+        // Get PS4 prompt (default: "+ ")
+        let ps4 = shell_state.get_var("PS4").unwrap_or_else(|| "+ ".to_string());
+        
+        // Print the command with expanded arguments to stderr
+        let command_str = expanded_args.join(" ");
+        if shell_state.colors_enabled {
+            eprintln!(
+                "{}{}{}",
+                shell_state.color_scheme.builtin,
+                ps4,
+                command_str
+            );
+        } else {
+            eprintln!("{}{}", ps4, command_str);
+        }
     }
 
     // Check if this is a function call
@@ -1557,7 +1634,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         };
 
         // If we're capturing output, create a writer for it
-        if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
+        let exit_code = if let Some(ref capture_buffer) = shell_state.capture_output.clone() {
             // Create a writer that writes to our capture buffer
             struct CaptureWriter {
                 buffer: Rc<RefCell<Vec<u8>>>,
@@ -1577,7 +1654,24 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
             crate::builtins::execute_builtin(&temp_cmd, shell_state, Some(Box::new(writer)))
         } else {
             crate::builtins::execute_builtin(&temp_cmd, shell_state, None)
+        };
+
+        // Check errexit option (-e): Exit immediately if command fails
+        // POSIX: Don't exit in these contexts:
+        // 1. Inside if/while/until condition (tracked by in_condition flag)
+        // 2. Part of && or || chain (tracked by in_logical_chain flag)
+        // 3. Pipeline (except last command) - handled by pipeline executor
+        // 4. Command with ! prefix - handled by negation in parser
+        if shell_state.options.errexit
+            && exit_code != 0
+            && !shell_state.in_condition
+            && !shell_state.in_logical_chain {
+            // Set exit_requested flag to trigger shell exit
+            shell_state.exit_requested = true;
+            shell_state.exit_code = exit_code;
         }
+
+        exit_code
     } else {
         // Separate environment variable assignments from the actual command
         // Environment vars must come before the command and have the form VAR=value
@@ -1618,6 +1712,11 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     let var_name = &assignment[..eq_pos];
                     let var_value = &assignment[eq_pos + 1..];
                     shell_state.set_var(var_name, var_value.to_string());
+                    
+                    // Auto-export if allexport option (-a) is enabled
+                    if shell_state.options.allexport {
+                        shell_state.export_var(var_name);
+                    }
                 }
             }
 
@@ -1739,7 +1838,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                     }
                 }
 
-                match child.wait() {
+                let exit_code = match child.wait() {
                     Ok(status) => status.code().unwrap_or(0),
                     Err(e) => {
                         if shell_state.colors_enabled {
@@ -1752,7 +1851,24 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
                         }
                         1
                     }
+                };
+
+                // Check errexit option (-e): Exit immediately if command fails
+                // POSIX: Don't exit in these contexts:
+                // 1. Inside if/while/until condition (tracked by in_condition flag)
+                // 2. Part of && or || chain (tracked by in_logical_chain flag)
+                // 3. Pipeline (except last command) - handled by pipeline executor
+                // 4. Command with ! prefix - handled by negation in parser
+                if shell_state.options.errexit
+                    && exit_code != 0
+                    && !shell_state.in_condition
+                    && !shell_state.in_logical_chain {
+                    // Set exit_requested flag to trigger shell exit
+                    shell_state.exit_requested = true;
+                    shell_state.exit_code = exit_code;
                 }
+
+                exit_code
             }
             Err(e) => {
                 if shell_state.colors_enabled {
@@ -1797,7 +1913,7 @@ fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> 
 
         // First expand variables, then wildcards
         let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-        let expanded_args = match expand_wildcards(&var_expanded_args) {
+        let expanded_args = match expand_wildcards(&var_expanded_args, shell_state) {
             Ok(args) => args,
             Err(_) => return 1,
         };

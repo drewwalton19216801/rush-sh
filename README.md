@@ -6,7 +6,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 24 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 25 built-in commands.
 
 ## Table of Contents
 
@@ -116,7 +116,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (24 total):
+- **Built-in Commands** (25 total):
   - `alias`: Define or display aliases
   - `break`: Exit from for, while, or until loops with optional [n] for nested loops
   - `cd`: Change directory
@@ -131,6 +131,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
   - `pushd`: Push directory onto stack and change to it
   - `pwd`: Print working directory
   - `return`: Return from a function with an optional exit code
+  - `set`: Set or unset shell options and positional parameters
   - `set_color_scheme`: Switch between color themes (default/dark/light)
   - `set_colors`: Enable/disable color output dynamically
   - `set_condensed`: Enable/disable condensed cwd display in prompt
@@ -1828,6 +1829,113 @@ set_color_scheme light     # Light theme
 ```
 
 The color system is designed to be both powerful and unobtrusive, providing visual enhancements while respecting user preferences and accessibility needs.
+
+### Set Builtin - Shell Options and Positional Parameters
+
+Rush now provides comprehensive support for the POSIX `set` builtin command, enabling control over shell behavior through option flags and management of positional parameters:
+
+- **Shell Option Management**: Enable/disable shell behavior flags with `-` (enable) and `+` (disable) syntax
+- **Named Options**: Use `-o optname` or `+o optname` for long option names
+- **Positional Parameters**: Set or clear positional parameters with `set -- args`
+- **Display Modes**: View all variables with `set` or all options with `set +o`
+- **8 POSIX Options Supported**:
+  - `-e` (errexit): Exit immediately if a command fails
+  - `-u` (nounset): Treat unset variables as errors
+  - `-x` (xtrace): Print commands before execution (with PS4 prefix)
+  - `-v` (verbose): Print shell input lines as read
+  - `-n` (noexec): Read commands but don't execute (syntax check mode)
+  - `-f` (noglob): Disable pathname expansion (globbing)
+  - `-C` (noclobber): Prevent output redirection from overwriting existing files
+  - `-a` (allexport): Automatically export all variables
+
+**Basic Usage:**
+
+```bash
+# Enable errexit (exit on error)
+set -e
+
+# Enable multiple options at once
+set -eux  # errexit, nounset, xtrace
+
+# Disable an option
+set +e
+
+# Use named options
+set -o errexit
+set +o errexit
+
+# Display all options
+set +o
+
+# Display all variables
+set
+
+# Set positional parameters
+set -- arg1 arg2 arg3
+echo $1  # arg1
+echo $#  # 3
+
+# Clear positional parameters
+set --
+
+# Combine options with positional parameters
+set -e -- arg1 arg2
+```
+
+**Advanced Usage:**
+
+```bash
+# Strict mode for safer scripts
+set -euo pipefail
+
+# Debug mode with command tracing
+set -x
+echo "This command will be printed before execution"
+set +x
+
+# Syntax check without execution
+set -n
+# Commands are parsed but not executed
+
+# Protect against accidental file overwrites
+set -C
+echo "data" > file.txt  # Creates file
+echo "more" > file.txt  # Error: file exists
+echo "more" >| file.txt # Override with >|
+
+# Auto-export all variables
+set -a
+MY_VAR=value  # Automatically exported
+set +a
+
+# Custom trace prompt
+PS4='+ ${BASH_SOURCE}:${LINENO}: '
+set -x
+echo "Traced with file and line info"
+```
+
+**Key Features:**
+
+- **POSIX Compliance**: Full compatibility with POSIX sh `set` command
+- **Option Combinations**: Multiple short options can be combined (e.g., `-eux`)
+- **Named Options**: Both short (`-e`) and long (`-o errexit`) forms supported
+- **Positional Parameters**: Complete management of script arguments
+- **Display Modes**: View current shell state and option settings
+- **Error Handling**: Comprehensive validation and error messages
+- **Integration**: Options affect shell behavior throughout execution
+
+**Implementation Details:**
+
+- Options are stored in `ShellState.options` structure
+- errexit checks occur after each command execution
+- nounset validation happens during variable expansion
+- xtrace prints to stderr before command execution
+- noexec mode parses but skips execution
+- noglob disables wildcard expansion in pathname expansion
+- noclobber prevents `>` from overwriting (use `>|` to override)
+- allexport automatically exports variables when set
+
+The `set` builtin provides essential control over shell behavior, making scripts more robust and debugging easier while maintaining full POSIX compatibility.
 
 ### .rushrc Configuration File
 

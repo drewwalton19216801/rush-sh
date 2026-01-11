@@ -359,7 +359,14 @@ pub fn expand_parameter(
     let value = match expansion.modifier {
         ParameterModifier::None => {
             // Simple variable expansion
-            shell_state.get_var(&expansion.var_name)
+            let var_value = shell_state.get_var(&expansion.var_name);
+            
+            // Check nounset option (-u): Treat unset variables as an error
+            if shell_state.options.nounset && var_value.is_none() {
+                return Err(format!("{}: unbound variable", expansion.var_name));
+            }
+            
+            var_value
         }
         ParameterModifier::Indirect => {
             // ${!name} - indirect expansion
