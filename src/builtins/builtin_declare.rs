@@ -112,7 +112,17 @@ fn format_function_definition(name: &str, ast: &Ast) -> String {
     format!("{}() {{\n    {}\n}}", name, format_ast_body(ast, 1))
 }
 
-/// Recursively format an AST node with proper indentation
+/// Format an AST node into an indented shell-like string.
+///
+/// The `indent_level` controls indentation depth in multiples of four spaces.
+///
+/// # Examples
+///
+/// ```
+/// let ast = Ast::FunctionCall { name: "echo".into(), args: vec!["hi".into()] };
+/// let s = format_ast_body(&ast, 1);
+/// assert_eq!(s, "    echo hi");
+/// ```
 fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
     let indent = "    ".repeat(indent_level);
 
@@ -280,7 +290,23 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
     }
 }
 
-/// Format a shell command for display
+/// Format a ShellCommand into a single-line shell syntax string.
+///
+/// Joins command arguments with spaces and appends any redirections using
+/// their shell operators (e.g. `>`, `>>`, `<`, `<<`, `>|`, `<<<`, and fd-style forms).
+///
+/// # Examples
+///
+/// ```
+/// use crate::parser::{ShellCommand, Redirection};
+///
+/// let cmd = ShellCommand {
+///     args: vec!["echo".into(), "hello".into()],
+///     redirections: vec![Redirection::Output("out.txt".into())],
+/// };
+///
+/// assert_eq!(format_command(&cmd), "echo hello > out.txt");
+/// ```
 fn format_command(cmd: &crate::parser::ShellCommand) -> String {
     let mut result = cmd.args.join(" ");
 

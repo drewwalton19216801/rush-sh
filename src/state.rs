@@ -394,6 +394,14 @@ impl FileDescriptorTable {
 }
 
 impl Default for FileDescriptorTable {
+    /// Creates the default ShellOptions with all option flags set to false.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let opts = ShellOptions::default();
+    /// assert_eq!(opts.get_by_long_name("errexit"), Some(false));
+    /// ```
     fn default() -> Self {
         Self::new()
     }
@@ -437,6 +445,14 @@ pub struct ShellOptions {
 }
 
 impl Default for ShellOptions {
+    /// Create a ShellOptions with all option flags set to false.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let opts = ShellOptions::default();
+    /// assert!(!opts.errexit && !opts.nounset && !opts.xtrace);
+    /// ```
     fn default() -> Self {
         Self {
             errexit: false,
@@ -455,15 +471,17 @@ impl Default for ShellOptions {
 }
 
 impl ShellOptions {
-    /// Get option value by short name
+    /// Retrieve the value of a shell option by its short-name flag.
     ///
-    /// # Arguments
-    /// * `name` - Single character option name (e.g., 'e', 'u', 'x')
+    /// Returns `Some(bool)` with the option's current value for recognized short names; `None` if the short name is not recognized.
     ///
-    /// # Returns
-    /// * `Some(bool)` if the option exists
-    /// * `None` if the option name is not recognized
-    #[allow(dead_code)]
+    /// # Examples
+    ///
+    /// ```
+    /// let opts = ShellOptions::default();
+    /// assert_eq!(opts.get_by_short_name('e'), Some(false)); // errexit is false by default
+    /// assert_eq!(opts.get_by_short_name('?'), None); // unknown short name
+    /// ```
     pub fn get_by_short_name(&self, name: char) -> Option<bool> {
         match name {
             'e' => Some(self.errexit),
@@ -480,15 +498,28 @@ impl ShellOptions {
         }
     }
     
-    /// Set option value by short name
+    /// Set a shell option identified by its single-character short name.
+    ///
+    /// Sets the option corresponding to `name` to `value`. Recognized short names:
+    /// 'e' (errexit), 'u' (nounset), 'x' (xtrace), 'v' (verbose), 'n' (noexec),
+    /// 'f' (noglob), 'C' (noclobber), 'a' (allexport), 'b' (notify), 'm' (monitor).
     ///
     /// # Arguments
-    /// * `name` - Single character option name (e.g., 'e', 'u', 'x')
-    /// * `value` - Boolean value to set (true to enable, false to disable)
+    ///
+    /// * `name` - single-character short option name.
+    /// * `value` - true to enable the option, false to disable it.
     ///
     /// # Returns
-    /// * `Ok(())` on success
-    /// * `Err(String)` with error message if option name is not recognized
+    ///
+    /// `Ok(())` on success, or `Err(String)` if `name` is not a recognized option.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut opts = ShellOptions::default();
+    /// opts.set_by_short_name('e', true).unwrap();
+    /// assert!(opts.errexit);
+    /// ```
     pub fn set_by_short_name(&mut self, name: char, value: bool) -> Result<(), String> {
         match name {
             'e' => { self.errexit = value; Ok(()) },
@@ -505,14 +536,23 @@ impl ShellOptions {
         }
     }
     
-    /// Get option value by long name
+    /// Retrieve the value of a shell option by its long name.
     ///
-    /// # Arguments
-    /// * `name` - Long option name (e.g., "errexit", "nounset", "xtrace")
+    /// `name` is the option's full identifier (for example: "errexit", "nounset", "xtrace").
     ///
     /// # Returns
-    /// * `Some(bool)` if the option exists
-    /// * `None` if the option name is not recognized
+    ///
+    /// `Some(true)` if the option is enabled, `Some(false)` if the option is disabled, or `None` if the name is not recognized.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut opts = crate::state::ShellOptions::default();
+    /// opts.errexit = true;
+    /// assert_eq!(opts.get_by_long_name("errexit"), Some(true));
+    /// assert_eq!(opts.get_by_long_name("noglob"), Some(false));
+    /// assert_eq!(opts.get_by_long_name("unknown"), None);
+    /// ```
     #[allow(dead_code)]
     pub fn get_by_long_name(&self, name: &str) -> Option<bool> {
         match name {
@@ -531,15 +571,20 @@ impl ShellOptions {
         }
     }
     
-    /// Set option value by long name
+    /// Set a shell option by its long name.
     ///
-    /// # Arguments
-    /// * `name` - Long option name (e.g., "errexit", "nounset", "xtrace")
-    /// * `value` - Boolean value to set (true to enable, false to disable)
+    /// Sets the specified long-form option (for example `"errexit"` or `"nounset"`) to the provided boolean value.
+    /// Returns `Ok(())` if the option was recognized and set, or `Err(String)` if the name is not recognized.
     ///
-    /// # Returns
-    /// * `Ok(())` on success
-    /// * `Err(String)` with error message if option name is not recognized
+    /// # Examples
+    ///
+    /// ```
+    /// let mut opts = ShellOptions::default();
+    /// opts.set_by_long_name("errexit", true).unwrap();
+    /// assert!(opts.errexit);
+    ///
+    /// assert!(opts.set_by_long_name("nonexistent", true).is_err());
+    /// ```
     pub fn set_by_long_name(&mut self, name: &str, value: bool) -> Result<(), String> {
         match name {
             "errexit" => { self.errexit = value; Ok(()) },
@@ -557,10 +602,19 @@ impl ShellOptions {
         }
     }
     
-    /// Get all option names and their current values
+    /// Lists all shell option names with their short-letter aliases and current values.
     ///
-    /// # Returns
-    /// A vector of tuples containing (long_name, short_name, value)
+    /// Returns a vector of tuples `(long_name, short_name, value)` for every supported option.
+    /// The `short_name` is `'\0'` when no short alias exists.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let opts = crate::state::ShellOptions::default();
+    /// let all = opts.get_all_options();
+    /// assert!(all.iter().any(|(name, _, _)| *name == "errexit"));
+    /// assert!(all.iter().any(|(name, short, _)| *name == "ignoreeof" && *short == '\0'));
+    /// ```
     pub fn get_all_options(&self) -> Vec<(&'static str, char, bool)> {
         vec![
             ("allexport", 'a', self.allexport),
@@ -687,6 +741,20 @@ pub struct ShellState {
 }
 
 impl ShellState {
+    /// Creates a new ShellState initialized with sensible defaults and environment-derived settings.
+    ///
+    /// The returned state initializes runtime fields (variables, exported, aliases, positional params, function/local scopes, FD table, traps, and control flags) and derives display preferences from environment:
+    /// - `colors_enabled` is determined by `NO_COLOR`, `RUSH_COLORS`, and whether stdout is a terminal.
+    /// - `condensed_cwd` is determined by `RUSH_CONDENSED` (defaults to `true`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let state = ShellState::new();
+    /// // basic invariants
+    /// assert_eq!(state.last_exit_code, 0);
+    /// assert!(state.shell_pid != 0);
+    /// ```
     pub fn new() -> Self {
         let shell_pid = std::process::id();
 

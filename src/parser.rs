@@ -280,6 +280,31 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
     parse_commands_sequentially(&tokens)
 }
 
+/// Parses a single top-level command slice into an AST.
+///
+/// Recognizes assignments, local assignments, `return`, negation (`!`), control constructs
+/// (`if`, `case`, `for`, `while`, `until`), function definitions, and otherwise falls back to
+/// pipeline parsing to produce an `Ast` for the provided token slice.
+///
+/// # Returns
+///
+/// `Ok(Ast)` on success, `Err(String)` with a descriptive error message on failure (for example,
+/// when the slice is empty or a `!` is not followed by a command).
+///
+/// # Examples
+///
+/// ```
+/// // Parse a simple assignment token slice
+/// let tokens = vec![Token::Word("VAR=value".into())];
+/// let ast = parse_slice(&tokens).unwrap();
+/// match ast {
+///     Ast::Assignment { var, value } => {
+///         assert_eq!(var, "VAR");
+///         assert_eq!(value, "value");
+///     }
+///     _ => panic!("expected Assignment"),
+/// }
+/// ```
 fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     if tokens.is_empty() {
         return Err("No commands found".to_string());
@@ -476,6 +501,32 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     parse_pipeline(tokens)
 }
 
+/// Parses a slice of tokens into a top-level AST representing one or more sequential shell commands.
+///
+/// This function consumes the provided token sequence and produces an `Ast` that represents either a
+/// single command/pipeline/compound construct or a `Sequence` of commands joined by semicolons/newlines
+/// and conditional operators. It recognizes subshells, command groups, pipelines, redirections,
+/// negation (`!`), function definitions, and control-flow blocks, and composes appropriate AST nodes.
+///
+/// # Errors
+///
+/// Returns an `Err(String)` when the tokens contain a syntactic problem that prevents building a valid AST,
+/// for example unmatched braces/parentheses, an empty subshell or command group, or when no commands are present.
+///
+/// # Examples
+///
+/// ```
+/// // Build a simple token stream for a single command `true`
+/// let tokens = vec![Token::Word("true".into())];
+/// let ast = parse_commands_sequentially(&tokens).unwrap();
+/// match ast {
+///     Ast::Pipeline(stages) => {
+///         assert_eq!(stages.len(), 1);
+///         assert!(stages[0].args.iter().any(|a| a == "true"));
+///     }
+///     _ => panic!("expected a pipeline with a single `true` command"),
+/// }
+/// ```
 fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
     let mut i = 0;
     let mut commands = Vec::new();
@@ -1233,6 +1284,24 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
     }
 }
 
+/// Parses a sequence of tokens into an `Ast::Pipeline` representing one or more pipeline stages.
+///
+/// The resulting pipeline contains one `ShellCommand` per stage with collected `args`,
+/// ordered `redirections`, and an optional `compound` (subshell or command group). Returns an
+/// error if the tokens contain unmatched braces/parentheses, an unexpected token, or no commands.
+///
+/// # Examples
+///
+/// ```
+/// use crate::parser::{parse_pipeline, Token, Ast};
+///
+/// let tokens = &[Token::Word("echo".to_string()), Token::Word("hello".to_string())];
+/// let ast = parse_pipeline(tokens).unwrap();
+/// match ast {
+///     Ast::Pipeline(stages) => assert_eq!(stages.len(), 1),
+///     _ => panic!("expected pipeline"),
+/// }
+/// ```
 fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
     let mut commands = Vec::new();
     let mut current_cmd = ShellCommand::default();

@@ -12,8 +12,21 @@ use super::state::ShellState;
 /// Maximum allowed subshell nesting depth to prevent stack overflow
 const MAX_SUBSHELL_DEPTH: usize = 100;
 
-/// Execute a command and capture its output as a string
-/// This is used for command substitution $(...)
+/// Execute the given AST and return its standard output (as produced to stdout) with trailing newlines removed.
+///
+/// The function runs the AST in the provided shell state and captures whatever would be written to stdout
+/// (including results from pipelines, builtins, functions, subshells, and external commands). If the executed
+/// AST exits with a non-zero status or fails to spawn/execute, an `Err(String)` describing the failure is returned.
+///
+/// # Examples
+///
+/// ```
+/// // Execute an empty pipeline yields an empty string
+/// let ast = Ast::Pipeline(vec![]);
+/// let mut state = ShellState::new();
+/// let out = execute_and_capture_output(ast, &mut state).unwrap();
+/// assert_eq!(out, "");
+/// ```
 fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
     // Create a pipe to capture stdout
     let (reader, writer) = pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
@@ -203,6 +216,18 @@ fn expand_variables_in_args(args: &[String], shell_state: &mut ShellState) -> Ve
     expanded_args
 }
 
+/// Expands shell-style variables, command substitutions, arithmetic expressions, and backtick substitutions inside a string.
+///
+/// This function processes `$VAR` and positional/special parameters (`$1`, `$?`, `$#`, `$*`, `$@`, `$$`, `$0`), command substitutions using `$(...)` and backticks, and arithmetic expansions using `$((...))`, producing the resulting string with substitutions applied. Undefined numeric positional parameters and the documented special parameters expand to an empty string; other undefined variable names are left as literal `$NAME`. Arithmetic evaluation errors are rendered as an error message (colorized when the shell state enables colors). Command substitutions are parsed and executed using the current shell state; on failure the original substitution text is preserved.
+///
+/// # Examples
+///
+/// ```
+/// // assume `shell_state` is a mutable ShellState with VAR=hello and a function `greet`
+/// let input = "Value:$VAR, Sum:$((1 + 2)), Cmd:$(echo hi), Back:`echo ok`";
+/// let out = expand_variables_in_string(input, &mut shell_state);
+/// // out might be: "Value:hello, Sum:3, Cmd:hi, Back:ok"
+/// ```
 pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> String {
     let mut result = String::new();
     let mut chars = input.chars().peekable();
@@ -529,6 +554,20 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
     result
 }
 
+/// Expand shell-style wildcard patterns in a list of arguments unless the `noglob` option is set.
+///
+/// Patterns containing `*`, `?`, or `[` are replaced by the sorted list of matching filesystem paths. If a pattern has no matches or is an invalid pattern, the original literal argument is kept. If the shell state's `noglob` option is enabled, all arguments are returned unchanged.
+///
+/// # Examples
+///
+/// ```
+/// # use crate::executor::expand_wildcards;
+/// # use crate::shell::ShellState;
+/// let shell_state = ShellState::default();
+/// let args = vec!["*.rs".to_string()];
+/// let expanded = expand_wildcards(&args, &shell_state).unwrap();
+/// // `expanded` now contains matched `.rs` paths in sorted order, or the literal `"*.rs"` if none matched.
+/// ```
 fn expand_wildcards(args: &[String], shell_state: &ShellState) -> Result<Vec<String>, String> {
     let mut expanded_args = Vec::new();
 
@@ -618,16 +657,28 @@ fn collect_here_document_content(delimiter: &str, shell_state: &mut ShellState) 
     content
 }
 
-/// Apply all redirections for a command in left-to-right order (POSIX requirement)
+/// Apply a sequence of redirections to a command or to the current process in left-to-right order.
 ///
-/// # Arguments
-/// * `redirections` - List of redirections to apply
-/// * `shell_state` - Mutable reference to shell state
-/// * `command` - Optional mutable reference to Command (for external commands)
+/// Applies each redirection in the provided slice to the optional `Command` (when executing an external
+/// command) or to the shell's file descriptor table for the current process. Redirections are processed
+/// left-to-right to match POSIX semantics; on the first failure no further redirections are applied.
 ///
-/// # Returns
-/// * `Ok(())` on success
-/// * `Err(String)` with error message on failure
+/// # Errors
+///
+/// Returns `Err(String)` with a diagnostic message if any redirection fails; returns `Ok(())` on success.
+///
+/// # Examples
+///
+/// ```
+/// # use crate::{apply_redirections, Redirection, ShellState, Command};
+/// # fn example() -> Result<(), String> {
+/// # let mut shell_state = ShellState::new();
+/// # let mut cmd = Command::new("cat");
+/// let reds = vec![Redirection::Output("out.txt".into())];
+/// apply_redirections(&reds, &mut shell_state, Some(&mut cmd))?;
+/// # Ok(())
+/// # }
+/// ```
 fn apply_redirections(
     redirections: &[Redirection],
     shell_state: &mut ShellState,
@@ -1039,6 +1090,26 @@ pub fn execute_trap_handler(trap_cmd: &str, shell_state: &mut ShellState) -> i32
     result
 }
 
+/// Evaluate an AST node within the provided shell state and return its exit code.
+///
+/// Executes the given `ast`, updating `shell_state` (variables, loop/function/subshell state,
+/// file descriptor and redirection effects, traps, etc.) as the AST semantics require.
+/// The function returns the final exit code for the executed AST node (0 for success,
+/// non-zero for failure). Side effects on `shell_state` follow the shell semantics
+/// implemented by the executor (variable assignment, function definition/call, loops,
+/// pipelines, redirections, subshell isolation, errexit behavior, traps, etc.).
+///
+/// # Examples
+///
+/// ```
+/// use crate::{Ast, ShellState, execute};
+///
+/// let mut state = ShellState::new();
+/// let ast = Ast::Assignment { var: "X".into(), value: "1".into() };
+/// let code = execute(ast, &mut state);
+/// assert_eq!(code, 0);
+/// assert_eq!(state.get_var("X").as_deref(), Some("1"));
+/// ```
 pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     match ast {
         Ast::Assignment { var, value } => {
@@ -1616,6 +1687,29 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
     }
 }
 
+/// Execute a single shell command (builtin, external command, function, or compound),
+/// applying redirections, per-command environment assignments, wildcard and variable
+/// expansion, xtrace printing, capture behavior, and errexit semantics as reflected
+/// in `shell_state`.
+///
+/// The function returns the command's exit code and updates `shell_state` (fd table,
+/// variables, capture buffer, exit request flags, etc.) as required by the executed
+/// command and the current shell options.
+///
+/// # Examples
+///
+/// ```
+/// // Construct a simple command and default shell state, then execute it.
+/// // (Types and constructors shown here assume typical crate-local APIs.)
+/// let mut shell_state = ShellState::default();
+/// let cmd = ShellCommand {
+///     args: vec!["echo".into(), "hello".into()],
+///     redirections: vec![],
+///     compound: None,
+/// };
+/// let code = execute_single_command(&cmd, &mut shell_state);
+/// assert_eq!(code, 0);
+/// ```
 fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
     // Check if this is a compound command (subshell)
     if let Some(ref compound_ast) = cmd.compound {
@@ -1957,6 +2051,28 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
     }
 }
 
+/// Execute a sequence of shell commands connected by pipes and return the pipeline's exit code.
+///
+/// This runs the provided commands as a pipeline: arguments are expanded (variables then wildcards),
+/// redirections are applied per command, builtins are executed inline where supported, and external
+/// commands are spawned as child processes. If `shell_state.options.noexec` is set the pipeline is
+/// not executed (no side effects) unless a `set` builtin appears in the pipeline. When
+/// `shell_state.capture_output` is active, the last command's stdout is captured into that buffer.
+/// On success returns the exit status of the final pipeline stage; on spawn, wait, or redirection
+/// failures returns `1`.
+///
+/// # Examples
+///
+/// ```
+/// let mut state = ShellState::default();
+/// let cmd = ShellCommand {
+///     args: vec!["echo".into(), "hello".into()],
+///     redirections: vec![],
+///     compound: None,
+/// };
+/// let exit = execute_pipeline(&[cmd], &mut state);
+/// assert_eq!(exit, 0);
+/// ```
 fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut ShellState) -> i32 {
     // Check noexec option (-n): Read commands but don't execute them
     // Exception: The 'set' builtin must always execute to allow disabling noexec

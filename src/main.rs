@@ -358,6 +358,19 @@ fn execute_exit_trap(shell_state: &mut state::ShellState) {
     }
 }
 
+/// Sources the user's ~/.rushrc into the provided shell state if the file exists.
+///
+/// If the `HOME` environment variable is set and a `.rushrc` file exists in that
+/// directory, reads its contents and executes it in `shell_state`. No action is
+/// taken if `HOME` is unset, the file does not exist, or the file cannot be read.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Provide a ShellState and source the user's rushrc if present.
+/// let mut state = state::ShellState::new();
+/// source_rushrc(&mut state);
+/// ```
 fn source_rushrc(shell_state: &mut state::ShellState) {
     if let Some(home) = env::var_os("HOME") {
         let rushrc_path = std::path::Path::new(&home).join(".rushrc");
@@ -434,7 +447,18 @@ mod tests {
         assert_eq!(shell_state.last_exit_code, 0);
     }
 
-    /// Test xtrace with PS4 variable
+    /// Verifies that enabling xtrace prefixes traced commands with the `PS4` value.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut shell_state = state::ShellState::new();
+    /// shell_state.set_var("PS4", "DEBUG: ".to_string());
+    /// shell_state.options.xtrace = true;
+    /// script_engine::execute_line("echo test", &mut shell_state);
+    /// assert_eq!(shell_state.get_var("PS4"), Some("DEBUG: ".to_string()));
+    /// assert_eq!(shell_state.last_exit_code, 0);
+    /// ```
     #[test]
     fn test_xtrace_with_ps4() {
         let mut shell_state = state::ShellState::new();
@@ -588,8 +612,26 @@ mod tests {
         assert!(shell_state.options.noexec);
     }
 
-    /// Test set builtin disables options correctly
-    #[test]
+    /// Verifies that the `set +<option>` builtin clears the corresponding shell option flags.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut shell_state = state::ShellState::new();
+    /// shell_state.options.errexit = true;
+    /// shell_state.options.nounset = true;
+    /// shell_state.options.xtrace = true;
+    /// shell_state.options.noexec = true;
+    ///
+    /// script_engine::execute_line("set +e", &mut shell_state);
+    /// assert!(!shell_state.options.errexit);
+    /// script_engine::execute_line("set +u", &mut shell_state);
+    /// assert!(!shell_state.options.nounset);
+    /// script_engine::execute_line("set +x", &mut shell_state);
+    /// assert!(!shell_state.options.xtrace);
+    /// script_engine::execute_line("set +n", &mut shell_state);
+    /// assert!(!shell_state.options.noexec);
+    /// ```
     fn test_set_builtin_disable_options() {
         let mut shell_state = state::ShellState::new();
         
@@ -800,7 +842,17 @@ mod tests {
         assert!(!shell_state.exit_requested);
     }
 
-    /// Test errexit with || operator
+    /// Verifies that enabling `errexit` does not cause the shell to exit when a failing command is part of an `||` chain.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut shell_state = state::ShellState::new();
+    /// shell_state.options.errexit = true;
+    /// script_engine::execute_line("false || echo fallback", &mut shell_state);
+    /// assert!(!shell_state.exit_requested);
+    /// assert_eq!(shell_state.last_exit_code, 0);
+    /// ```
     #[test]
     fn test_errexit_with_or_operator() {
         let mut shell_state = state::ShellState::new();
@@ -933,6 +985,19 @@ mod tests {
         assert_eq!(shell_state.get_var("#"), Some("4".to_string()));
     }
 
+    /// Verifies positional parameter behavior when no positional parameters have been set.
+    ///
+    /// Checks that `$1` is unset, `$#` is `"0"`, and both `$@` and `$*` are empty strings.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let shell_state = state::ShellState::new();
+    /// assert_eq!(shell_state.get_var("1"), None);
+    /// assert_eq!(shell_state.get_var("#"), Some("0".to_string()));
+    /// assert_eq!(shell_state.get_var("@"), Some("".to_string()));
+    /// assert_eq!(shell_state.get_var("*"), Some("".to_string()));
+    /// ```
     #[test]
     fn test_positional_params_empty() {
         let shell_state = state::ShellState::new();
@@ -1336,6 +1401,17 @@ mod tests {
         assert!(shell_state.options.allexport);
     }
 
+    /// Verifies that enabling `allexport` causes newly assigned variables to be exported automatically.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut shell_state = state::ShellState::new();
+    /// shell_state.options.allexport = true;
+    /// script_engine::execute_line("TEST_VAR=value", &mut shell_state);
+    /// assert!(shell_state.exported.contains("TEST_VAR"));
+    /// assert_eq!(shell_state.get_var("TEST_VAR"), Some("value".to_string()));
+    /// ```
     #[test]
     fn test_allexport_auto_exports() {
         let mut shell_state = state::ShellState::new();
@@ -1694,7 +1770,18 @@ mod set_builtin_error_handling {
         assert_ne!(shell_state.last_exit_code, 0);
     }
 
-    /// Test option with invalid value
+    /// Verify that `set -o` rejects options specified with an explicit value.
+    ///
+    /// This test runs `set -o errexit=true` (option with an explicit `=value`) and
+    /// asserts the shell treats it as an error by setting a non-zero `last_exit_code`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut shell_state = state::ShellState::new();
+    /// script_engine::execute_line("set -o errexit=true", &mut shell_state);
+    /// assert_ne!(shell_state.last_exit_code, 0);
+    /// ```
     #[test]
     fn test_option_with_invalid_value() {
         let mut shell_state = state::ShellState::new();
@@ -1932,7 +2019,25 @@ mod set_builtin_posix_compliance {
 mod set_builtin_performance {
     use super::*;
 
-    /// Test large number of positional parameters (100+)
+    /// Verifies correct handling and indexing of a large number of positional parameters.
+    ///
+    /// Constructs a `set --` command with 200 parameters, executes it, and asserts that
+    /// the positional parameter count and selected positional values are stored and accessible.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut shell_state = state::ShellState::new();
+    /// let mut cmd = "set --".to_string();
+    /// for i in 1..=200 {
+    ///     cmd.push_str(&format!(" param{}", i));
+    /// }
+    /// script_engine::execute_line(&cmd, &mut shell_state);
+    /// assert_eq!(shell_state.get_var("#"), Some("200".to_string()));
+    /// assert_eq!(shell_state.get_var("1"), Some("param1".to_string()));
+    /// assert_eq!(shell_state.get_var("100"), Some("param100".to_string()));
+    /// assert_eq!(shell_state.get_var("200"), Some("param200".to_string()));
+    /// ```
     #[test]
     fn test_large_positional_params() {
         let mut shell_state = state::ShellState::new();

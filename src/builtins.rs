@@ -76,6 +76,19 @@ pub trait Builtin {
     ) -> i32;
 }
 
+/// Provides a vector of all builtin command implementations in registration order.
+///
+/// Each element is a boxed implementation of `Builtin` representing one builtin command
+/// available to the shell.
+///
+/// # Examples
+///
+/// ```
+/// let builtins = crate::builtins::get_builtins();
+/// let names: Vec<_> = builtins.iter().map(|b| b.name()).collect();
+/// assert!(names.contains(&"cd"));
+/// assert!(names.contains(&"pwd"));
+/// ```
 fn get_builtins() -> Vec<Box<dyn Builtin>> {
     vec![
         Box::new(builtin_cd::CdBuiltin),
@@ -121,6 +134,29 @@ pub fn get_builtin_commands() -> Vec<String> {
     commands
 }
 
+/// Execute a builtin command, applying redirections and selecting the appropriate output writer.
+///
+/// This function locates and runs the builtin named by `cmd.args[0]`, applying any redirections
+/// from `cmd.redirections` in left-to-right order, expanding filenames using `shell_state`,
+/// saving and restoring file descriptors around the builtin invocation, and selecting stdout
+/// from the shell's file-descriptor table (or using a sink writer if stdout is closed).
+/// If `output_override` is provided, it is used directly as the builtin's output writer and
+/// redirections are not applied. Colored error messages are printed according to `shell_state`'s
+/// color settings. On success it returns the builtin's exit code; on failure it returns `1`.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Construct a ShellCommand and ShellState appropriately in real code.
+/// // Here we show the call site pattern only.
+/// # use std::io::Write;
+/// # struct ShellCommand { args: Vec<String>, redirections: Vec<()> }
+/// # struct ShellState { colors_enabled: bool, color_scheme: (), fd_table: std::rc::Rc<std::cell::RefCell<()>> }
+/// # fn example_call(cmd: &ShellCommand, state: &mut ShellState) {
+/// let exit_code = crate::builtins::execute_builtin(cmd, state, None);
+/// println!("exit code: {}", exit_code);
+/// # }
+/// ```
 pub fn execute_builtin(
     cmd: &ShellCommand,
     shell_state: &mut ShellState,
