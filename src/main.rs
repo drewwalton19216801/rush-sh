@@ -631,7 +631,8 @@ mod tests {
     /// assert!(!shell_state.options.xtrace);
     /// script_engine::execute_line("set +n", &mut shell_state);
     /// assert!(!shell_state.options.noexec);
-    /// ```
+    /// ```\
+    #[test]
     fn test_set_builtin_disable_options() {
         let mut shell_state = state::ShellState::new();
         
