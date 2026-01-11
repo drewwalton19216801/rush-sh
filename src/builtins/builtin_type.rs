@@ -87,38 +87,48 @@ impl super::Builtin for TypeBuiltin {
         for name in &names {
             let mut found = false;
 
-            // 1. Check aliases
-            if let Some(alias_value) = shell_state.get_alias(name) {
-                if !path_only {
+            if path_only {
+                // With -p flag, only search for external commands in PATH
+                if let Some(path) = find_in_path(name, shell_state) {
+                    let _ = writeln!(output_writer, "{}", path);
+                    found = true;
+                }
+                // For -p, we don't report "not found" for non-external commands
+                // We just produce no output, but still mark as found if it exists as alias/keyword/function/builtin
+                else if shell_state.get_alias(name).is_some()
+                    || is_shell_keyword(name)
+                    || shell_state.functions.contains_key(name)
+                    || super::is_builtin(name)
+                {
+                    found = true;
+                }
+            } else {
+                // Without -p flag, check in priority order and display type
+                // 1. Check aliases
+                if let Some(alias_value) = shell_state.get_alias(name) {
                     let _ = writeln!(output_writer, "{} is aliased to '{}'", name, alias_value);
+                    found = true;
                 }
-                found = true;
-            }
-            // 2. Check keywords
-            else if is_shell_keyword(name) {
-                if !path_only {
+                // 2. Check keywords
+                else if is_shell_keyword(name) {
                     let _ = writeln!(output_writer, "{} is a shell keyword", name);
+                    found = true;
                 }
-                found = true;
-            }
-            // 3. Check functions
-            else if shell_state.functions.contains_key(name) {
-                if !path_only {
+                // 3. Check functions
+                else if shell_state.functions.contains_key(name) {
                     let _ = writeln!(output_writer, "{} is a function", name);
+                    found = true;
                 }
-                found = true;
-            }
-            // 4. Check built-ins
-            else if super::is_builtin(name) {
-                if !path_only {
+                // 4. Check built-ins
+                else if super::is_builtin(name) {
                     let _ = writeln!(output_writer, "{} is a shell builtin", name);
+                    found = true;
                 }
-                found = true;
-            }
-            // 5. Check external commands in PATH
-            else if let Some(path) = find_in_path(name, shell_state) {
-                let _ = writeln!(output_writer, "{} is {}", name, path);
-                found = true;
+                // 5. Check external commands in PATH
+                else if let Some(path) = find_in_path(name, shell_state) {
+                    let _ = writeln!(output_writer, "{} is {}", name, path);
+                    found = true;
+                }
             }
 
             // If not found, print error
@@ -380,7 +390,10 @@ mod tests {
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
         assert_eq!(exit_code, 0);
         let output_str = String::from_utf8(output).unwrap();
-        assert!(output_str.contains("ls is /"));
+        // With -p, should only show the path, not "ls is /bin/ls"
+        assert!(output_str.starts_with('/'));
+        assert!(output_str.contains("/ls"));
+        assert!(!output_str.contains("ls is"));
     }
 
     #[test]
