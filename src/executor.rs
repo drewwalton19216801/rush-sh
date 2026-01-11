@@ -1759,7 +1759,7 @@ fn execute_single_command(cmd: &ShellCommand, shell_state: &mut ShellState) -> i
         let command_str = expanded_args.join(" ");
         if shell_state.colors_enabled {
             eprintln!(
-                "{}{}{}",
+                "{}{}{}\x1b[0m",
                 shell_state.color_scheme.builtin,
                 ps4,
                 command_str
