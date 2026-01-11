@@ -1,7 +1,7 @@
 # POSIX Compliance Progress for Rush Shell
 
 **Current Version**: 0.6.7
-**POSIX Compliance Level**: ~90%
+**POSIX Compliance Level**: ~91%
 **Test Coverage**: 413+ test functions across all components
 
 This document outlines the current progress toward full POSIX sh (IEEE Std 1003.1-2008) compliance for the Rush shell implementation. Features are categorized by POSIX specification sections and marked as implemented (✅), partially implemented (⚠️), or not implemented (❌).
@@ -131,7 +131,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ exit (implemented)
 - ✅ export (implemented)
 - ❌ readonly (not implemented)
-- ❌ return (not implemented)
+- ✅ return (implemented)
 - ❌ set (not implemented)
 - ✅ shift (implemented)
 - ❌ times (not implemented)
@@ -142,14 +142,14 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Current Built-in Status
 
-**Implemented (21):**
+**Implemented (22):**
 
-- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, set_color_scheme, set_colors, set_condensed, shift, source, test, trap, type, unalias, unset
+- alias, cd, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set_color_scheme, set_colors, set_condensed, shift, source, test, trap, type, unalias, unset
 
 **Missing POSIX Built-ins:**
 
-- **Special Built-ins**: :, break, continue, eval, exec, readonly, return, set, times, umask, wait
-- **Note**: Many common built-ins are implemented (alias, dirs, pushd/popd, source, test, color management)
+- **Special Built-ins**: :, break, continue, eval, exec, readonly, set, times, umask, wait
+- **Note**: Many common built-ins are implemented (alias, dirs, pushd/popd, source, test, return, color management)
 
 ## 4. Regular Built-in Utilities
 
@@ -226,14 +226,11 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - `eval` (evaluate string as shell command)
     - `exec` (replace shell with command)
     - `readonly` (mark variables as read-only)
-    - `return` (return from function)
     - `break` (exit from loop)
     - `continue` (skip to next loop iteration)
     - `:` (colon - null command)
     - `times` (print accumulated times)
     - `umask` (set file creation mask)
-    - `wait` (wait for background jobs)
-
     - `wait` (wait for background jobs)
 
 ### Medium Priority
@@ -279,18 +276,18 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ Missing built-in functionality (eval, exec, set, readonly, return, break, continue, etc.)
+- ❌ Missing built-in functionality (eval, exec, set, readonly, break, continue, etc.)
 - ❌ Job control features (bg, fg, jobs, &)
 
 ## Compliance Metrics
 
-### Estimated Current Compliance: ~90%
+### Estimated Current Compliance: ~91%
 
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
-- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions, subshells, command grouping implemented)
-- **Built-in Commands**: 65% ✅ (20 built-ins implemented out of 31 POSIX required)
+- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions with return, subshells, command grouping implemented)
+- **Built-in Commands**: 68% ✅ (22 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)
 - **Job Control**: 0% ❌ (optional POSIX feature)

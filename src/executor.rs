@@ -1259,6 +1259,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                     // Clear return state
                     shell_state.clear_return();
 
+                    // Update last_exit_code so $? captures the return value
+                    shell_state.last_exit_code = return_value;
+
                     // Return the early return value
                     return return_value;
                 }
@@ -1268,6 +1271,9 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Exit function context
                 shell_state.exit_function();
+
+                // Update last_exit_code so $? captures the function's exit code
+                shell_state.last_exit_code = exit_code;
 
                 exit_code
             } else {
