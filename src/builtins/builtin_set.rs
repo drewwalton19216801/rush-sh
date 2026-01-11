@@ -14,9 +14,11 @@ impl super::Builtin for SetBuiltin {
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// let b = SetBuiltin;
-    /// assert_eq!(b.name(), "set");
+    /// ```
+    /// // Note: SetBuiltin is in a private module
+    /// // Use the public builtins API instead
+    /// use rush_sh::builtins::is_builtin;
+    /// assert!(is_builtin("set"));
     /// ```
     fn name(&self) -> &'static str {
         "set"
@@ -31,9 +33,8 @@ impl super::Builtin for SetBuiltin {
     /// # Examples
     ///
     /// ```
-    /// let b = crate::builtins::builtin_set::SetBuiltin;
-    /// let names = b.names();
-    /// assert_eq!(names, vec!["set"]);
+    /// // Note: SetBuiltin is in a private module
+    /// // This example is for documentation only
     /// ```
     fn names(&self) -> Vec<&'static str> {
         vec![self.name()]
@@ -44,9 +45,10 @@ impl super::Builtin for SetBuiltin {
     /// # Examples
     ///
     /// ```
-    /// use crate::builtins::builtin_set::SetBuiltin;
-    /// let b = SetBuiltin;
-    /// assert_eq!(b.description(), "Set or unset shell options and positional parameters");
+    /// // Note: SetBuiltin is in a private module
+    /// // Use the public builtins API instead
+    /// use rush_sh::builtins::is_builtin;
+    /// assert!(is_builtin("set"));
     /// ```
     fn description(&self) -> &'static str {
         "Set or unset shell options and positional parameters"
@@ -72,18 +74,9 @@ impl super::Builtin for SetBuiltin {
     ///
     /// # Examples
     ///
-    /// ```no_run
-    /// use parser::ShellCommand;
-    /// use state::ShellState;
-    /// use builtins::builtin_set::SetBuiltin;
-    /// use std::io::sink;
-    ///
-    /// let builtin = SetBuiltin;
-    /// let cmd = ShellCommand { args: vec!["set".into(), "-e".into()] };
-    /// let mut shell = ShellState::default();
-    /// let mut out = sink();
-    /// let code = builtin.run(&cmd, &mut shell, &mut out);
-    /// assert!(code == 0);
+    /// ```
+    /// // Note: SetBuiltin is in a private module
+    /// // This example is for documentation only
     /// ```
     fn run(
         &self,
@@ -172,9 +165,8 @@ struct ParsedArgs {
 /// # Examples
 ///
 /// ```
-/// let parsed = parse_arguments(&[String::from("-e"), String::from("--"), String::from("arg1")]).unwrap();
-/// assert_eq!(parsed.options_in_order, vec![('e', true)]);
-/// assert_eq!(parsed.positional_args, vec![String::from("arg1")]);
+/// // Note: parse_arguments is a private function
+/// // This example is for documentation only
 /// ```
 fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
     let mut options_in_order = Vec::new();
@@ -257,13 +249,8 @@ fn parse_arguments(args: &[String]) -> Result<ParsedArgs, String> {
 /// # Examples
 ///
 /// ```
-/// use crate::state::ShellState;
-/// let mut state = ShellState::default();
-/// state.variables.insert("TEST_VAR".to_string(), "test_value".to_string());
-/// let mut out: Vec<u8> = Vec::new();
-/// assert_eq!(display_all_variables(&state, &mut out), 0);
-/// let s = String::from_utf8(out).unwrap();
-/// assert!(s.contains("TEST_VAR=test_value"));
+/// // Note: display_all_variables is a private function
+/// // This example is for documentation only
 /// ```
 fn display_all_variables(shell_state: &ShellState, output_writer: &mut dyn Write) -> i32 {
     // Get all variables sorted by name
@@ -286,12 +273,8 @@ fn display_all_variables(shell_state: &ShellState, output_writer: &mut dyn Write
 /// # Examples
 ///
 /// ```
-/// let state = ShellState::default();
-/// let mut buf = Vec::new();
-/// let _ = display_all_options(&state, &mut buf);
-/// let output = String::from_utf8(buf).unwrap();
-/// // Output contains lines like "set -o errexit on"
-/// assert!(output.contains("set -o"));
+/// // Note: display_all_options is a private function
+/// // This example is for documentation only
 /// ```
 ///
 /// Returns 0 on success.

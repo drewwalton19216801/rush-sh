@@ -61,8 +61,8 @@ pub enum Token {
 /// # Examples
 ///
 /// ```
-/// assert_eq!(is_keyword("if"), Some(Token::If));
-/// assert_eq!(is_keyword("foobar"), None);
+/// // Note: is_keyword is a private function
+/// // This example is for documentation only
 /// ```
 fn is_keyword(word: &str) -> Option<Token> {
     match word {
@@ -411,8 +411,8 @@ fn expand_variables_in_command(command: &str, shell_state: &ShellState) -> Strin
 /// # Examples
 ///
 /// ```
-/// use crate::lexer::{lex, Token};
-/// use crate::state::ShellState;
+/// use rush_sh::lexer::{lex, Token};
+/// use rush_sh::state::ShellState;
 ///
 /// let state = ShellState::default();
 /// let toks = lex("echo hello | cat > out.txt", &state).unwrap();

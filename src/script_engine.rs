@@ -98,6 +98,7 @@ pub fn contains_keyword(line: &str, keyword: &str) -> bool {
 /// # Examples
 ///
 /// ```
+/// use rush_sh::script_engine::starts_with_keyword;
 /// assert!(starts_with_keyword("  if condition", "if"));
 /// assert!(!starts_with_keyword("echo if", "if"));
 /// ```

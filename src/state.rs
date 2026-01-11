@@ -394,13 +394,13 @@ impl FileDescriptorTable {
 }
 
 impl Default for FileDescriptorTable {
-    /// Creates the default ShellOptions with all option flags set to false.
+    /// Creates the default FileDescriptorTable.
     ///
     /// # Examples
     ///
     /// ```
-    /// let opts = ShellOptions::default();
-    /// assert_eq!(opts.get_by_long_name("errexit"), Some(false));
+    /// use rush_sh::state::FileDescriptorTable;
+    /// let table = FileDescriptorTable::default();
     /// ```
     fn default() -> Self {
         Self::new()
@@ -450,6 +450,7 @@ impl Default for ShellOptions {
     /// # Examples
     ///
     /// ```
+    /// use rush_sh::state::ShellOptions;
     /// let opts = ShellOptions::default();
     /// assert!(!opts.errexit && !opts.nounset && !opts.xtrace);
     /// ```
@@ -478,6 +479,7 @@ impl ShellOptions {
     /// # Examples
     ///
     /// ```
+    /// use rush_sh::state::ShellOptions;
     /// let opts = ShellOptions::default();
     /// assert_eq!(opts.get_by_short_name('e'), Some(false)); // errexit is false by default
     /// assert_eq!(opts.get_by_short_name('?'), None); // unknown short name
@@ -516,6 +518,7 @@ impl ShellOptions {
     /// # Examples
     ///
     /// ```
+    /// use rush_sh::state::ShellOptions;
     /// let mut opts = ShellOptions::default();
     /// opts.set_by_short_name('e', true).unwrap();
     /// assert!(opts.errexit);
@@ -547,7 +550,8 @@ impl ShellOptions {
     /// # Examples
     ///
     /// ```
-    /// let mut opts = crate::state::ShellOptions::default();
+    /// use rush_sh::state::ShellOptions;
+    /// let mut opts = ShellOptions::default();
     /// opts.errexit = true;
     /// assert_eq!(opts.get_by_long_name("errexit"), Some(true));
     /// assert_eq!(opts.get_by_long_name("noglob"), Some(false));
@@ -579,6 +583,7 @@ impl ShellOptions {
     /// # Examples
     ///
     /// ```
+    /// use rush_sh::state::ShellOptions;
     /// let mut opts = ShellOptions::default();
     /// opts.set_by_long_name("errexit", true).unwrap();
     /// assert!(opts.errexit);
@@ -610,7 +615,8 @@ impl ShellOptions {
     /// # Examples
     ///
     /// ```
-    /// let opts = crate::state::ShellOptions::default();
+    /// use rush_sh::state::ShellOptions;
+    /// let opts = ShellOptions::default();
     /// let all = opts.get_all_options();
     /// assert!(all.iter().any(|(name, _, _)| *name == "errexit"));
     /// assert!(all.iter().any(|(name, short, _)| *name == "ignoreeof" && *short == '\0'));
@@ -750,6 +756,7 @@ impl ShellState {
     /// # Examples
     ///
     /// ```
+    /// use rush_sh::ShellState;
     /// let state = ShellState::new();
     /// // basic invariants
     /// assert_eq!(state.last_exit_code, 0);

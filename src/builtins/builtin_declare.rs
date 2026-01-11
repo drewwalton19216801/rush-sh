@@ -119,9 +119,8 @@ fn format_function_definition(name: &str, ast: &Ast) -> String {
 /// # Examples
 ///
 /// ```
-/// let ast = Ast::FunctionCall { name: "echo".into(), args: vec!["hi".into()] };
-/// let s = format_ast_body(&ast, 1);
-/// assert_eq!(s, "    echo hi");
+/// // Note: format_ast_body is a private function
+/// // This example is for documentation only
 /// ```
 fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
     let indent = "    ".repeat(indent_level);
@@ -298,14 +297,8 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
 /// # Examples
 ///
 /// ```
-/// use crate::parser::{ShellCommand, Redirection};
-///
-/// let cmd = ShellCommand {
-///     args: vec!["echo".into(), "hello".into()],
-///     redirections: vec![Redirection::Output("out.txt".into())],
-/// };
-///
-/// assert_eq!(format_command(&cmd), "echo hello > out.txt");
+/// // Note: format_command is a private function
+/// // This example is for documentation only
 /// ```
 fn format_command(cmd: &crate::parser::ShellCommand) -> String {
     let mut result = cmd.args.join(" ");

@@ -359,7 +359,8 @@ fn collect_variable_names_with_prefix(prefix: &str, shell_state: &ShellState) ->
 /// # Examples
 ///
 /// ```
-/// use crate::{ParameterExpansion, ParameterModifier, ShellState, expand_parameter};
+/// use rush_sh::parameter_expansion::{ParameterExpansion, ParameterModifier, expand_parameter};
+/// use rush_sh::ShellState;
 ///
 /// let exp = ParameterExpansion { var_name: "VAR".to_string(), modifier: ParameterModifier::None };
 /// let mut state = ShellState::new();

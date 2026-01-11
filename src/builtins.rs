@@ -84,10 +84,11 @@ pub trait Builtin {
 /// # Examples
 ///
 /// ```
-/// let builtins = crate::builtins::get_builtins();
-/// let names: Vec<_> = builtins.iter().map(|b| b.name()).collect();
-/// assert!(names.contains(&"cd"));
-/// assert!(names.contains(&"pwd"));
+/// // Note: get_builtins is a private function
+/// // Use is_builtin() or get_builtin_commands() instead for public API
+/// use rush_sh::builtins::is_builtin;
+/// assert!(is_builtin("cd"));
+/// assert!(is_builtin("pwd"));
 /// ```
 fn get_builtins() -> Vec<Box<dyn Builtin>> {
     vec![
@@ -147,15 +148,14 @@ pub fn get_builtin_commands() -> Vec<String> {
 /// # Examples
 ///
 /// ```no_run
+/// use rush_sh::builtins::execute_builtin;
+/// use rush_sh::parser::ShellCommand;
+/// use rush_sh::ShellState;
 /// // Construct a ShellCommand and ShellState appropriately in real code.
-/// // Here we show the call site pattern only.
-/// # use std::io::Write;
-/// # struct ShellCommand { args: Vec<String>, redirections: Vec<()> }
-/// # struct ShellState { colors_enabled: bool, color_scheme: (), fd_table: std::rc::Rc<std::cell::RefCell<()>> }
-/// # fn example_call(cmd: &ShellCommand, state: &mut ShellState) {
-/// let exit_code = crate::builtins::execute_builtin(cmd, state, None);
+/// let cmd = ShellCommand { args: vec!["pwd".into()], redirections: vec![], compound: None };
+/// let mut state = ShellState::new();
+/// let exit_code = execute_builtin(&cmd, &mut state, None);
 /// println!("exit code: {}", exit_code);
-/// # }
 /// ```
 pub fn execute_builtin(
     cmd: &ShellCommand,
