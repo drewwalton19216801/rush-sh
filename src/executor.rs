@@ -1307,6 +1307,81 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
             exit_code
         }
+        Ast::Until { condition, body } => {
+            let mut exit_code = 0;
+
+            // Enter loop context
+            shell_state.enter_loop();
+
+            // Execute the loop until condition is true (exit code 0)
+            loop {
+                // Evaluate the condition
+                let cond_exit = execute(*condition.clone(), shell_state);
+
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    shell_state.exit_loop();
+                    return cond_exit;
+                }
+
+                // Check if exit was requested (e.g., from trap handler)
+                if shell_state.exit_requested {
+                    shell_state.exit_loop();
+                    return shell_state.exit_code;
+                }
+
+                // If condition is true (exit code 0), break
+                if cond_exit == 0 {
+                    break;
+                }
+
+                // Execute the body
+                exit_code = execute(*body.clone(), shell_state);
+
+                // Check if we got an early return from a function
+                if shell_state.is_returning() {
+                    shell_state.exit_loop();
+                    return exit_code;
+                }
+
+                // Check if exit was requested (e.g., from trap handler)
+                if shell_state.exit_requested {
+                    shell_state.exit_loop();
+                    return shell_state.exit_code;
+                }
+
+                // Check for break signal
+                if shell_state.is_breaking() {
+                    if shell_state.get_break_level() == 1 {
+                        // Break out of this loop
+                        shell_state.clear_break();
+                        break;
+                    } else {
+                        // Decrement level and propagate to outer loop
+                        shell_state.decrement_break_level();
+                        break;
+                    }
+                }
+
+                // Check for continue signal
+                if shell_state.is_continuing() {
+                    if shell_state.get_continue_level() == 1 {
+                        // Continue to next iteration of this loop
+                        shell_state.clear_continue();
+                        continue;
+                    } else {
+                        // Decrement level and propagate to outer loop
+                        shell_state.decrement_continue_level();
+                        break; // Exit this loop to continue outer loop
+                    }
+                }
+            }
+
+            // Exit loop context
+            shell_state.exit_loop();
+
+            exit_code
+        }
         Ast::FunctionDefinition { name, body } => {
             // Store function definition in shell state
             shell_state.define_function(name.clone(), *body);
@@ -3618,5 +3693,539 @@ mod tests {
         // continue returns 0, so the loop's exit code should be 0
         assert_eq!(exit_code, 0);
         assert_eq!(shell_state.get_var("count"), Some("2".to_string()));
+    }
+
+    // ========================================================================
+    // Until Loop Tests
+    // ========================================================================
+
+    #[test]
+    fn test_until_basic_loop() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        // i=0; until [ $i = "3" ]; do output="$output$i"; i=$((i + 1)); done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("012".to_string()));
+        assert_eq!(shell_state.get_var("i"), Some("3".to_string()));
+    }
+
+    #[test]
+    fn test_until_condition_initially_true() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("executed", "no".to_string());
+        
+        // until true; do executed="yes"; done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Assignment {
+                var: "executed".to_string(),
+                value: "yes".to_string(),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // Body should not execute since condition is true (exit code 0)
+        assert_eq!(shell_state.get_var("executed"), Some("no".to_string()));
+    }
+
+    #[test]
+    fn test_until_with_commands_in_body() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("count", "0".to_string());
+        
+        // count=0; until [ $count -ge 3 ]; do count=$((count + 1)); echo $count; done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$count".to_string(), "-ge".to_string(), "3".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "count".to_string(),
+                    value: "$((count + 1))".to_string(),
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["echo".to_string(), "$count".to_string()],
+                    redirections: vec![],
+                    compound: None,
+                }]),
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("count"), Some("3".to_string()));
+    }
+
+    #[test]
+    fn test_until_with_variable_modification() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("x", "1".to_string());
+        
+        // x=1; until [ $x -gt 5 ]; do x=$((x * 2)); done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$x".to_string(), "-gt".to_string(), "5".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Assignment {
+                var: "x".to_string(),
+                value: "$((x * 2))".to_string(),
+            }),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("x"), Some("8".to_string()));
+    }
+
+    #[test]
+    fn test_until_nested_loops() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+        
+        let inner_loop = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "$((j + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let outer_loop = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "0".to_string(),
+                },
+                inner_loop,
+            ])),
+        };
+        
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("10112021".to_string()));
+    }
+
+    #[test]
+    fn test_until_with_break() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["false".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["break".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("012".to_string()));
+    }
+
+    #[test]
+    fn test_until_with_continue() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "-ge".to_string(), "5".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["continue".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("1245".to_string()));
+    }
+
+    #[test]
+    fn test_until_empty_body() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        
+        // until true; do :; done (empty body with true condition)
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["true".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn test_until_with_command_substitution() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("count", "0".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        // until [ $(echo $count) = "3" ]; do output="$output$count"; count=$((count + 1)); done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$(echo $count)".to_string(), "=".to_string(), "3".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$count".to_string(),
+                },
+                Ast::Assignment {
+                    var: "count".to_string(),
+                    value: "$((count + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("012".to_string()));
+    }
+
+    #[test]
+    fn test_until_with_arithmetic_condition() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("x", "1".to_string());
+        shell_state.set_var("output", "".to_string());
+        
+        // x=1; until [ $((x * 2)) -gt 10 ]; do output="$output$x"; x=$((x + 1)); done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$((x * 2))".to_string(), "-gt".to_string(), "10".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$x".to_string(),
+                },
+                Ast::Assignment {
+                    var: "x".to_string(),
+                    value: "$((x + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("12345".to_string()));
+    }
+
+    #[test]
+    fn test_until_inside_for() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        
+        // for i in 1 2; do j=0; until [ $j = "2" ]; do output="$output$i$j"; j=$((j + 1)); done; done
+        let inner_until = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "$((j + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let outer_for = Ast::For {
+            variable: "i".to_string(),
+            items: vec!["1".to_string(), "2".to_string()],
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "0".to_string(),
+                },
+                inner_until,
+            ])),
+        };
+        
+        let exit_code = execute(outer_for, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("10112021".to_string()));
+    }
+
+    #[test]
+    fn test_for_inside_until() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+        
+        // i=0; until [ $i = "2" ]; do for j in a b; do output="$output$i$j"; done; i=$((i + 1)); done
+        let inner_for = Ast::For {
+            variable: "j".to_string(),
+            items: vec!["a".to_string(), "b".to_string()],
+            body: Box::new(Ast::Assignment {
+                var: "output".to_string(),
+                value: "$output$i$j".to_string(),
+            }),
+        };
+        
+        let outer_until = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                inner_for,
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let exit_code = execute(outer_until, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("0a0b1a1b".to_string()));
+    }
+
+    #[test]
+    fn test_until_inside_while() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+        
+        let inner_until = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "$((j + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let outer_while = Ast::While {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "-lt".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "0".to_string(),
+                },
+                inner_until,
+            ])),
+        };
+        
+        let exit_code = execute(outer_while, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("10112021".to_string()));
+    }
+
+    #[test]
+    fn test_while_inside_until() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+        
+        let inner_while = Ast::While {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$j".to_string(), "-lt".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "$((j + 1))".to_string(),
+                },
+            ])),
+        };
+        
+        let outer_until = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "0".to_string(),
+                },
+                inner_while,
+            ])),
+        };
+        
+        let exit_code = execute(outer_until, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("10112021".to_string()));
+    }
+
+    #[test]
+    fn test_until_preserves_exit_code() {
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("i", "0".to_string());
+        
+        // until [ $i = "1" ]; do i=$((i + 1)); false; done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "1".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Pipeline(vec![ShellCommand {
+                    args: vec!["false".to_string()],
+                    redirections: vec![],
+                    compound: None,
+                }]),
+            ])),
+        };
+        
+        let exit_code = execute(ast, &mut shell_state);
+        // Last command in body was false (exit 1), so loop should return 1
+        assert_eq!(exit_code, 1);
     }
 }

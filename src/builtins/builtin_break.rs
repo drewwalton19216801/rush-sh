@@ -268,4 +268,200 @@ mod tests {
 
         shell_state.exit_loop();
     }
+
+    #[test]
+    fn test_break_in_until_loop() {
+        let _lock = ENV_LOCK.lock().unwrap();
+
+        use crate::executor::execute;
+        use crate::parser::Ast;
+
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+
+        // until false; do output="$output$i"; i=$((i + 1)); if [ $i = "3" ]; then break; fi; done
+        let ast = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["false".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i".to_string(),
+                },
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["break".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+            ])),
+        };
+
+        let exit_code = execute(ast, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("012".to_string()));
+    }
+
+    #[test]
+    fn test_break_in_nested_until_loops() {
+        let _lock = ENV_LOCK.lock().unwrap();
+
+        use crate::executor::execute;
+        use crate::parser::Ast;
+
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+
+        // Nested until loops with break
+        let inner_loop = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "3".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "$((j + 1))".to_string(),
+                },
+                Ast::If {
+                    branches: vec![(
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "2".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                        Box::new(Ast::Pipeline(vec![ShellCommand {
+                            args: vec!["break".to_string()],
+                            redirections: vec![],
+                            compound: None,
+                        }])),
+                    )],
+                    else_branch: None,
+                },
+            ])),
+        };
+
+        let outer_loop = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "0".to_string(),
+                },
+                inner_loop,
+            ])),
+        };
+
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        // Inner loop breaks at j=2, so we get: 10, 11 (then break), 20, 21 (then break)
+        assert_eq!(shell_state.get_var("output"), Some("10112021".to_string()));
+    }
+
+    #[test]
+    fn test_break_2_in_nested_until_loops() {
+        let _lock = ENV_LOCK.lock().unwrap();
+
+        use crate::executor::execute;
+        use crate::parser::Ast;
+
+        let mut shell_state = ShellState::new();
+        shell_state.set_var("output", "".to_string());
+        shell_state.set_var("i", "0".to_string());
+
+        // Nested until loops with break 2
+        let inner_loop = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "3".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "output".to_string(),
+                    value: "$output$i$j".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "$((j + 1))".to_string(),
+                },
+                Ast::And {
+                    left: Box::new(Ast::Pipeline(vec![ShellCommand {
+                        args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "2".to_string()],
+                        redirections: vec![],
+                        compound: None,
+                    }])),
+                    right: Box::new(Ast::If {
+                        branches: vec![(
+                            Box::new(Ast::Pipeline(vec![ShellCommand {
+                                args: vec!["test".to_string(), "$j".to_string(), "=".to_string(), "1".to_string()],
+                                redirections: vec![],
+                                compound: None,
+                            }])),
+                            Box::new(Ast::Pipeline(vec![ShellCommand {
+                                args: vec!["break".to_string(), "2".to_string()],
+                                redirections: vec![],
+                                compound: None,
+                            }])),
+                        )],
+                        else_branch: None,
+                    }),
+                },
+            ])),
+        };
+
+        let outer_loop = Ast::Until {
+            condition: Box::new(Ast::Pipeline(vec![ShellCommand {
+                args: vec!["test".to_string(), "$i".to_string(), "=".to_string(), "3".to_string()],
+                redirections: vec![],
+                compound: None,
+            }])),
+            body: Box::new(Ast::Sequence(vec![
+                Ast::Assignment {
+                    var: "i".to_string(),
+                    value: "$((i + 1))".to_string(),
+                },
+                Ast::Assignment {
+                    var: "j".to_string(),
+                    value: "0".to_string(),
+                },
+                inner_loop,
+            ])),
+        };
+
+        let exit_code = execute(outer_loop, &mut shell_state);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.get_var("output"), Some("10111220".to_string()));
+    }
 }

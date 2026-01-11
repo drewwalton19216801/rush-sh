@@ -63,7 +63,7 @@ src/
 #### **Parser** (`src/parser.rs`)
 
 - **AST Construction**: Builds Abstract Syntax Tree from token stream
-- **Control Structures**: Handles if/elif/else, case, for, while, functions
+- **Control Structures**: Handles if/elif/else, case, for, while, until, functions
 - **Pipeline Construction**: Creates pipeline structures for command chaining
 - **Redirection Parsing**: Processes I/O redirection operators
 - **Subshell Parsing**: Parses subshell expressions with proper nesting

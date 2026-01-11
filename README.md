@@ -108,6 +108,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
   - `case` statements with glob pattern matching: `case word in pattern1|pattern2) commands ;; *.txt) commands ;; *) default ;; esac`
   - `for` loops: `for variable in item1 item2 item3; do commands; done`
   - `while` loops: `while condition; do commands; done`
+  - `until` loops: `until condition; do commands; done`
   - **Functions**: Complete function support with definition, calls, local variables, return statements, and recursion
     - Function definition: `name() { commands; }`
     - Function calls: `name arg1 arg2`
@@ -158,7 +159,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~90% POSIX compliant). 
 
 **File Descriptor Operations** - Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and read/write (N<>) operations. Includes 30+ test cases for comprehensive coverage.
 
-**Complete Control Structures** - Full implementation of POSIX control structures including `for` loops, `while` loops, and function definitions with local variable scoping, return statements, and recursion support.
+**Complete Control Structures** - Full implementation of POSIX control structures including `for` loops, `while` loops, `until` loops, and function definitions with local variable scoping, return statements, and recursion support.
 
 **Function System** - Comprehensive function implementation with definition, calls, local variables (`local` keyword), return statements, recursion, and function introspection (`declare -f`).
 
@@ -913,6 +914,8 @@ Several features were fully implemented but not properly documented in previous 
 **For Loops** - Complete implementation with `for variable in items; do commands; done` syntax, supporting variable assignment, multiple items, and integration with all shell features.
 
 **While Loops** - Full implementation with `while condition; do commands; done` syntax, supporting complex conditions, nested loops, and proper exit code handling.
+
+**Until Loops** - Full implementation with `until condition; do commands; done` syntax, executing commands until the condition becomes true (inverse of while loops), supporting complex conditions, nested loops, and proper exit code handling.
 
 **Function System** - Comprehensive function implementation including:
 
@@ -1990,6 +1993,7 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
 - Execute elif example script: `source examples/elif_example.sh`
 - Execute case example script: `source examples/case_example.sh`
 - Execute variables example script: `source examples/variables_example.sh`
+- Execute until loop demo: `source examples/until_demo.sh`
 - Execute complex example script with command substitution: `source examples/complex_example.sh`
 - Execute positional parameters demo: `source examples/positional_parameters_demo.sh`
 - Execute functions demo (comprehensive): `source examples/functions_demo.sh`
@@ -2020,13 +2024,14 @@ Unlike script mode (running `./target/release/rush-sh script.sh`), the `source` 
 - Use control structures:
   - If statement: `if true; then echo yes; else echo no; fi`
   - If-elif-else statement: `if false; then echo no; elif true; then echo yes; else echo maybe; fi`
+  - While loops: `count=0; while [ $count -lt 5 ]; do echo "Count: $count"; count=$((count + 1)); done`
+  - Until loops: `count=0; until [ $count -eq 5 ]; do echo "Count: $count"; count=$((count + 1)); done`
   - Case statement with glob patterns:
     - Simple match: `case hello in hello) echo match ;; *) echo no match ;; esac`
     - Glob patterns: `case file.txt in *.txt) echo "Text file" ;; *.jpg) echo "Image" ;; *) echo "Other" ;; esac`
     - Multiple patterns: `case file in *.txt|*.md) echo "Document" ;; *.exe|*.bin) echo "Executable" ;; *) echo "Other" ;; esac`
     - Character classes: `case letter in [abc]) echo "A, B, or C" ;; *) echo "Other letter" ;; esac`
   - For loops: `for i in 1 2 3; do echo "Number: $i"; done`
-  - While loops: `while [ $count -lt 5 ]; do echo "Count: $count"; count=$((count + 1)); done`
   - Loop control:
     - Break from loop: `for i in 1 2 3 4 5; do if [ $i -eq 3 ]; then break; fi; echo $i; done`
     - Continue to next iteration: `for i in 1 2 3 4 5; do if [ $i -eq 3 ]; then continue; fi; echo $i; done`
@@ -2302,7 +2307,7 @@ The test suite provides extensive coverage of:
 - **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
 - **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
-- Control structures (if-elif-else statements, case statements with glob patterns, for loops, while loops)
+- Control structures (if-elif-else statements, case statements with glob patterns, for loops, while loops, until loops)
 - **Functions** (definition, calls, local variables, return statements, recursion, introspection)
 - Command substitution (`$(...)` and `` `...` `` syntax, error handling, variable expansion)
 - **Arithmetic expansion** (`$((...))` syntax, operator precedence, variable integration, error handling)
