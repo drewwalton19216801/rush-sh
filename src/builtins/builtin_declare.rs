@@ -222,6 +222,15 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             result.push_str(&format!("\n{}done", indent));
             result
         }
+        Ast::Until { condition, body } => {
+            let mut result = String::new();
+            result.push_str(&format!("{}until ", indent));
+            result.push_str(&format_ast_body(condition, 0));
+            result.push_str("; do\n");
+            result.push_str(&format_ast_body(body, indent_level + 1));
+            result.push_str(&format!("\n{}done", indent));
+            result
+        }
         Ast::FunctionDefinition { name, body } => {
             format!(
                 "{}() {{\n{}    {}\n{}}}\n",

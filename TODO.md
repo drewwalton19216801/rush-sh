@@ -286,7 +286,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
-- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while loops, functions with return, subshells, command grouping implemented)
+- **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while/until loops, functions with return, subshells, command grouping implemented)
 - **Built-in Commands**: 74% ✅ (24 built-ins implemented out of 31 POSIX required)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)

@@ -486,6 +486,17 @@ done</code></pre>
                             </div>
 
                             <div class="example-group">
+                                <h4>Until Loops</h4>
+                                <div class="code-block">
+                                    <pre><code>count=1
+until [ $count -gt 5 ]; do
+    echo "Count: $count"
+    count=$((count + 1))
+done</code></pre>
+                                </div>
+                            </div>
+
+                            <div class="example-group">
                                 <h4>Loop Control</h4>
                                 <div class="code-block">
                                     <pre><code># Break - exit from loop

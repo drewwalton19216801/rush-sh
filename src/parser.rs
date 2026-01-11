@@ -30,6 +30,10 @@ pub enum Ast {
         condition: Box<Ast>,
         body: Box<Ast>,
     },
+    Until {
+        condition: Box<Ast>,
+        body: Box<Ast>,
+    },
     FunctionDefinition {
         name: String,
         body: Box<Ast>,
@@ -145,10 +149,10 @@ fn skip_to_matching_fi(tokens: &[Token], i: &mut usize) {
 /// Handles nested loops correctly.
 fn skip_to_matching_done(tokens: &[Token], i: &mut usize) {
     let mut loop_depth = 1;
-    *i += 1; // Move past the 'for' or 'while' token
+    *i += 1; // Move past the 'for' or 'while' or 'until' token
     while *i < tokens.len() && loop_depth > 0 {
         match tokens[*i] {
-            Token::For | Token::While => loop_depth += 1,
+            Token::For | Token::While | Token::Until => loop_depth += 1,
             Token::Done => loop_depth -= 1,
             _ => {}
         }
@@ -207,13 +211,13 @@ pub fn parse(tokens: Vec<Token>) -> Result<Ast, String> {
                         j += 1;
                     }
                 }
-                Token::For | Token::While => {
+                Token::For | Token::While | Token::Until => {
                     // Skip to matching done
                     let mut for_depth = 1;
                     j += 1;
                     while j < tokens.len() && for_depth > 0 {
                         match tokens[j] {
-                            Token::For | Token::While => for_depth += 1,
+                            Token::For | Token::While | Token::Until => for_depth += 1,
                             Token::Done => for_depth -= 1,
                             _ => {}
                         }
@@ -415,6 +419,11 @@ fn parse_slice(tokens: &[Token]) -> Result<Ast, String> {
     // Check if it's a while loop
     if let Token::While = tokens[0] {
         return parse_while(tokens);
+    }
+
+    // Check if it's an until loop
+    if let Token::Until = tokens[0] {
+        return parse_until(tokens);
     }
 
     // Check if it's a function definition
@@ -914,7 +923,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             i += 1; // Move past the 'for' token
             while i < tokens.len() {
                 match tokens[i] {
-                    Token::For | Token::While => depth += 1,
+                    Token::For | Token::While | Token::Until => depth += 1,
                     Token::Done => {
                         depth -= 1;
                         if depth == 0 {
@@ -932,7 +941,25 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             i += 1; // Move past the 'while' token
             while i < tokens.len() {
                 match tokens[i] {
-                    Token::While | Token::For => depth += 1,
+                    Token::While | Token::For | Token::Until => depth += 1,
+                    Token::Done => {
+                        depth -= 1;
+                        if depth == 0 {
+                            i += 1; // Include the done
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+                i += 1;
+            }
+        } else if tokens[i] == Token::Until {
+            // For until loops, find the matching done
+            let mut depth = 1; // Start at 1 because we're already inside the until
+            i += 1; // Move past the 'until' token
+            while i < tokens.len() {
+                match tokens[i] {
+                    Token::Until | Token::For | Token::While => depth += 1,
                     Token::Done => {
                         depth -= 1;
                         if depth == 0 {
@@ -1399,6 +1426,9 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
             }
             Token::While => {
                 current_cmd.args.push("while".to_string());
+            }
+            Token::Until => {
+                current_cmd.args.push("until".to_string());
             }
             Token::Do => {
                 current_cmd.args.push("do".to_string());
@@ -1956,7 +1986,7 @@ fn parse_while(tokens: &[Token]) -> Result<Ast, String> {
     let mut depth = 0;
     while i < tokens.len() {
         match &tokens[i] {
-            Token::While | Token::For => {
+            Token::While | Token::For | Token::Until => {
                 depth += 1;
                 body_tokens.push(tokens[i].clone());
             }
@@ -2004,6 +2034,106 @@ fn parse_while(tokens: &[Token]) -> Result<Ast, String> {
     };
 
     Ok(Ast::While {
+        condition: Box::new(condition_ast),
+        body: Box::new(body_ast),
+    })
+}
+
+fn parse_until(tokens: &[Token]) -> Result<Ast, String> {
+    let mut i = 1; // Skip 'until'
+
+    // Parse condition until we hit 'do' or semicolon/newline
+    let mut cond_tokens = Vec::new();
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::Do => break,
+            Token::Semicolon | Token::Newline => {
+                i += 1;
+                // Check if next token is 'do'
+                if i < tokens.len() && tokens[i] == Token::Do {
+                    break;
+                }
+            }
+            _ => {
+                cond_tokens.push(tokens[i].clone());
+                i += 1;
+            }
+        }
+    }
+
+    if cond_tokens.is_empty() {
+        return Err("Expected condition after until".to_string());
+    }
+
+    // Skip any newlines before 'do'
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+
+    // Expect 'do'
+    if i >= tokens.len() || tokens[i] != Token::Do {
+        return Err("Expected 'do' in until loop".to_string());
+    }
+    i += 1;
+
+    // Skip any newlines after 'do'
+    while i < tokens.len() && tokens[i] == Token::Newline {
+        i += 1;
+    }
+
+    // Parse body until 'done'
+    let mut body_tokens = Vec::new();
+    let mut depth = 0;
+    while i < tokens.len() {
+        match &tokens[i] {
+            Token::While | Token::For | Token::Until => {
+                depth += 1;
+                body_tokens.push(tokens[i].clone());
+            }
+            Token::Done => {
+                if depth > 0 {
+                    depth -= 1;
+                    body_tokens.push(tokens[i].clone());
+                } else {
+                    break; // This done closes our until loop
+                }
+            }
+            Token::Newline => {
+                // Skip newlines but check what comes after
+                let mut j = i + 1;
+                while j < tokens.len() && tokens[j] == Token::Newline {
+                    j += 1;
+                }
+                if j < tokens.len() && depth == 0 && tokens[j] == Token::Done {
+                    i = j; // Skip to done
+                    break;
+                }
+                // Otherwise it's just a newline in the middle of commands
+                body_tokens.push(tokens[i].clone());
+            }
+            _ => {
+                body_tokens.push(tokens[i].clone());
+            }
+        }
+        i += 1;
+    }
+
+    if i >= tokens.len() || tokens[i] != Token::Done {
+        return Err("Expected 'done' to close until loop".to_string());
+    }
+
+    // Parse the condition
+    let condition_ast = parse_slice(&cond_tokens)?;
+
+    // Parse the body
+    let body_ast = if body_tokens.is_empty() {
+        // Empty body - create a no-op
+        create_empty_body_ast()
+    } else {
+        parse_commands_sequentially(&body_tokens)?
+    };
+
+    Ok(Ast::Until {
         condition: Box::new(condition_ast),
         body: Box::new(body_ast),
     })
@@ -2096,7 +2226,7 @@ fn parse_function_definition(tokens: &[Token]) -> Result<Ast, String> {
                 // Skip to matching fi
                 skip_to_matching_fi(tokens, &mut i);
             }
-            Token::For | Token::While => {
+            Token::For | Token::While | Token::Until => {
                 // Skip to matching done
                 skip_to_matching_done(tokens, &mut i);
             }

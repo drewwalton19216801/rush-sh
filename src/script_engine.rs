@@ -189,6 +189,8 @@ pub fn execute_script(
     let mut for_depth = 0;
     let mut in_while_block = false;
     let mut while_depth = 0;
+    let mut in_until_block = false;
+    let mut until_depth = 0;
 
     // Track quote state across lines to handle multiline strings correctly
     let mut in_double_quote = false;
@@ -277,6 +279,9 @@ pub fn execute_script(
             } else if starts_with_keyword(line, "while") {
                 in_while_block = true;
                 while_depth += 1;
+            } else if starts_with_keyword(line, "until") {
+                in_until_block = true;
+                until_depth += 1;
             } else if {
                 let trimmed = line.trim();
                 trimmed == "{" || trimmed.starts_with("{ ") || trimmed.starts_with("{\t")
@@ -318,7 +323,7 @@ pub fn execute_script(
                 if if_depth == 0 {
                     in_if_block = false;
                     // Only execute if we're not inside a loop or other block
-                    if !in_for_block && !in_while_block && !in_function_block && !in_group_block && !in_case_block {
+                    if !in_for_block && !in_while_block && !in_until_block && !in_function_block && !in_group_block && !in_case_block {
                         execute_line(&current_block, shell_state);
                         current_block.clear();
 
@@ -349,6 +354,17 @@ pub fn execute_script(
                         break;
                     }
                 }
+            } else if in_until_block && contains_keyword(line, "done") {
+                until_depth -= 1;
+                if until_depth == 0 {
+                    in_until_block = false;
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
+
+                    if shell_state.exit_requested {
+                        break;
+                    }
+                }
             } else if in_case_block && contains_keyword(line, "esac") {
                 in_case_block = false;
                 execute_line(&current_block, shell_state);
@@ -363,6 +379,7 @@ pub fn execute_script(
                 && !in_group_block
                 && !in_for_block
                 && !in_while_block
+                && !in_until_block
             {
                 if let Some(delimiter) = line_contains_heredoc(&current_block, shell_state) {
                     i += 1;

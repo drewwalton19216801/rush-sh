@@ -41,6 +41,7 @@ pub enum Token {
     Do,
     Done,
     While,    // while
+    Until,    // until
     Break,    // break
     Continue, // continue
     And,      // &&
@@ -61,6 +62,7 @@ fn is_keyword(word: &str) -> Option<Token> {
         "return" => Some(Token::Return),
         "for" => Some(Token::For),
         "while" => Some(Token::While),
+        "until" => Some(Token::Until),
         "break" => Some(Token::Break),
         "continue" => Some(Token::Continue),
         "do" => Some(Token::Do),
