@@ -712,6 +712,15 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                             }
                         }
                     }
+                    Token::RedirOutClobber => {
+                        i += 1;
+                        if i < tokens.len() {
+                            if let Token::Word(file) = &tokens[i] {
+                                redirections.push(Redirection::OutputClobber(file.clone()));
+                                i += 1;
+                            }
+                        }
+                    }
                     Token::RedirIn => {
                         i += 1;
                         if i < tokens.len() {
@@ -1483,6 +1492,17 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                                     current_cmd
                                         .redirections
                                         .push(Redirection::Output(file.clone()));
+                                    i += 1;
+                                }
+                            }
+                        }
+                        Token::RedirOutClobber => {
+                            i += 1;
+                            if i < tokens.len() {
+                                if let Token::Word(file) = &tokens[i] {
+                                    current_cmd
+                                        .redirections
+                                        .push(Redirection::OutputClobber(file.clone()));
                                     i += 1;
                                 }
                             }
