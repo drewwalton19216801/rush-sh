@@ -463,6 +463,7 @@ impl ShellOptions {
     /// # Returns
     /// * `Some(bool)` if the option exists
     /// * `None` if the option name is not recognized
+    #[allow(dead_code)]
     pub fn get_by_short_name(&self, name: char) -> Option<bool> {
         match name {
             'e' => Some(self.errexit),
@@ -512,6 +513,7 @@ impl ShellOptions {
     /// # Returns
     /// * `Some(bool)` if the option exists
     /// * `None` if the option name is not recognized
+    #[allow(dead_code)]
     pub fn get_by_long_name(&self, name: &str) -> Option<bool> {
         match name {
             "errexit" => Some(self.errexit),
