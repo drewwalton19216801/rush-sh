@@ -1,6 +1,6 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.7.0** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.7.1** - A comprehensive POSIX sh-compatible shell implementation
 
 [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
@@ -169,7 +169,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of 24 built-in commands including loop control (`break`/`continue`), directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), function returns (`return`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 25 built-in commands including loop control (`break`/`continue`), directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), function returns (`return`), shell options (`set`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
@@ -2208,7 +2208,7 @@ Rush consists of the following components:
 
 ### Comprehensive Test Suite
 
-Rush includes an extensive test suite with **413+ test functions** ensuring reliability and correctness:
+Rush includes an extensive test suite with **499+ test functions** ensuring reliability and correctness:
 
 - **Unit Tests**: Individual component testing for lexer, parser, arithmetic engine, and parameter expansion
 - **Integration Tests**: End-to-end command execution, pipelines, redirections, and control structures
@@ -2370,7 +2370,7 @@ This benchmark suite provides a foundation for maintaining optimal shell perform
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (all 24 built-in commands including alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set_color_scheme, set_colors, set_condensed, shift, source, test, [, trap, type, unalias, unset)
+- Built-in command functionality (all 25 built-in commands including alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, trap, type, unalias, unset)
 - **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
 - **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
