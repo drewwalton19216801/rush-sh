@@ -8,24 +8,49 @@
 //! # Signal Queue Mechanism
 //!
 //! Signals are handled asynchronously using a global queue:
-//! 1. Signal handler thread enqueues signal events into `SIGNAL_QUEUE`
+//! 1. Signal handler thread (via signal_hook) enqueues signal events into `SIGNAL_QUEUE`
 //! 2. Main execution thread processes pending signals at safe points
 //! 3. Queue has a maximum size to prevent memory exhaustion
 //! 4. Oldest signals are dropped when queue is full
 //!
-//! # Thread Safety
+//! # Thread Safety vs Async-Signal-Safety
 //!
-//! The signal queue uses `Arc<Mutex<VecDeque<SignalEvent>>>` to ensure:
-//! - Thread-safe access from signal handler and main thread
-//! - Proper synchronization between enqueue and dequeue operations
-//! - No data races or memory corruption
+//! **IMPORTANT**: The signal queue uses `Arc<Mutex<VecDeque<SignalEvent>>>` which provides
+//! thread safety but is **NOT async-signal-safe**. This means:
+//!
+//! - ✅ Safe to call from dedicated signal-handling threads (like signal_hook provides)
+//! - ✅ Safe to call from normal application threads
+//! - ❌ **NOT safe** to call directly from POSIX signal handlers (sigaction)
+//!
+//! The `Mutex::lock()` and `eprintln!()` operations used in this module can deadlock or
+//! cause undefined behavior if called from a POSIX signal handler context.
+//!
+//! ## Recommended Signal Handling Approaches
+//!
+//! For true async-signal-safety, consider these alternatives:
+//!
+//! 1. **signal_hook's iterator pattern** (current approach):
+//!    - Uses a dedicated thread to receive signals
+//!    - Calls `enqueue_signal` from that thread (safe)
+//!
+//! 2. **Self-pipe trick**:
+//!    - Signal handler writes to a pipe (async-signal-safe)
+//!    - Main thread reads from pipe and processes signals
+//!
+//! 3. **Lock-free atomic buffers**:
+//!    - Use atomic operations instead of mutexes
+//!    - Requires careful implementation to avoid race conditions
+//!
+//! 4. **signalfd (Linux-specific)**:
+//!    - Converts signals to file descriptor events
+//!    - Can be integrated with event loops
 //!
 //! # Usage
 //!
 //! ```rust,no_run
 //! use rush_sh::state::{enqueue_signal, process_pending_signals, ShellState};
 //!
-//! // In signal handler thread:
+//! // In signal handler thread (via signal_hook):
 //! enqueue_signal("INT", 2);
 //!
 //! // In main execution loop:
@@ -45,6 +70,15 @@ lazy_static! {
     ///
     /// Signals are enqueued by the signal handler thread and dequeued by the main thread.
     /// This provides a thread-safe mechanism for asynchronous signal handling.
+    ///
+    /// # Safety Warning
+    ///
+    /// This queue uses `Mutex` which is **NOT async-signal-safe**. It must only be accessed from:
+    /// - Dedicated signal-handling threads (like signal_hook provides)
+    /// - Normal application threads
+    ///
+    /// **Never** access this queue directly from a POSIX signal handler (sigaction) as it can
+    /// cause deadlocks or undefined behavior.
     pub static ref SIGNAL_QUEUE: Arc<Mutex<VecDeque<SignalEvent>>> =
         Arc::new(Mutex::new(VecDeque::new()));
 }
@@ -53,12 +87,24 @@ lazy_static! {
 ///
 /// This prevents unbounded memory growth if signals arrive faster than they can be processed.
 /// When the queue is full, the oldest signal is dropped to make room for new ones.
+///
+/// # Implementation Note
+///
+/// The overflow handling in [`enqueue_signal`] uses `eprintln!()` which is not async-signal-safe.
+/// This is acceptable because `enqueue_signal` is designed to be called from a dedicated
+/// signal-handling thread, not from POSIX signal handlers.
 const MAX_SIGNAL_QUEUE_SIZE: usize = 100;
 
 /// Represents a signal event that needs to be processed
 ///
 /// Signal events are created when a signal is received and queued for later processing
 /// by the main execution thread. Each event captures the signal name, number, and timestamp.
+///
+/// # Safety Note
+///
+/// Creating a `SignalEvent` calls `Instant::now()` which may not be async-signal-safe on all
+/// platforms. This struct should only be instantiated from safe contexts (dedicated signal
+/// threads, not POSIX signal handlers).
 #[derive(Debug, Clone)]
 pub struct SignalEvent {
     /// Signal name (e.g., "INT", "TERM", "HUP")
@@ -97,7 +143,7 @@ impl SignalEvent {
 
 /// Enqueue a signal event for later processing
 ///
-/// This function is called by the signal handler thread when a signal is received.
+/// This function is called by a dedicated signal handler thread when a signal is received.
 /// If the queue is full, the oldest event is dropped to make room for the new one.
 ///
 /// # Arguments
@@ -105,18 +151,61 @@ impl SignalEvent {
 /// * `signal_name` - The name of the signal (e.g., "INT", "TERM")
 /// * `signal_number` - The numeric signal value (e.g., 2, 15)
 ///
-/// # Thread Safety
+/// # Safety Warning - NOT Async-Signal-Safe
 ///
-/// This function is thread-safe and can be called from signal handlers.
-/// It uses a mutex to protect the signal queue from concurrent access.
+/// **CRITICAL**: This function is **NOT async-signal-safe** and must **NOT** be called directly
+/// from POSIX signal handlers (sigaction). It uses:
+/// - `Mutex::lock()` - can deadlock if called from signal handler
+/// - `eprintln!()` - not async-signal-safe, can cause undefined behavior
+///
+/// ## Safe Usage Contexts
+///
+/// ✅ **Safe to call from**:
+/// - Dedicated signal-handling threads (like signal_hook's iterator pattern)
+/// - Normal application threads
+/// - After receiving signals via safe relay mechanisms (signalfd, self-pipe)
+///
+/// ❌ **NEVER call from**:
+/// - POSIX signal handlers registered with sigaction
+/// - Any context where async-signal-safety is required
+///
+/// ## Recommended Patterns
+///
+/// If you need true async-signal-safety, use one of these approaches instead:
+///
+/// 1. **signal_hook iterator** (current approach):
+///    ```rust,no_run
+///    use signal_hook::iterator::Signals;
+///    use std::thread;
+///
+///    let mut signals = Signals::new(&[SIGINT, SIGTERM]).unwrap();
+///    thread::spawn(move || {
+///        for sig in signals.forever() {
+///            enqueue_signal("INT", sig); // Safe: called from dedicated thread
+///        }
+///    });
+///    ```
+///
+/// 2. **Self-pipe trick**:
+///    - Signal handler writes signal number to pipe (async-signal-safe)
+///    - Main thread reads from pipe and calls `enqueue_signal`
+///
+/// 3. **Lock-free atomic buffer**:
+///    - Replace `Mutex<VecDeque>` with atomic operations
+///    - More complex but truly async-signal-safe
 ///
 /// # Examples
 ///
 /// ```rust,no_run
 /// use rush_sh::state::enqueue_signal;
 ///
-/// // Called from signal handler
+/// // ✅ SAFE: Called from signal_hook's dedicated thread
 /// enqueue_signal("INT", 2);
+///
+/// // ❌ UNSAFE: Never do this in a sigaction handler!
+/// // extern "C" fn signal_handler(sig: i32) {
+/// //     enqueue_signal("INT", sig); // DEADLOCK RISK!
+/// // }
 /// ```
 pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
     if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
