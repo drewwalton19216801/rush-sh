@@ -1,6 +1,6 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.7.1** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.7.2** - A comprehensive POSIX sh-compatible shell implementation
 
 [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
@@ -1871,7 +1871,6 @@ set +o nounset            # Disable nounset using long name
 # Display all shell variables
 set                        # Shows all variables (NAME=value format)
 ```
-
 
 **Key Features:**
 
