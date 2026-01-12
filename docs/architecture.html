@@ -252,28 +252,19 @@
                         <div class="component-card">
                             <div class="component-header">
                                 <div class="component-icon">📝</div>
-                                <h3>Lexer (<code>src/lexer.rs</code>)</h3>
+                                <h3>Lexer (<code>src/lexer/</code>)</h3>
                             </div>
                             <div class="component-details">
-                                <h4>Responsibilities</h4>
+                                <h4>Module Structure</h4>
                                 <ul>
-                                    <li><strong>Token Recognition:</strong> Identifies commands, operators, keywords,
-                                        and special tokens</li>
-                                    <li><strong>Quote Handling:</strong> Processes single/double quotes and escape
-                                        sequences</li>
-                                    <li><strong>Variable Detection:</strong> Identifies variable patterns for deferred
-                                        expansion</li>
-                                    <li><strong>Alias Expansion:</strong> Expands command aliases before parsing</li>
-                                    <li><strong>Command Substitution:</strong> Preserves $(...) and `...` syntax for
-                                        runtime expansion</li>
-                                    <li><strong>Here-document Tokenization:</strong> Recognizes << and <<< operators for
-                                            here-documents and here-strings</li>
-                                    <li><strong>FD Redirection Parsing:</strong> Handles file descriptor redirection
-                                        operators (N>&M, N<&M, N>&-, N<&-)< /li>
+                                    <li><strong>Main Module (<code>mod.rs</code>):</strong> Token recognition, quote handling, variable detection, alias expansion, command substitution preservation, here-document tokenization, and FD redirection parsing</li>
+                                    <li><strong>Token Types (<code>token.rs</code>):</strong> Token enum definitions and helper methods</li>
+                                    <li><strong>Test Organization (<code>tests/</code>):</strong> 7 focused test modules covering basic tokenization, alias expansion, quote handling, expansion patterns, redirection operators, tilde expansion, and edge cases</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
                                 <ul>
+                                    <li>Modular organization with clear separation of concerns</li>
                                     <li>Context-aware tokenization</li>
                                     <li>Efficient pattern matching</li>
                                     <li>Comprehensive error reporting</li>
@@ -285,26 +276,20 @@
                         <div class="component-card">
                             <div class="component-header">
                                 <div class="component-icon">🔍</div>
-                                <h3>Parser (<code>src/parser.rs</code>)</h3>
+                                <h3>Parser (<code>src/parser/</code>)</h3>
                             </div>
                             <div class="component-details">
-                                <h4>Responsibilities</h4>
+                                <h4>Module Structure</h4>
                                 <ul>
-                                    <li><strong>AST Construction:</strong> Builds Abstract Syntax Tree from token stream
-                                    </li>
-                                    <li><strong>Control Structures:</strong> Handles if/elif/else, case, for, while, until,
-                                        functions</li>
-                                    <li><strong>Pipeline Construction:</strong> Creates pipeline structures for command
-                                        chaining</li>
-                                    <li><strong>Redirection Parsing:</strong> Processes I/O redirection operators</li>
-                                    <li><strong>Subshell Parsing:</strong> Parses subshell expressions with proper
-                                        nesting</li>
-                                    <li><strong>FD Redirection AST Nodes:</strong> Constructs AST nodes for file
-                                        descriptor operations</li>
+                                    <li><strong>Main Module (<code>mod.rs</code>):</strong> AST construction, pipeline building, redirection parsing, subshell parsing, and FD redirection AST nodes</li>
+                                    <li><strong>AST Definitions (<code>ast.rs</code>):</strong> Complete AST node type definitions for commands, pipelines, and control flow structures</li>
+                                    <li><strong>Control Flow (<code>control_flow.rs</code>):</strong> Specialized parsers for if/elif/else, case, for, while, until, and function definitions</li>
+                                    <li><strong>Test Organization (<code>tests/</code>):</strong> 6 focused test modules covering basic parsing, control flow, compound commands, pipelines, operators, and redirections</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
                                 <ul>
+                                    <li>Modular organization with specialized submodules</li>
                                     <li>Recursive descent parsing</li>
                                     <li>Comprehensive error recovery</li>
                                     <li>Context-aware structure building</li>
@@ -316,30 +301,22 @@
                         <div class="component-card">
                             <div class="component-header">
                                 <div class="component-icon">⚡</div>
-                                <h3>Executor (<code>src/executor.rs</code>)</h3>
+                                <h3>Executor (<code>src/executor/</code>)</h3>
                             </div>
                             <div class="component-details">
-                                <h4>Responsibilities</h4>
+                                <h4>Module Structure</h4>
                                 <ul>
-                                    <li><strong>Command Execution:</strong> Runs external commands and built-in
-                                        functions</li>
-                                    <li><strong>Variable Expansion:</strong> Runtime expansion of variables and
-                                        parameters</li>
-                                    <li><strong>Pipeline Management:</strong> Coordinates data flow between pipeline
-                                        stages</li>
-                                    <li><strong>Redirection Handling:</strong> Manages file descriptors and I/O
-                                        redirection</li>
-                                    <li><strong>Error Propagation:</strong> Handles exit codes and error conditions</li>
-                                    <li><strong>Subshell Execution:</strong> Executes subshells with state isolation and
-                                        trap inheritance</li>
-                                    <li><strong>FD Table Management:</strong> Manages file descriptor duplication,
-                                        closing, and read/write operations</li>
-                                    <li><strong>Here-document Processing:</strong> Handles here-document and here-string
-                                        expansion and execution</li>
+                                    <li><strong>Main Module (<code>mod.rs</code>):</strong> Command execution engine and error propagation</li>
+                                    <li><strong>Expansion Engine (<code>expansion.rs</code>):</strong> Variable expansion, wildcard expansion, and command substitution</li>
+                                    <li><strong>Redirection Handler (<code>redirection.rs</code>):</strong> FD table management, redirection handling, and here-document processing</li>
+                                    <li><strong>Command Executor (<code>command.rs</code>):</strong> Single command execution, pipeline management, and built-in integration</li>
+                                    <li><strong>Subshell Handler (<code>subshell.rs</code>):</strong> Subshell execution with state isolation, compound commands, and trap inheritance</li>
+                                    <li><strong>Test Organization (<code>tests/</code>):</strong> 5 focused test modules covering execution, expansion, redirection, commands, and subshells</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
                                 <ul>
+                                    <li>Highly modular architecture with focused submodules</li>
                                     <li>Efficient process management</li>
                                     <li>Robust error handling</li>
                                     <li>Streaming I/O operations</li>
@@ -351,27 +328,21 @@
                         <div class="component-card">
                             <div class="component-header">
                                 <div class="component-icon">🗂️</div>
-                                <h3>Shell State (<code>src/state.rs</code>)</h3>
+                                <h3>Shell State (<code>src/state/</code>)</h3>
                             </div>
                             <div class="component-details">
-                                <h4>Responsibilities</h4>
+                                <h4>Module Structure</h4>
                                 <ul>
-                                    <li><strong>Variable Scoping:</strong> Global and local variable management with
-                                        proper scoping</li>
-                                    <li><strong>Environment Integration:</strong> Coordination with system environment
-                                        variables</li>
-                                    <li><strong>Function Context:</strong> Function call stack and local variable
-                                        scoping</li>
-                                    <li><strong>Directory Stack:</strong> pushd/popd/dirs functionality</li>
-                                    <li><strong>Alias Management:</strong> Command alias storage and expansion</li>
-                                    <li><strong>FD Table:</strong> File descriptor table with save/restore capabilities
-                                        for subshells</li>
-                                    <li><strong>Trap Management:</strong> Signal trap handlers with inheritance and
-                                        queue management</li>
+                                    <li><strong>Main Module (<code>mod.rs</code>):</strong> Variable scoping, environment integration, function context, directory stack, alias management, and loop control state</li>
+                                    <li><strong>FD Table (<code>fd_table.rs</code>):</strong> File descriptor table with save/restore capabilities and FD operations</li>
+                                    <li><strong>Shell Options (<code>options.rs</code>):</strong> Shell option flags (errexit, nounset, xtrace, etc.) and option display</li>
+                                    <li><strong>Signal Handling (<code>signals.rs</code>):</strong> Trap management, signal normalization, and trap display</li>
+                                    <li><strong>Test Organization (<code>tests/</code>):</strong> 4 focused test modules covering state management, variable scoping, FD operations, and shell options</li>
                                 </ul>
 
                                 <h4>Key Features</h4>
                                 <ul>
+                                    <li>Well-organized modular structure</li>
                                     <li>Thread-safe state management</li>
                                     <li>Efficient variable lookups</li>
                                     <li>Proper scoping rules</li>
