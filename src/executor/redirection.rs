@@ -64,9 +64,9 @@ use std::os::fd::AsRawFd;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Stdio};
 
+use super::expansion::expand_variables_in_string;
 use crate::parser::Redirection;
 use crate::state::ShellState;
-use super::expansion::expand_variables_in_string;
 
 /// Atomically write data to a file, respecting noclobber settings
 ///
@@ -80,7 +80,7 @@ fn write_file_with_noclobber(
     shell_state: &ShellState,
 ) -> Result<(), String> {
     use std::fs::OpenOptions;
-    
+
     if noclobber && !force_clobber {
         // Atomic check-and-create: fails if file exists
         let mut file = OpenOptions::new()
@@ -95,53 +95,55 @@ fn write_file_with_noclobber(
                             shell_state.color_scheme.error, path
                         )
                     } else {
-                        format!("cannot overwrite existing file '{}' (noclobber is set)", path)
-                    }
-                } else {
-                    if shell_state.colors_enabled {
                         format!(
-                            "{}Cannot create {}: {}\x1b[0m",
-                            shell_state.color_scheme.error, path, e
+                            "cannot overwrite existing file '{}' (noclobber is set)",
+                            path
                         )
-                    } else {
-                        format!("Cannot create {}: {}", path, e)
                     }
-                }
-            })?;
-        
-        file.write_all(data)
-            .map_err(|e| {
-                if shell_state.colors_enabled {
+                } else if shell_state.colors_enabled {
                     format!(
-                        "{}Failed to write to {}: {}\x1b[0m",
+                        "{}Cannot create {}: {}\x1b[0m",
                         shell_state.color_scheme.error, path, e
                     )
                 } else {
-                    format!("Failed to write to {}: {}", path, e)
+                    format!("Cannot create {}: {}", path, e)
                 }
             })?;
+
+        file.write_all(data).map_err(|e| {
+            if shell_state.colors_enabled {
+                format!(
+                    "{}Failed to write to {}: {}\x1b[0m",
+                    shell_state.color_scheme.error, path, e
+                )
+            } else {
+                format!("Failed to write to {}: {}", path, e)
+            }
+        })?;
     } else {
         // Allow overwriting (normal behavior or force_clobber)
-        std::fs::write(path, data)
-            .map_err(|e| {
-                if shell_state.colors_enabled {
-                    format!(
-                        "{}Cannot write to {}: {}\x1b[0m",
-                        shell_state.color_scheme.error, path, e
-                    )
-                } else {
-                    format!("Cannot write to {}: {}", path, e)
-                }
-            })?;
+        std::fs::write(path, data).map_err(|e| {
+            if shell_state.colors_enabled {
+                format!(
+                    "{}Cannot write to {}: {}\x1b[0m",
+                    shell_state.color_scheme.error, path, e
+                )
+            } else {
+                format!("Cannot write to {}: {}", path, e)
+            }
+        })?;
     }
-    
+
     Ok(())
 }
 
 /// Collect here-document content from stdin until the specified delimiter is found
 /// This function reads from stdin line by line until it finds a line that exactly matches the delimiter
 /// If shell_state has pending_heredoc_content, it uses that instead (for script execution)
-pub(crate) fn collect_here_document_content(delimiter: &str, shell_state: &mut ShellState) -> String {
+pub(crate) fn collect_here_document_content(
+    delimiter: &str,
+    shell_state: &mut ShellState,
+) -> String {
     // Check if we have pending here-document content from script execution
     if let Some(content) = shell_state.pending_heredoc_content.take() {
         return content;
@@ -222,25 +224,67 @@ pub fn apply_redirections(
                 apply_input_redirection(0, file, shell_state, command.as_deref_mut())?;
             }
             Redirection::Output(file) => {
-                apply_output_redirection(1, file, false, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(
+                    1,
+                    file,
+                    false,
+                    false,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::OutputClobber(file) => {
-                apply_output_redirection(1, file, false, true, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(
+                    1,
+                    file,
+                    false,
+                    true,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::Append(file) => {
-                apply_output_redirection(1, file, true, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(
+                    1,
+                    file,
+                    true,
+                    false,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::FdInput(fd, file) => {
                 apply_input_redirection(*fd, file, shell_state, command.as_deref_mut())?;
             }
             Redirection::FdOutput(fd, file) => {
-                apply_output_redirection(*fd, file, false, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(
+                    *fd,
+                    file,
+                    false,
+                    false,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::FdOutputClobber(fd, file) => {
-                apply_output_redirection(*fd, file, false, true, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(
+                    *fd,
+                    file,
+                    false,
+                    true,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::FdAppend(fd, file) => {
-                apply_output_redirection(*fd, file, true, false, shell_state, command.as_deref_mut())?;
+                apply_output_redirection(
+                    *fd,
+                    file,
+                    true,
+                    false,
+                    shell_state,
+                    command.as_deref_mut(),
+                )?;
             }
             Redirection::FdDuplicate(target_fd, source_fd) => {
                 apply_fd_duplication(*target_fd, *source_fd, shell_state, command.as_deref_mut())?;
@@ -300,12 +344,12 @@ fn apply_input_redirection(
 
             // Also perform OS-level dup2
             let raw_fd = shell_state.fd_table.borrow().get_raw_fd(0);
-            if let Some(rfd) = raw_fd {
-                if rfd != 0 {
-                    unsafe {
-                        if libc::dup2(rfd, 0) < 0 {
-                            return Err(format!("Failed to dup2 fd {} to 0", rfd));
-                        }
+            if let Some(rfd) = raw_fd
+                && rfd != 0
+            {
+                unsafe {
+                    if libc::dup2(rfd, 0) < 0 {
+                        return Err(format!("Failed to dup2 fd {} to 0", rfd));
                     }
                 }
             }
@@ -375,7 +419,10 @@ fn apply_output_redirection(
             .open(&expanded_file)
             .map_err(|e| {
                 if shell_state.colors_enabled {
-                    format!("{}Cannot open {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                    format!(
+                        "{}Cannot open {}: {}\x1b[0m",
+                        shell_state.color_scheme.error, expanded_file, e
+                    )
                 } else {
                     format!("Cannot open {}: {}", expanded_file, e)
                 }
@@ -394,11 +441,17 @@ fn apply_output_redirection(
                             shell_state.color_scheme.error, expanded_file
                         )
                     } else {
-                        format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file)
+                        format!(
+                            "cannot overwrite existing file '{}' (noclobber is set)",
+                            expanded_file
+                        )
                     }
                 } else {
                     if shell_state.colors_enabled {
-                        format!("{}Cannot create {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
+                        format!(
+                            "{}Cannot create {}: {}\x1b[0m",
+                            shell_state.color_scheme.error, expanded_file, e
+                        )
                     } else {
                         format!("Cannot create {}: {}", expanded_file, e)
                     }
@@ -406,14 +459,16 @@ fn apply_output_redirection(
             })?
     } else {
         // Normal create (truncate) or force_clobber
-        File::create(&expanded_file)
-            .map_err(|e| {
-                if shell_state.colors_enabled {
-                    format!("{}Cannot create {}: {}\x1b[0m", shell_state.color_scheme.error, expanded_file, e)
-                } else {
-                    format!("Cannot create {}: {}", expanded_file, e)
-                }
-            })?
+        File::create(&expanded_file).map_err(|e| {
+            if shell_state.colors_enabled {
+                format!(
+                    "{}Cannot create {}: {}\x1b[0m",
+                    shell_state.color_scheme.error, expanded_file, e
+                )
+            } else {
+                format!("Cannot create {}: {}", expanded_file, e)
+            }
+        })?
     };
 
     if let Some(cmd) = command {
@@ -435,7 +490,7 @@ fn apply_output_redirection(
                 true,  // write
                 append,
                 !append, // truncate if not appending
-                false, // clobber
+                false,   // clobber
             )?;
         }
     } else {
@@ -450,12 +505,15 @@ fn apply_output_redirection(
                         shell_state.color_scheme.error, expanded_file
                     )
                 } else {
-                    format!("cannot overwrite existing file '{}' (noclobber is set)", expanded_file)
+                    format!(
+                        "cannot overwrite existing file '{}' (noclobber is set)",
+                        expanded_file
+                    )
                 };
                 return Err(error_msg);
             }
         }
-        
+
         // Now safe to open - we MUST update the file descriptor table for ALL FDs including 1 and 2
         shell_state.fd_table.borrow_mut().open_fd(
             fd,

@@ -27,13 +27,13 @@ pub fn line_contains_heredoc(line: &str, shell_state: &state::ShellState) -> Opt
 /// Check if a line contains a specific keyword as a distinct token
 /// This handles comments and ensures the keyword is not part of another word
 pub fn contains_keyword(line: &str, keyword: &str) -> bool {
-    let mut chars = line.chars().peekable();
+    let chars = line.chars().peekable();
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     let mut escaped = false;
     let mut current_word = String::new();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         if escaped {
             escaped = false;
             // Escaped characters are treated as part of the word

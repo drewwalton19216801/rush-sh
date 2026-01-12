@@ -174,8 +174,7 @@ pub fn execute_builtin(
     };
 
     // If output_override is provided, use the old simple path for command substitution
-    if output_override.is_some() {
-        let mut output_writer = output_override.unwrap();
+    if let Some(mut output_writer) = output_override {
         let builtins = get_builtins();
         if let Some(builtin) = builtins
             .into_iter()
