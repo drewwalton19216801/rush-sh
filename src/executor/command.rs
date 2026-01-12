@@ -29,7 +29,10 @@ use super::{execute, execute_compound_in_pipeline, execute_compound_with_redirec
 /// // Note: execute_and_capture_output is a crate-internal function
 /// // This example is for documentation only
 /// ```
-pub(crate) fn execute_and_capture_output(ast: Ast, shell_state: &mut ShellState) -> Result<String, String> {
+pub(crate) fn execute_and_capture_output(
+    ast: Ast,
+    shell_state: &mut ShellState,
+) -> Result<String, String> {
     // Create a pipe to capture stdout
     let (reader, writer) = pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
 
@@ -226,25 +229,25 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
     // Exception: The 'set' builtin must always execute to allow disabling noexec
     // IMPORTANT: Check this BEFORE processing redirections to prevent side effects
     let is_set_builtin = !cmd.args.is_empty() && cmd.args[0] == "set";
-    
+
     if shell_state.options.noexec && !is_set_builtin {
         return 0; // Return success without executing (no side effects)
     }
 
     if cmd.args.is_empty() {
         // No command, but may have redirections - process them for side effects
-        if !cmd.redirections.is_empty() {
-            if let Err(e) = apply_redirections(&cmd.redirections, shell_state, None) {
-                if shell_state.colors_enabled {
-                    eprintln!(
-                        "{}Redirection error: {}\x1b[0m",
-                        shell_state.color_scheme.error, e
-                    );
-                } else {
-                    eprintln!("Redirection error: {}", e);
-                }
-                return 1;
+        if !cmd.redirections.is_empty()
+            && let Err(e) = apply_redirections(&cmd.redirections, shell_state, None)
+        {
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}Redirection error: {}\x1b[0m",
+                    shell_state.color_scheme.error, e
+                );
+            } else {
+                eprintln!("Redirection error: {}", e);
             }
+            return 1;
         }
         return 0;
     }
@@ -263,16 +266,16 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
     // Print command if xtrace is enabled (-x)
     if shell_state.options.xtrace {
         // Get PS4 prompt (default: "+ ")
-        let ps4 = shell_state.get_var("PS4").unwrap_or_else(|| "+ ".to_string());
-        
+        let ps4 = shell_state
+            .get_var("PS4")
+            .unwrap_or_else(|| "+ ".to_string());
+
         // Print the command with expanded arguments to stderr
         let command_str = expanded_args.join(" ");
         if shell_state.colors_enabled {
             eprintln!(
                 "{}{}{}\x1b[0m",
-                shell_state.color_scheme.builtin,
-                ps4,
-                command_str
+                shell_state.color_scheme.builtin, ps4, command_str
             );
         } else {
             eprintln!("{}{}", ps4, command_str);
@@ -330,7 +333,8 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
             && exit_code != 0
             && !shell_state.in_condition
             && !shell_state.in_logical_chain
-            && !shell_state.in_negation {
+            && !shell_state.in_negation
+        {
             // Set exit_requested flag to trigger shell exit
             shell_state.exit_requested = true;
             shell_state.exit_code = exit_code;
@@ -377,7 +381,7 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
                     let var_name = &assignment[..eq_pos];
                     let var_value = &assignment[eq_pos + 1..];
                     shell_state.set_var(var_name, var_value.to_string());
-                    
+
                     // Auto-export if allexport option (-a) is enabled
                     if shell_state.options.allexport {
                         shell_state.export_var(var_name);
@@ -386,18 +390,18 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
             }
 
             // Process redirections even without a command
-            if !cmd.redirections.is_empty() {
-                if let Err(e) = apply_redirections(&cmd.redirections, shell_state, None) {
-                    if shell_state.colors_enabled {
-                        eprintln!(
-                            "{}Redirection error: {}\x1b[0m",
-                            shell_state.color_scheme.error, e
-                        );
-                    } else {
-                        eprintln!("Redirection error: {}", e);
-                    }
-                    return 1;
+            if !cmd.redirections.is_empty()
+                && let Err(e) = apply_redirections(&cmd.redirections, shell_state, None)
+            {
+                if shell_state.colors_enabled {
+                    eprintln!(
+                        "{}Redirection error: {}\x1b[0m",
+                        shell_state.color_scheme.error, e
+                    );
+                } else {
+                    eprintln!("Redirection error: {}", e);
                 }
+                return 1;
             }
             return 0;
         }
@@ -460,10 +464,10 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
             let mut fds = Vec::new();
 
             for fd_num in 3..=9 {
-                if fd_table.is_open(fd_num) {
-                    if let Some(raw_fd) = fd_table.get_raw_fd(fd_num) {
-                        fds.push((fd_num, raw_fd));
-                    }
+                if fd_table.is_open(fd_num)
+                    && let Some(raw_fd) = fd_table.get_raw_fd(fd_num)
+                {
+                    fds.push((fd_num, raw_fd));
                 }
             }
 
@@ -490,16 +494,13 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
         // closure capture keeps the file handles alive
         match command.spawn() {
             Ok(mut child) => {
-                // If capturing, read stdout
-                if capturing {
-                    if let Some(mut stdout) = child.stdout.take() {
-                        use std::io::Read;
-                        let mut output = Vec::new();
-                        if stdout.read_to_end(&mut output).is_ok() {
-                            if let Some(ref capture_buffer) = shell_state.capture_output {
-                                capture_buffer.borrow_mut().extend_from_slice(&output);
-                            }
-                        }
+                if capturing && let Some(mut stdout) = child.stdout.take() {
+                    use std::io::Read;
+                    let mut output = Vec::new();
+                    if stdout.read_to_end(&mut output).is_ok()
+                        && let Some(ref capture_buffer) = shell_state.capture_output
+                    {
+                        capture_buffer.borrow_mut().extend_from_slice(&output);
                     }
                 }
 
@@ -528,7 +529,8 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
                     && exit_code != 0
                     && !shell_state.in_condition
                     && !shell_state.in_logical_chain
-                    && !shell_state.in_negation {
+                    && !shell_state.in_negation
+                {
                     // Set exit_requested flag to trigger shell exit
                     shell_state.exit_requested = true;
                     shell_state.exit_code = exit_code;
@@ -559,10 +561,10 @@ pub(crate) fn execute_pipeline(commands: &[ShellCommand], shell_state: &mut Shel
     // Check noexec option (-n): Read commands but don't execute them
     // Exception: The 'set' builtin must always execute to allow disabling noexec
     // For pipelines, check if any command is 'set', otherwise skip execution
-    let has_set_builtin = commands.iter().any(|cmd| {
-        !cmd.args.is_empty() && cmd.args[0] == "set"
-    });
-    
+    let has_set_builtin = commands
+        .iter()
+        .any(|cmd| !cmd.args.is_empty() && cmd.args[0] == "set");
+
     if shell_state.options.noexec && !has_set_builtin {
         return 0; // Return success without executing (no side effects)
     }

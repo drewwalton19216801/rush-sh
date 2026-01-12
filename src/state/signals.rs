@@ -230,7 +230,10 @@ pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
             // Lock poisoned - another thread panicked while holding the lock
             // Cannot safely enqueue; signal is dropped to avoid cascading failures
             #[cfg(debug_assertions)]
-            eprintln!("Warning: Signal queue lock poisoned, dropping signal {}", signal_name);
+            eprintln!(
+                "Warning: Signal queue lock poisoned, dropping signal {}",
+                signal_name
+            );
         }
     }
 }
@@ -280,30 +283,28 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
     // This prevents deadlock if a trap handler enqueues a signal
     for signal_event in pending_signals {
         // Check if a trap is set for this signal
-        if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name) {
-            if !trap_cmd.is_empty() {
-                // Display signal information for debugging/tracking
-                if shell_state.colors_enabled {
-                    eprintln!(
-                        "{}Signal {} (signal {}) received at {:?}\x1b[0m",
-                        shell_state.color_scheme.builtin,
-                        signal_event.signal_name,
-                        signal_event.signal_number,
-                        signal_event.timestamp
-                    );
-                } else {
-                    eprintln!(
-                        "Signal {} (signal {}) received at {:?}",
-                        signal_event.signal_name,
-                        signal_event.signal_number,
-                        signal_event.timestamp
-                    );
-                }
-
-                // Execute the trap handler
-                // Note: This preserves the exit code as per POSIX requirements
-                crate::executor::execute_trap_handler(&trap_cmd, shell_state);
+        if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name)
+            && !trap_cmd.is_empty()
+        {
+            // Display signal information for debugging/tracking
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}Signal {} (signal {}) received at {:?}\x1b[0m",
+                    shell_state.color_scheme.builtin,
+                    signal_event.signal_name,
+                    signal_event.signal_number,
+                    signal_event.timestamp
+                );
+            } else {
+                eprintln!(
+                    "Signal {} (signal {}) received at {:?}",
+                    signal_event.signal_name, signal_event.signal_number, signal_event.timestamp
+                );
             }
+
+            // Execute the trap handler
+            // Note: This preserves the exit code as per POSIX requirements
+            crate::executor::execute_trap_handler(&trap_cmd, shell_state);
         }
     }
 }

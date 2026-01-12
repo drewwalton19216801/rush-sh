@@ -119,6 +119,7 @@ impl FileDescriptorTable {
     /// # Returns
     /// * `Ok(())` on success
     /// * `Err(String)` with error message on failure
+    #[allow(clippy::too_many_arguments)]
     pub fn open_fd(
         &mut self,
         fd_num: i32,
@@ -378,7 +379,7 @@ impl FileDescriptorTable {
             Some(FileDescriptor::Closed) => None,
             None => {
                 // Standard file descriptors (0, 1, 2) are always open unless explicitly closed
-                if fd_num >= 0 && fd_num <= 2 {
+                if (0..=2).contains(&fd_num) {
                     Some(fd_num as RawFd)
                 } else {
                     None

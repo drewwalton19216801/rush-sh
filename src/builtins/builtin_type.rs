@@ -146,11 +146,7 @@ impl super::Builtin for TypeBuiltin {
             }
         }
 
-        if all_found {
-            0
-        } else {
-            1
-        }
+        if all_found { 0 } else { 1 }
     }
 }
 
@@ -169,13 +165,13 @@ fn find_in_path(name: &str, shell_state: &ShellState) -> Option<String> {
         let full_path = format!("{}/{}", dir, name);
 
         // Check if file exists and is executable
-        if let Ok(metadata) = fs::metadata(&full_path) {
-            if metadata.is_file() {
-                // Check if executable (any execute bit set)
-                let permissions = metadata.permissions();
-                if permissions.mode() & 0o111 != 0 {
-                    return Some(full_path);
-                }
+        if let Ok(metadata) = fs::metadata(&full_path)
+            && metadata.is_file()
+        {
+            // Check if executable (any execute bit set)
+            let permissions = metadata.permissions();
+            if permissions.mode() & 0o111 != 0 {
+                return Some(full_path);
             }
         }
     }
