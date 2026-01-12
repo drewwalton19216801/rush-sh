@@ -183,7 +183,13 @@ impl SignalEvent {
 ///    let mut signals = Signals::new(&[SIGINT, SIGTERM]).unwrap();
 ///    thread::spawn(move || {
 ///        for sig in signals.forever() {
-///            enqueue_signal("INT", sig); // Safe: called from dedicated thread
+///            // Map signal number to name
+///            let signal_name = match sig {
+///                SIGINT => "INT",
+///                SIGTERM => "TERM",
+///                _ => continue, // Skip unknown signals
+///            };
+///            enqueue_signal(signal_name, sig); // Safe: called from dedicated thread
 ///        }
 ///    });
 ///    ```
