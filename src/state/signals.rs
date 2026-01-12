@@ -216,14 +216,22 @@ impl SignalEvent {
 /// // }
 /// ```
 pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
-    if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
-        // If queue is full, remove oldest event
-        if queue.len() >= MAX_SIGNAL_QUEUE_SIZE {
-            queue.pop_front();
-            eprintln!("Warning: Signal queue overflow, dropping oldest signal");
-        }
+    match SIGNAL_QUEUE.lock() {
+        Ok(mut queue) => {
+            // If queue is full, remove oldest event
+            if queue.len() >= MAX_SIGNAL_QUEUE_SIZE {
+                queue.pop_front();
+                eprintln!("Warning: Signal queue overflow, dropping oldest signal");
+            }
 
-        queue.push_back(SignalEvent::new(signal_name.to_string(), signal_number));
+            queue.push_back(SignalEvent::new(signal_name.to_string(), signal_number));
+        }
+        Err(_) => {
+            // Lock poisoned - another thread panicked while holding the lock
+            // Cannot safely enqueue; signal is dropped to avoid cascading failures
+            #[cfg(debug_assertions)]
+            eprintln!("Warning: Signal queue lock poisoned, dropping signal {}", signal_name);
+        }
     }
 }
 
