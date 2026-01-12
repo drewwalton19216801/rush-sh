@@ -1,105 +1,18 @@
+//! Lexical analysis for the Rush shell.
+//!
+//! This module provides tokenization of shell input, converting raw text into
+//! a stream of tokens that can be parsed into an Abstract Syntax Tree (AST).
+
+pub mod token;
+
+pub use token::{is_shell_keyword, Token};
+use token::is_keyword;
+
 use std::collections::HashSet;
 use std::env;
 
 use super::parameter_expansion::{expand_parameter, parse_parameter_expansion};
 use super::state::ShellState;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Token {
-    Word(String),
-    Pipe,
-    RedirOut,
-    RedirOutClobber, // >| operator (noclobber override)
-    RedirIn,
-    RedirAppend,
-    RedirHereDoc(String, bool), // Here-document: <<DELIMITER, bool=true if delimiter was quoted
-    RedirHereString(String),    // Here-string: <<<"content"
-    // File descriptor redirections
-    RedirectFdIn(i32, String),     // N<file - redirect fd N from file
-    RedirectFdOut(i32, String),    // N>file - redirect fd N to file
-    RedirectFdOutClobber(i32, String), // N>|file - redirect fd N to file with noclobber override
-    RedirectFdAppend(i32, String), // N>>file - append fd N to file
-    RedirectFdDup(i32, i32),       // N>&M or N<&M - duplicate fd M to fd N
-    RedirectFdClose(i32),          // N>&- or N<&- - close fd N
-    RedirectFdInOut(i32, String),  // N<>file - open fd N for read/write
-    If,
-    Then,
-    Else,
-    Elif,
-    Fi,
-    Case,
-    In,
-    Esac,
-    DoubleSemicolon,
-    Semicolon,
-    RightParen,
-    LeftParen,
-    LeftBrace,
-    RightBrace,
-    Newline,
-    Local,
-    Return,
-    For,
-    Do,
-    Done,
-    While,    // while
-    Until,    // until
-    Break,    // break
-    Continue, // continue
-    And,      // &&
-    Or,       // ||
-    Bang,     // ! (negation operator)
-}
-
-/// Map a keyword string to its corresponding shell Token.
-///
-/// # Returns
-///
-/// `Some(Token::X)` if `word` matches a recognized shell keyword (for example: `if`, `then`,
-/// `else`, `elif`, `fi`, `case`, `in`, `esac`, `local`, `return`, `for`, `while`, `until`,
-/// `break`, `continue`, `do`, `done`), `None` otherwise.
-///
-/// # Examples
-///
-/// ```
-/// // Note: is_keyword is a private function
-/// // This example is for documentation only
-/// ```
-fn is_keyword(word: &str) -> Option<Token> {
-    match word {
-        "if" => Some(Token::If),
-        "then" => Some(Token::Then),
-        "else" => Some(Token::Else),
-        "elif" => Some(Token::Elif),
-        "fi" => Some(Token::Fi),
-        "case" => Some(Token::Case),
-        "in" => Some(Token::In),
-        "esac" => Some(Token::Esac),
-        "local" => Some(Token::Local),
-        "return" => Some(Token::Return),
-        "for" => Some(Token::For),
-        "while" => Some(Token::While),
-        "until" => Some(Token::Until),
-        "break" => Some(Token::Break),
-        "continue" => Some(Token::Continue),
-        "do" => Some(Token::Do),
-        "done" => Some(Token::Done),
-        _ => None,
-    }
-}
-
-/// Check if a word is a shell keyword (public API for builtins)
-/// This includes both keywords recognized by the lexer and special tokens
-pub fn is_shell_keyword(word: &str) -> bool {
-    // Check lexer keywords first
-    if is_keyword(word).is_some() {
-        return true;
-    }
-    
-    // Check additional POSIX keywords and special tokens
-    // These are handled as separate tokens but should be recognized as keywords by `type`
-    matches!(word, "until" | "{" | "}" | "!")
-}
 
 /// Skip whitespace characters (space and tab) in the character stream
 fn skip_whitespace(chars: &mut std::iter::Peekable<std::str::Chars>) {
