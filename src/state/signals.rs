@@ -80,7 +80,7 @@ impl SignalEvent {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use rush_sh::state::SignalEvent;
+    /// use rush_sh::state::signals::SignalEvent;
     ///
     /// let event = SignalEvent::new("INT".to_string(), 2);
     /// assert_eq!(event.signal_name, "INT");
