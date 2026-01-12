@@ -176,7 +176,7 @@ impl SignalEvent {
 /// 1. **signal_hook iterator** (current approach):
 ///    ```rust,no_run
 ///    use rush_sh::state::enqueue_signal;
-///    use signal_hook::consts::signal::{SIGINT, SIGTERM};
+///    use signal_hook::consts::{SIGINT, SIGTERM};
 ///    use signal_hook::iterator::Signals;
 ///    use std::thread;
 ///
