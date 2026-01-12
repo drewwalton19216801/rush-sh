@@ -1,6 +1,6 @@
 # Rush - A Unix shell written in Rust
 
-**Version 0.7.0** - A comprehensive POSIX sh-compatible shell implementation
+**Version 0.7.1** - A comprehensive POSIX sh-compatible shell implementation
 
 [![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
 
