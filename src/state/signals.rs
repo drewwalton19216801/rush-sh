@@ -156,14 +156,27 @@ pub fn enqueue_signal(signal_name: &str, signal_number: i32) {
 /// process_pending_signals(&mut shell_state);
 /// ```
 pub fn process_pending_signals(shell_state: &mut ShellState) {
-    // Try to lock the queue with a timeout to avoid blocking
-    if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
-        // Process all pending signals
-        while let Some(signal_event) = queue.pop_front() {
-            // Check if a trap is set for this signal
-            if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name)
-                && !trap_cmd.is_empty()
-            {
+    // Drain all pending signals into a local collection while holding the lock
+    let pending_signals = {
+        if let Ok(mut queue) = SIGNAL_QUEUE.lock() {
+            // Drain all signals from the queue into a local Vec
+            let mut signals = Vec::new();
+            while let Some(signal_event) = queue.pop_front() {
+                signals.push(signal_event);
+            }
+            signals
+        } else {
+            // If we can't acquire the lock, return early
+            return;
+        }
+    }; // Lock is dropped here
+
+    // Process all signals without holding the lock
+    // This prevents deadlock if a trap handler enqueues a signal
+    for signal_event in pending_signals {
+        // Check if a trap is set for this signal
+        if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name) {
+            if !trap_cmd.is_empty() {
                 // Display signal information for debugging/tracking
                 if shell_state.colors_enabled {
                     eprintln!(
