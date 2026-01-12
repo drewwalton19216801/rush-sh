@@ -115,7 +115,7 @@ pub fn starts_with_keyword(line: &str, keyword: &str) -> bool {
         }
     }
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         match ch {
             ' ' | '\t' | '\n' | ';' | '|' | '&' | '(' | ')' | '{' | '}' => {
                 return current_word == keyword;
@@ -156,7 +156,7 @@ pub fn execute_line(line: &str, shell_state: &mut state::ShellState) {
             eprintln!("{}", line);
         }
     }
-    
+
     match lexer::lex(line, shell_state) {
         Ok(tokens) => match lexer::expand_aliases(tokens, shell_state, &mut HashSet::new()) {
             Ok(expanded_tokens) => match brace_expansion::expand_braces(expanded_tokens) {
@@ -208,7 +208,7 @@ pub fn execute_line(line: &str, shell_state: &mut state::ShellState) {
                 eprintln!("Lex error: {}", e);
             }
             shell_state.set_last_exit_code(1);
-            
+
             // Check if this is a nounset error - if so, request shell exit
             if e.contains("unbound variable") {
                 shell_state.exit_requested = true;
@@ -250,11 +250,11 @@ pub fn execute_script(
         state::process_pending_signals(shell_state);
 
         // Check for shutdown signal
-        if let Some(flag) = shutdown_flag {
-            if flag.load(Ordering::Relaxed) {
-                eprintln!("Script interrupted by SIGTERM");
-                break;
-            }
+        if let Some(flag) = shutdown_flag
+            && flag.load(Ordering::Relaxed)
+        {
+            eprintln!("Script interrupted by SIGTERM");
+            break;
         }
 
         // Check if exit was requested (e.g., from trap handler)
@@ -269,10 +269,10 @@ pub fn execute_script(
         }
 
         // Update quote state based on this line
-        let mut chars = line.chars().peekable();
+        let chars = line.chars().peekable();
         let mut escaped = false;
 
-        while let Some(ch) = chars.next() {
+        for ch in chars {
             if escaped {
                 escaped = false;
                 continue;
@@ -327,13 +327,16 @@ pub fn execute_script(
             } else if starts_with_keyword(line, "until") {
                 in_until_block = true;
                 until_depth += 1;
-            } else if {
-                let trimmed = line.trim();
-                trimmed == "{" || trimmed.starts_with("{ ") || trimmed.starts_with("{\t")
-            } {
-                in_group_block = true;
-                brace_depth += line.matches('{').count() as i32;
-                brace_depth -= line.matches('}').count() as i32;
+            } else {
+                let is_group_start = {
+                    let trimmed = line.trim();
+                    trimmed == "{" || trimmed.starts_with("{ ") || trimmed.starts_with("{\t")
+                };
+                if is_group_start {
+                    in_group_block = true;
+                    brace_depth += line.matches('{').count() as i32;
+                    brace_depth -= line.matches('}').count() as i32;
+                }
             }
         }
 
@@ -368,7 +371,13 @@ pub fn execute_script(
                 if if_depth == 0 {
                     in_if_block = false;
                     // Only execute if we're not inside a loop or other block
-                    if !in_for_block && !in_while_block && !in_until_block && !in_function_block && !in_group_block && !in_case_block {
+                    if !in_for_block
+                        && !in_while_block
+                        && !in_until_block
+                        && !in_function_block
+                        && !in_group_block
+                        && !in_case_block
+                    {
                         execute_line(&current_block, shell_state);
                         current_block.clear();
 
