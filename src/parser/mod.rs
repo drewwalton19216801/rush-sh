@@ -1,115 +1,13 @@
+//! Parser module for the Rush shell.
+//!
+//! This module provides functionality to parse tokenized shell input into an Abstract
+//! Syntax Tree (AST) that can be executed by the executor module.
+
+pub mod ast;
+
+pub use ast::{Ast, Redirection, ShellCommand};
+
 use super::lexer::Token;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Ast {
-    Pipeline(Vec<ShellCommand>),
-    Sequence(Vec<Ast>),
-    Assignment {
-        var: String,
-        value: String,
-    },
-    LocalAssignment {
-        var: String,
-        value: String,
-    },
-    If {
-        branches: Vec<(Box<Ast>, Box<Ast>)>, // (condition, then_branch)
-        else_branch: Option<Box<Ast>>,
-    },
-    Case {
-        word: String,
-        cases: Vec<(Vec<String>, Ast)>,
-        default: Option<Box<Ast>>,
-    },
-    For {
-        variable: String,
-        items: Vec<String>,
-        body: Box<Ast>,
-    },
-    While {
-        condition: Box<Ast>,
-        body: Box<Ast>,
-    },
-    Until {
-        condition: Box<Ast>,
-        body: Box<Ast>,
-    },
-    FunctionDefinition {
-        name: String,
-        body: Box<Ast>,
-    },
-    FunctionCall {
-        name: String,
-        args: Vec<String>,
-    },
-    Return {
-        value: Option<String>,
-    },
-    And {
-        left: Box<Ast>,
-        right: Box<Ast>,
-    },
-    Or {
-        left: Box<Ast>,
-        right: Box<Ast>,
-    },
-    /// Subshell execution: (commands)
-    /// Commands execute in an isolated copy of the shell state
-    Subshell {
-        body: Box<Ast>,
-    },
-    /// Command group execution: { commands; }
-    /// Commands execute in the current shell state
-    CommandGroup {
-        body: Box<Ast>,
-    },
-    /// Command negation: ! command
-    /// Inverts the exit code and exempts from errexit
-    Negation {
-        command: Box<Ast>,
-    },
-}
-
-/// Represents a single redirection operation
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Redirection {
-    /// Input from file: < file or N< file
-    Input(String),
-    /// Output to file: > file or N> file
-    Output(String),
-    /// Output to file with noclobber override: >| file
-    OutputClobber(String),
-    /// Append to file: >> file or N>> file
-    Append(String),
-    /// Input from file with explicit fd: N< file
-    FdInput(i32, String),
-    /// Output to file with explicit fd: N> file
-    FdOutput(i32, String),
-    /// Output to file with explicit fd and noclobber override: N>| file
-    FdOutputClobber(i32, String),
-    /// Append to file with explicit fd: N>> file
-    FdAppend(i32, String),
-    /// Duplicate file descriptor: N>&M or N<&M
-    FdDuplicate(i32, i32),
-    /// Close file descriptor: N>&- or N<&-
-    FdClose(i32),
-    /// Open file for read/write: N<> file
-    FdInputOutput(i32, String),
-    /// Here-document: << EOF ... EOF
-    HereDoc(String, String),
-    /// Here-string: <<< "string"
-    HereString(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ShellCommand {
-    pub args: Vec<String>,
-    /// All redirections in order of appearance (for POSIX left-to-right processing)
-    pub redirections: Vec<Redirection>,
-    /// Optional compound command (subshell, command group, etc.)
-    /// If present, this takes precedence over args
-    pub compound: Option<Box<Ast>>,
-}
 
 /// Helper function to validate if a string is a valid variable name.
 /// Returns true if the name starts with a letter or underscore.
