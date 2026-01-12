@@ -676,11 +676,11 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 match &tokens[i] {
                     Token::RedirOut => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::Output(file.clone()));
-                                i += 1;
-                            }
+                        if i < tokens.len()
+                            && let Token::Word(file) = &tokens[i]
+                        {
+                            redirections.push(Redirection::Output(file.clone()));
+                            i += 1;
                         }
                     }
                     Token::RedirOutClobber => {
@@ -697,20 +697,20 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     }
                     Token::RedirIn => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::Input(file.clone()));
-                                i += 1;
-                            }
+                        if i < tokens.len()
+                            && let Token::Word(file) = &tokens[i]
+                        {
+                            redirections.push(Redirection::Input(file.clone()));
+                            i += 1;
                         }
                     }
                     Token::RedirAppend => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::Append(file.clone()));
-                                i += 1;
-                            }
+                        if i < tokens.len()
+                            && let Token::Word(file) = &tokens[i]
+                        {
+                            redirections.push(Redirection::Append(file.clone()));
+                            i += 1;
                         }
                     }
                     Token::RedirectFdOut(fd, file) => {
@@ -903,11 +903,11 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 match &tokens[i] {
                     Token::RedirOut => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::Output(file.clone()));
-                                i += 1;
-                            }
+                        if i < tokens.len()
+                            && let Token::Word(file) = &tokens[i]
+                        {
+                            redirections.push(Redirection::Output(file.clone()));
+                            i += 1;
                         }
                     }
                     Token::RedirOutClobber => {
@@ -924,20 +924,20 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     }
                     Token::RedirIn => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::Input(file.clone()));
-                                i += 1;
-                            }
+                        if i < tokens.len()
+                            && let Token::Word(file) = &tokens[i]
+                        {
+                            redirections.push(Redirection::Input(file.clone()));
+                            i += 1;
                         }
                     }
                     Token::RedirAppend => {
                         i += 1;
-                        if i < tokens.len() {
-                            if let Token::Word(file) = &tokens[i] {
-                                redirections.push(Redirection::Append(file.clone()));
-                                i += 1;
-                            }
+                        if i < tokens.len()
+                            && let Token::Word(file) = &tokens[i]
+                        {
+                            redirections.push(Redirection::Append(file.clone()));
+                            i += 1;
                         }
                     }
                     Token::RedirectFdOut(fd, file) => {
@@ -1340,13 +1340,13 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     match &tokens[i] {
                         Token::RedirOut => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::Output(file.clone()));
-                                    i += 1;
-                                }
+                            if i < tokens.len()
+                                && let Token::Word(file) = &tokens[i]
+                            {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::Output(file.clone()));
+                                i += 1;
                             }
                         }
                         Token::RedirOutClobber => {
@@ -1365,24 +1365,24 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                         }
                         Token::RedirIn => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::Input(file.clone()));
-                                    i += 1;
-                                }
+                            if i < tokens.len()
+                                && let Token::Word(file) = &tokens[i]
+                            {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::Input(file.clone()));
+                                i += 1;
                             }
                         }
                         Token::RedirAppend => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::Append(file.clone()));
-                                    i += 1;
-                                }
+                            if i < tokens.len()
+                                && let Token::Word(file) = &tokens[i]
+                            {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::Append(file.clone()));
+                                i += 1;
                             }
                         }
                         Token::RedirectFdOut(fd, file) => {
@@ -1490,13 +1490,13 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                     match &tokens[i] {
                         Token::RedirOut => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::Output(file.clone()));
-                                    i += 1;
-                                }
+                            if i < tokens.len()
+                                && let Token::Word(file) = &tokens[i]
+                            {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::Output(file.clone()));
+                                i += 1;
                             }
                         }
                         Token::RedirOutClobber => {
@@ -1515,24 +1515,24 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
                         }
                         Token::RedirIn => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::Input(file.clone()));
-                                    i += 1;
-                                }
+                            if i < tokens.len()
+                                && let Token::Word(file) = &tokens[i]
+                            {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::Input(file.clone()));
+                                i += 1;
                             }
                         }
                         Token::RedirAppend => {
                             i += 1;
-                            if i < tokens.len() {
-                                if let Token::Word(file) = &tokens[i] {
-                                    current_cmd
-                                        .redirections
-                                        .push(Redirection::Append(file.clone()));
-                                    i += 1;
-                                }
+                            if i < tokens.len()
+                                && let Token::Word(file) = &tokens[i]
+                            {
+                                current_cmd
+                                    .redirections
+                                    .push(Redirection::Append(file.clone()));
+                                i += 1;
                             }
                         }
                         Token::RedirectFdOut(fd, file) => {
@@ -1794,7 +1794,6 @@ fn parse_pipeline(tokens: &[Token]) -> Result<Ast, String> {
 
     Ok(Ast::Pipeline(commands))
 }
-
 
 #[cfg(test)]
 mod tests;

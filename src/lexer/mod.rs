@@ -5,8 +5,8 @@
 
 pub mod token;
 
-pub use token::{is_shell_keyword, Token};
 use token::is_keyword;
+pub use token::{Token, is_shell_keyword};
 
 use std::collections::HashSet;
 use std::env;
@@ -30,12 +30,10 @@ fn flush_current_token(current: &mut String, tokens: &mut Vec<Token>, was_quoted
     if !current.is_empty() {
         // Only check for keywords if the word was NOT quoted
         // Quoted strings like "done" should always be Word tokens, not keyword tokens
-        if !was_quoted {
-            if let Some(keyword) = is_keyword(current) {
-                tokens.push(keyword);
-                current.clear();
-                return;
-            }
+        if !was_quoted && let Some(keyword) = is_keyword(current) {
+            tokens.push(keyword);
+            current.clear();
+            return;
         }
         tokens.push(Token::Word(current.clone()));
         current.clear();
@@ -602,25 +600,27 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
             '!' if !in_double_quote && !in_single_quote => {
                 // Only emit Token::Bang if ! appears at command start position
                 // Command start is: beginning of input, after whitespace/newline/semicolon, or after operators
-                let is_command_start = current.is_empty() && (
-                    tokens.is_empty() ||
-                    matches!(tokens.last(), Some(
-                        Token::Newline |
-                        Token::Semicolon |
-                        Token::And |
-                        Token::Or |
-                        Token::Then |
-                        Token::Else |
-                        Token::Elif |
-                        Token::Do |
-                        Token::While |
-                        Token::Until |
-                        Token::If |
-                        Token::LeftParen |
-                        Token::LeftBrace
-                    ))
-                );
-                
+                let is_command_start = current.is_empty()
+                    && (tokens.is_empty()
+                        || matches!(
+                            tokens.last(),
+                            Some(
+                                Token::Newline
+                                    | Token::Semicolon
+                                    | Token::And
+                                    | Token::Or
+                                    | Token::Then
+                                    | Token::Else
+                                    | Token::Elif
+                                    | Token::Do
+                                    | Token::While
+                                    | Token::Until
+                                    | Token::If
+                                    | Token::LeftParen
+                                    | Token::LeftBrace
+                            )
+                        ));
+
                 if is_command_start {
                     flush_current_token(&mut current, &mut tokens, false);
                     chars.next(); // consume !
@@ -664,14 +664,14 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                 if let Some(&'|') = chars.peek() {
                     // This is >| (noclobber override)
                     chars.next(); // consume |
-                    
+
                     skip_whitespace(&mut chars);
-                    
+
                     // Collect the filename (handle quotes)
                     let mut filename = String::new();
                     let mut in_filename_quote = false;
                     let mut filename_quote_char = ' ';
-                    
+
                     while let Some(&ch) = chars.peek() {
                         if !in_filename_quote && (ch == '"' || ch == '\'') {
                             in_filename_quote = true;
@@ -680,8 +680,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if in_filename_quote && ch == filename_quote_char {
                             in_filename_quote = false;
                             chars.next(); // consume quote but don't add to filename
-                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
-                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        } else if !in_filename_quote
+                            && (ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                                || ch == '>'
+                                || ch == '<')
                         {
                             break;
                         } else {
@@ -689,7 +696,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                             chars.next();
                         }
                     }
-                    
+
                     if !filename.is_empty() {
                         if let Some(fd) = fd_num {
                             // With fd number, use RedirectFdOutClobber for proper noclobber override
@@ -747,7 +754,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     let mut filename = String::new();
                     let mut in_filename_quote = false;
                     let mut filename_quote_char = ' ';
-                    
+
                     while let Some(&ch) = chars.peek() {
                         if !in_filename_quote && (ch == '"' || ch == '\'') {
                             in_filename_quote = true;
@@ -756,8 +763,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if in_filename_quote && ch == filename_quote_char {
                             in_filename_quote = false;
                             chars.next(); // consume quote but don't add to filename
-                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
-                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        } else if !in_filename_quote
+                            && (ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                                || ch == '>'
+                                || ch == '<')
                         {
                             break;
                         } else {
@@ -775,9 +789,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                     } else {
                         // No filename provided - error
-                        return Err(
-                            "Invalid redirection: expected filename after >>".to_string()
-                        );
+                        return Err("Invalid redirection: expected filename after >>".to_string());
                     }
                 } else {
                     // Regular output redirection: > or N>
@@ -787,7 +799,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     let mut filename = String::new();
                     let mut in_filename_quote = false;
                     let mut filename_quote_char = ' ';
-                    
+
                     while let Some(&ch) = chars.peek() {
                         if !in_filename_quote && (ch == '"' || ch == '\'') {
                             in_filename_quote = true;
@@ -796,8 +808,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if in_filename_quote && ch == filename_quote_char {
                             in_filename_quote = false;
                             chars.next(); // consume quote but don't add to filename
-                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
-                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        } else if !in_filename_quote
+                            && (ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                                || ch == '>'
+                                || ch == '<')
                         {
                             break;
                         } else {
@@ -815,9 +834,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                     } else {
                         // No filename provided - error
-                        return Err(
-                            "Invalid redirection: expected filename after >".to_string()
-                        );
+                        return Err("Invalid redirection: expected filename after >".to_string());
                     }
                 }
             }
@@ -967,7 +984,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     let mut filename = String::new();
                     let mut in_filename_quote = false;
                     let mut filename_quote_char = ' ';
-                    
+
                     while let Some(&ch) = chars.peek() {
                         if !in_filename_quote && (ch == '"' || ch == '\'') {
                             in_filename_quote = true;
@@ -976,8 +993,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if in_filename_quote && ch == filename_quote_char {
                             in_filename_quote = false;
                             chars.next(); // consume quote but don't add to filename
-                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
-                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        } else if !in_filename_quote
+                            && (ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                                || ch == '>'
+                                || ch == '<')
                         {
                             break;
                         } else {
@@ -1000,7 +1024,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     let mut filename = String::new();
                     let mut in_filename_quote = false;
                     let mut filename_quote_char = ' ';
-                    
+
                     while let Some(&ch) = chars.peek() {
                         if !in_filename_quote && (ch == '"' || ch == '\'') {
                             in_filename_quote = true;
@@ -1009,8 +1033,15 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         } else if in_filename_quote && ch == filename_quote_char {
                             in_filename_quote = false;
                             chars.next(); // consume quote but don't add to filename
-                        } else if !in_filename_quote && (ch == ' ' || ch == '\t' || ch == '\n'
-                            || ch == ';' || ch == '|' || ch == '&' || ch == '>' || ch == '<')
+                        } else if !in_filename_quote
+                            && (ch == ' '
+                                || ch == '\t'
+                                || ch == '\n'
+                                || ch == ';'
+                                || ch == '|'
+                                || ch == '&'
+                                || ch == '>'
+                                || ch == '<')
                         {
                             break;
                         } else {
@@ -1028,9 +1059,7 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                         }
                     } else {
                         // No filename provided - error
-                        return Err(
-                            "Invalid redirection: expected filename after <".to_string()
-                        );
+                        return Err("Invalid redirection: expected filename after <".to_string());
                     }
                 }
             }
@@ -1084,20 +1113,18 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     let mut check_chars = brace_content.chars().peekable();
                     let mut check_in_single = false;
                     let mut check_in_double = false;
-                    
+
                     while let Some(ch) = check_chars.next() {
                         if ch == '\'' && !check_in_double {
                             check_in_single = !check_in_single;
                         } else if ch == '"' && !check_in_single {
                             check_in_double = !check_in_double;
-                        } else if !check_in_single && !check_in_double {
-                            if ch == ',' {
-                                has_brace_expansion_pattern = true;
-                                break;
-                            } else if ch == '.' && check_chars.peek() == Some(&'.') {
-                                has_brace_expansion_pattern = true;
-                                break;
-                            }
+                        } else if !check_in_single
+                            && !check_in_double
+                            && (ch == ',' || (ch == '.' && check_chars.peek() == Some(&'.')))
+                        {
+                            has_brace_expansion_pattern = true;
+                            break;
                         }
                     }
 

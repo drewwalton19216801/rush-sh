@@ -446,15 +446,13 @@ fn apply_output_redirection(
                             expanded_file
                         )
                     }
+                } else if shell_state.colors_enabled {
+                    format!(
+                        "{}Cannot create {}: {}\x1b[0m",
+                        shell_state.color_scheme.error, expanded_file, e
+                    )
                 } else {
-                    if shell_state.colors_enabled {
-                        format!(
-                            "{}Cannot create {}: {}\x1b[0m",
-                            shell_state.color_scheme.error, expanded_file, e
-                        )
-                    } else {
-                        format!("Cannot create {}: {}", expanded_file, e)
-                    }
+                    format!("Cannot create {}: {}", expanded_file, e)
                 }
             })?
     } else {
@@ -655,10 +653,10 @@ fn apply_heredoc_redirection(
         .map_err(|e| format!("Failed to write here-document content: {}", e))?;
 
     // Apply to stdin if fd is 0
-    if fd == 0 {
-        if let Some(cmd) = command {
-            cmd.stdin(Stdio::from(reader));
-        }
+    if fd == 0
+        && let Some(cmd) = command
+    {
+        cmd.stdin(Stdio::from(reader));
     }
 
     Ok(())
@@ -681,10 +679,10 @@ fn apply_herestring_redirection(
         .map_err(|e| format!("Failed to write here-string content: {}", e))?;
 
     // Apply to stdin if fd is 0
-    if fd == 0 {
-        if let Some(cmd) = command {
-            cmd.stdin(Stdio::from(reader));
-        }
+    if fd == 0
+        && let Some(cmd) = command
+    {
+        cmd.stdin(Stdio::from(reader));
     }
 
     Ok(())
