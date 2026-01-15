@@ -2547,11 +2547,14 @@ mod negation_errexit_tests {
     fn test_lineno_in_script() {
         let mut shell_state = state::ShellState::new();
         
-        let script = "echo line $LINENO\necho line $LINENO\necho line $LINENO";
+        // Set a variable to capture LINENO values
+        let script = "L1=$LINENO\nL2=$LINENO\nL3=$LINENO";
         script_engine::execute_script(script, &mut shell_state, None);
         
-        // Should output lines 1, 2, 3
         assert_eq!(shell_state.last_exit_code, 0);
+        assert_eq!(shell_state.get_var("L1"), Some("1".to_string()));
+        assert_eq!(shell_state.get_var("L2"), Some("2".to_string()));
+        assert_eq!(shell_state.get_var("L3"), Some("3".to_string()));
     }
 
     #[test]
