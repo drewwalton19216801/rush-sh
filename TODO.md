@@ -279,7 +279,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ Missing built-in functionality (eval, exec, readonly, :, times, umask, wait)
+- ❌ Missing built-in functionality (eval, exec, readonly, times, umask, wait)
 - ❌ Job control features (bg, fg, jobs, &)
 
 ## Compliance Metrics
