@@ -13,7 +13,7 @@ use std::rc::Rc;
 use crate::parser::{Ast, ShellCommand};
 use crate::state::ShellState;
 
-use super::expansion::{expand_variables_in_args, expand_wildcards};
+use super::expansion::{expand_variables_in_args, expand_variables_in_string, expand_wildcards};
 use super::redirection::apply_redirections;
 use super::{execute, execute_compound_in_pipeline, execute_compound_with_redirections};
 
@@ -266,9 +266,12 @@ pub(crate) fn execute_single_command(cmd: &ShellCommand, shell_state: &mut Shell
     // Print command if xtrace is enabled (-x)
     if shell_state.options.xtrace {
         // Get PS4 prompt (default: "+ ")
-        let ps4 = shell_state
+        let ps4_raw = shell_state
             .get_var("PS4")
             .unwrap_or_else(|| "+ ".to_string());
+        
+        // Expand variables in PS4 (e.g., $LINENO)
+        let ps4 = expand_variables_in_string(&ps4_raw, shell_state);
 
         // Print the command with expanded arguments to stderr
         let command_str = expanded_args.join(" ");
