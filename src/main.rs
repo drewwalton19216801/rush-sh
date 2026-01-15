@@ -2542,4 +2542,32 @@ mod negation_errexit_tests {
         assert!(!shell_state.exit_requested);
         assert_eq!(shell_state.get_var("COUNT"), Some("2".to_string()));
     }
+
+    #[test]
+    fn test_lineno_in_script() {
+        let mut shell_state = state::ShellState::new();
+        
+        let script = "echo line $LINENO\necho line $LINENO\necho line $LINENO";
+        script_engine::execute_script(script, &mut shell_state, None);
+        
+        // Should output lines 1, 2, 3
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
+    #[test]
+    fn test_lineno_in_function() {
+        let mut shell_state = state::ShellState::new();
+        
+        let script = r#"
+test_func() {
+    echo "Function line $LINENO"
+}
+echo "Script line $LINENO"
+test_func
+echo "Script line $LINENO"
+"#;
+        
+        script_engine::execute_script(script, &mut shell_state, None);
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
 }
