@@ -223,6 +223,9 @@ pub fn execute_script(
     shell_state: &mut state::ShellState,
     shutdown_flag: Option<&AtomicBool>,
 ) {
+    // Reset line number for script execution
+    shell_state.current_line_number = 1;
+    
     let mut current_block = String::new();
     let mut in_if_block = false;
     let mut if_depth = 0;
@@ -462,5 +465,7 @@ pub fn execute_script(
             }
         }
         i += 1;
+        // Update current line number for $LINENO
+        shell_state.current_line_number = i + 1;
     }
 }
