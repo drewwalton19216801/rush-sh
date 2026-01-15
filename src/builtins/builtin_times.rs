@@ -31,8 +31,8 @@ impl super::Builtin for TimesBuiltin {
         }
 
         // Get resource usage for the shell process and its children
-        let (shell_user, shell_sys) = get_rusage_self();
-        let (children_user, children_sys) = get_rusage_children();
+        let (shell_user, shell_sys) = get_rusage(libc::RUSAGE_SELF);
+        let (children_user, children_sys) = get_rusage(libc::RUSAGE_CHILDREN);
 
         // Format and output the times
         // Format: XmY.ZZs (e.g., 0m0.12s)
@@ -53,36 +53,15 @@ impl super::Builtin for TimesBuiltin {
     }
 }
 
-/// Get resource usage for the current process (RUSAGE_SELF)
-fn get_rusage_self() -> (f64, f64) {
+/// Get resource usage for either the current process or its children
+fn get_rusage(usage_type: i32) -> (f64, f64) {
     #[cfg(unix)]
     {
         use std::mem::MaybeUninit;
-        
-        unsafe {
-            let mut usage = MaybeUninit::<libc::rusage>::uninit();
-            if libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) == 0 {
-                let usage = usage.assume_init();
-                let user_time = timeval_to_seconds(&usage.ru_utime);
-                let sys_time = timeval_to_seconds(&usage.ru_stime);
-                return (user_time, sys_time);
-            }
-        }
-    }
-    
-    // Fallback for non-Unix systems or if getrusage fails
-    (0.0, 0.0)
-}
 
-/// Get resource usage for child processes (RUSAGE_CHILDREN)
-fn get_rusage_children() -> (f64, f64) {
-    #[cfg(unix)]
-    {
-        use std::mem::MaybeUninit;
-        
         unsafe {
             let mut usage = MaybeUninit::<libc::rusage>::uninit();
-            if libc::getrusage(libc::RUSAGE_CHILDREN, usage.as_mut_ptr()) == 0 {
+            if libc::getrusage(usage_type, usage.as_mut_ptr()) == 0 {
                 let usage = usage.assume_init();
                 let user_time = timeval_to_seconds(&usage.ru_utime);
                 let sys_time = timeval_to_seconds(&usage.ru_stime);
@@ -90,7 +69,7 @@ fn get_rusage_children() -> (f64, f64) {
             }
         }
     }
-    
+
     // Fallback for non-Unix systems or if getrusage fails
     (0.0, 0.0)
 }
