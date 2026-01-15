@@ -275,7 +275,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                         var_name.push(c);
                         chars.next();
                     } else {
-                        // Regular variable name
+                        // Regular variable name (including multi-character special variables like LINENO)
                         while let Some(&c) = next_ch {
                             if c.is_alphanumeric() || c == '_' {
                                 var_name.push(c);
