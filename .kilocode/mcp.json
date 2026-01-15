@@ -1,14 +1,8 @@
 {
   "mcpServers": {
     "context7": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@upstash/context7-mcp"
-      ],
-      "env": {
-        "DEFAULT_MINIMUM_TOKENS": ""
-      }
+      "type": "streamable-http",
+      "url": "https://mcp.context7.com/mcp"
     }
   }
 }
