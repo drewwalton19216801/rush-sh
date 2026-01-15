@@ -16,7 +16,7 @@
 
 - **Compliance Level**: ~94% POSIX compliant
 - **Test Coverage**: 499+ test functions across all components
-- **Built-in Commands**: 25 implemented commands
+- **Built-in Commands**: 26 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
@@ -637,7 +637,7 @@ impl ShellState {
 
 ### High Priority (Core POSIX Features)
 
-1. **Missing Built-ins**: `eval`, `exec`, `readonly`, `:` (colon)
+1. **Missing Built-ins**: `eval`, `exec`, `readonly`
 2. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
 
 ### Medium Priority

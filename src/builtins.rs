@@ -41,6 +41,7 @@ impl Write for BadFdWriter {
 mod builtin_alias;
 mod builtin_break;
 mod builtin_cd;
+mod builtin_colon;
 mod builtin_continue;
 mod builtin_declare;
 mod builtin_dirs;
@@ -117,6 +118,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_return::ReturnBuiltin),
         Box::new(builtin_break::BreakBuiltin),
         Box::new(builtin_continue::ContinueBuiltin),
+        Box::new(builtin_colon::ColonBuiltin),
     ]
 }
 
@@ -444,6 +446,7 @@ mod tests {
         assert!(commands.contains(&"break".to_string()));
         assert!(commands.contains(&"continue".to_string()));
         assert!(commands.contains(&"set".to_string()));
-        assert_eq!(commands.len(), 27);
+        assert!(commands.contains(&":".to_string()));
+        assert_eq!(commands.len(), 28);
     }
 }

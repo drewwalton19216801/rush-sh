@@ -364,7 +364,9 @@ fahrenheit=$((celsius * 9 / 5 + 32))</code></pre>
 
                     <div class="expansion-section">
                         <h3>Parameter Expansion with Modifiers</h3>
-                        <p>Advanced variable expansion with POSIX sh modifiers for powerful string manipulation. Supports both <code>$VAR</code> and <code>${VAR}</code> brace syntax for all variable types including special variables like <code>$LINENO</code>.</p>
+                        <p>Advanced variable expansion with POSIX sh modifiers for powerful string manipulation.
+                            Supports both <code>$VAR</code> and <code>${VAR}</code> brace syntax for all variable types
+                            including special variables like <code>$LINENO</code>.</p>
 
                         <div class="expansion-examples">
                             <div class="example-group">
@@ -587,7 +589,7 @@ local var="value"</code></pre>
                     <h2>🛠️ Built-in Commands</h2>
 
                     <div class="builtins-overview">
-                        <p>Rush includes <strong>25 comprehensive built-in commands</strong> for enhanced functionality
+                        <p>Rush includes <strong>26 comprehensive built-in commands</strong> for enhanced functionality
                             and performance:</p>
 
                         <div class="builtins-grid">
@@ -667,6 +669,13 @@ local var="value"</code></pre>
                                     <li><code>declare</code> - Function introspection</li>
                                     <li><code>type</code> - Display information about command type (alias, keyword,
                                         function, builtin, or external command)</li>
+                                </ul>
+                            </div>
+
+                            <div class="builtin-category">
+                                <h4>Utility</h4>
+                                <ul>
+                                    <li><code>:</code> - Null command (no-op), always returns success</li>
                                 </ul>
                             </div>
                         </div>
