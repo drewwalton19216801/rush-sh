@@ -524,6 +524,13 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Execute function body
                 let exit_code = execute(function_body, shell_state);
 
+                // Helper to restore line number from stack
+                let restore_line_number = |state: &mut ShellState| {
+                    if let Some(saved_line) = state.line_number_stack.pop() {
+                        state.current_line_number = saved_line;
+                    }
+                };
+
                 // Check if we got an early return from the function
                 if shell_state.is_returning() {
                     let return_value = shell_state.get_return_value().unwrap_or(0);
@@ -532,9 +539,7 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                     shell_state.set_positional_params(old_positional);
 
                     // Restore line number
-                    if let Some(saved_line) = shell_state.line_number_stack.pop() {
-                        shell_state.current_line_number = saved_line;
-                    }
+                    restore_line_number(shell_state);
 
                     // Exit function context
                     shell_state.exit_function();
