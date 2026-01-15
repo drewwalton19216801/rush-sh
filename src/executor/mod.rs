@@ -517,6 +517,10 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Set positional parameters for function arguments
                 shell_state.set_positional_params(args.clone());
 
+                // Save current line number and reset to 1 for function body
+                shell_state.line_number_stack.push(shell_state.current_line_number);
+                shell_state.current_line_number = 1;
+
                 // Execute function body
                 let exit_code = execute(function_body, shell_state);
 
@@ -526,6 +530,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                     // Restore old positional parameters
                     shell_state.set_positional_params(old_positional);
+
+                    // Restore line number
+                    if let Some(saved_line) = shell_state.line_number_stack.pop() {
+                        shell_state.current_line_number = saved_line;
+                    }
 
                     // Exit function context
                     shell_state.exit_function();
@@ -542,6 +551,11 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
 
                 // Restore old positional parameters
                 shell_state.set_positional_params(old_positional);
+
+                // Restore line number
+                if let Some(saved_line) = shell_state.line_number_stack.pop() {
+                    shell_state.current_line_number = saved_line;
+                }
 
                 // Exit function context
                 shell_state.exit_function();
