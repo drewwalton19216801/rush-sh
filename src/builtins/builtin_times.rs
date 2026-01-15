@@ -26,7 +26,7 @@ impl super::Builtin for TimesBuiltin {
     ) -> i32 {
         // POSIX times takes no arguments
         if cmd.args.len() > 1 {
-            let _ = writeln!(output_writer, "times: too many arguments");
+            eprintln!("times: too many arguments");
             return 1;
         }
 
