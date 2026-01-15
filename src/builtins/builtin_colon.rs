@@ -14,10 +14,10 @@ use crate::state::ShellState;
 ///
 /// # POSIX Compliance
 ///
-/// This builtin is *not* part of POSIX standards. The colon command accepts any 
-/// number of arguments, which are subject to normal shell expansions (variable 
-/// expansion, command substitution, etc.), but the arguments are then ignored. 
-/// The command always exits with status 0.
+/// The colon (`:`) is a POSIX special built-in command per IEEE Std 1003.1.
+/// It accepts any number of arguments, which are subject to normal shell 
+/// expansions (variable expansion, command substitution, etc.), but the 
+/// arguments are then ignored. The command always exits with status 0.
 ///
 /// # Examples
 ///
