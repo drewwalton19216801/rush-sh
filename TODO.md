@@ -139,7 +139,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ return (implemented)
 - ✅ set (implemented with 8 POSIX options)
 - ✅ shift (implemented)
-- ❌ times (not implemented)
+- ✅ times (implemented)
 - ✅ trap (implemented)
 - ❌ umask (not implemented)
 - ✅ unset (implemented)
@@ -147,13 +147,13 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Current Built-in Status
 
-**Implemented (26):**
+**Implemented (27):**
 
-- : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, trap, type, unalias, unset
+- : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, times, trap, type, unalias, unset
 
 **Missing POSIX Built-ins:**
 
-- **Special Built-ins**: eval, exec, readonly, times, umask, wait
+- **Special Built-ins**: eval, exec, readonly, umask, wait
 - **Note**: Many common built-ins are implemented (alias, dirs, pushd/popd, source, test, return, set, color management)
 
 ## 4. Regular Built-in Utilities
@@ -230,7 +230,6 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - `eval` (evaluate string as shell command)
     - `exec` (replace shell with command)
     - `readonly` (mark variables as read-only)
-    - `times` (print accumulated times)
     - `umask` (set file creation mask)
     - `wait` (wait for background jobs)
 
@@ -256,7 +255,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ **Lexer tests** (tokenization, expansion, quoting, arithmetic, parameter expansion)
 - ✅ **Parser tests** (AST construction, control structures, if/elif/else, case statements)
 - ✅ **Executor tests** (command execution, pipelines, redirections, built-in commands)
-- ✅ **Built-in tests** (all 26 implemented commands with comprehensive coverage)
+- ✅ **Built-in tests** (all 27 implemented commands with comprehensive coverage)
 - ✅ **Integration tests** (end-to-end scenarios, variable expansion, control structures)
 - ✅ **Arithmetic expansion tests** (operators, precedence, variables, error handling)
 - ✅ **Parameter expansion tests** (all modifiers, pattern matching, indirect expansion, edge cases)
@@ -279,7 +278,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ### Areas Without Tests (due to unimplemented features)
 
-- ❌ Missing built-in functionality (eval, exec, readonly, times, umask, wait)
+- ❌ Missing built-in functionality (eval, exec, readonly, umask, wait)
 - ❌ Job control features (bg, fg, jobs, &)
 
 ## Compliance Metrics
@@ -290,7 +289,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 - **Basic Execution**: 95% ✅
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while/until loops, functions with return, subshells, command grouping implemented)
-- **Built-in Commands**: 84% ✅ (26 built-ins implemented out of 31 POSIX required, including critical `set` builtin)
+- **Built-in Commands**: 87% ✅ (27 built-ins implemented out of 31 POSIX required, including critical `set` and `times` builtins)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)
 - **Job Control**: 0% ❌ (optional POSIX feature)
