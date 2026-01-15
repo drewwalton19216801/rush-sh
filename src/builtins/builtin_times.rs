@@ -176,8 +176,7 @@ mod tests {
         
         assert_eq!(exit_code, 1);
         
-        let output_str = String::from_utf8(output).unwrap();
-        assert!(output_str.contains("too many arguments"));
+        assert!(output.is_empty(), "no output should be written to stdout on error");
     }
 
     #[test]
