@@ -2209,7 +2209,7 @@ Rush features a modular architecture with well-organized components for maintain
 
 ### Supporting Components
 
-- **Built-in Commands** ([`src/builtins/`](src/builtins/)): 26 optimized built-in commands with direct state access
+- **Built-in Commands** ([`src/builtins/`](src/builtins/)): 27 optimized built-in commands with direct state access
 - **Completion** ([`src/completion.rs`](src/completion.rs)): Intelligent tab-completion for commands, files, and directories
 - **Script Engine** ([`src/script_engine.rs`](src/script_engine.rs)): Script file execution with proper error handling
 
