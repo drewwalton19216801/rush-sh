@@ -364,9 +364,27 @@ fahrenheit=$((celsius * 9 / 5 + 32))</code></pre>
 
                     <div class="expansion-section">
                         <h3>Parameter Expansion with Modifiers</h3>
-                        <p>Advanced variable expansion with POSIX sh modifiers for powerful string manipulation</p>
+                        <p>Advanced variable expansion with POSIX sh modifiers for powerful string manipulation. Supports both <code>$VAR</code> and <code>${VAR}</code> brace syntax for all variable types including special variables like <code>$LINENO</code>.</p>
 
                         <div class="expansion-examples">
+                            <div class="example-group">
+                                <h4>Variable Expansion Syntax</h4>
+                                <div class="code-block">
+                                    <pre><code># Both syntaxes supported
+echo $HOME
+echo ${HOME}
+
+# Works with special variables
+echo $LINENO
+echo ${LINENO}
+
+# PS4 variable expansion for xtrace
+PS4='+ ${LINENO}: '
+set -x
+echo "Debug output"</code></pre>
+                                </div>
+                            </div>
+
                             <div class="example-group">
                                 <h4>Default Values</h4>
                                 <div class="code-block">

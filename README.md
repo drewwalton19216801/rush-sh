@@ -79,7 +79,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
   - Operator precedence with parentheses support
 - **Environment Variables**: Full support for variable assignment, expansion, and export.
   - Variable assignment: `VAR=value` and `VAR="quoted value"`
-  - Variable expansion: `$VAR` and special variables (`$?`, `$$`, `$0`)
+  - Variable expansion: `$VAR` and `${VAR}` (both syntaxes supported for all variable types)
+  - Special variables: `$?`, `$$`, `$0`, `$LINENO` (with full `${VAR}` brace syntax support)
   - **Parameter Expansion with Modifiers**: Advanced variable expansion with POSIX sh modifiers
     - `${VAR:-default}` - use default if VAR is unset or null
     - `${VAR:=default}` - assign default if VAR is unset or null
@@ -1842,7 +1843,7 @@ Rush now provides comprehensive support for the POSIX `set` built-in command, en
 - **8 POSIX Options Supported**:
   - `-e` (errexit): Exit immediately if a command fails
   - `-u` (nounset): Treat unset variables as errors
-  - `-x` (xtrace): Print commands before execution (with PS4 prefix)
+  - `-x` (xtrace): Print commands before execution (with PS4 prefix and variable expansion)
   - `-v` (verbose): Print shell input lines as read
   - `-n` (noexec): Read commands but don't execute (syntax check mode)
   - `-f` (noglob): Disable pathname expansion (globbing)
@@ -1887,7 +1888,7 @@ set                        # Shows all variables (NAME=value format)
 - Options are stored in [`ShellState.options`](src/state.rs:738) structure
 - errexit checks occur after each command execution
 - nounset validation happens during variable expansion
-- xtrace prints to stderr before command execution
+- xtrace prints to stderr before command execution with PS4 variable expansion
 - noexec mode parses but skips execution
 - noglob disables wildcard expansion in pathname expansion
 - noclobber prevents `>` from overwriting (use `>|` to override)

@@ -22,6 +22,8 @@
 
 ### Recently Implemented Features
 
+- **PS4 Variable Expansion**: Full variable expansion support in PS4 prompt for xtrace output (`set -x`), including special variables like `$LINENO` and support for both `$VAR` and `${VAR}` brace syntax
+- **${VAR} Brace Syntax**: Complete support for brace syntax in variable expansion for all variable types, including special variables like `$LINENO`, `$?`, `$$`, etc.
 - **Set Builtin**: POSIX-compliant `set` command with comprehensive shell option management (errexit, nounset, xtrace, verbose, noexec, noglob, noclobber, allexport), positional parameter control, named options (-o/+o), and display modes - 86+ test cases covering all functionality
 - **Loop Control Builtins**: POSIX-compliant `break` and `continue` commands with support for nested loops via optional [n] argument, working with for/while/until loops, and 29 comprehensive test cases
 - **Subshell Support**: Full POSIX-compliant subshells with state isolation, exit code propagation, trap inheritance, depth limit protection (max 100 levels), and 60+ test cases
