@@ -2,7 +2,8 @@
 
 **Version 0.7.3** - A comprehensive POSIX sh-compatible shell implementation
 
-[![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh)
+[![dependency status](https://deps.rs/repo/github/drewwalton19216801/rush-sh/status.svg)](https://deps.rs/repo/github/drewwalton19216801/rush-sh) ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/drewwalton19216801/rush-sh)
+
 
 ![Rush Logo](images/rush_logo.png)
 
