@@ -60,6 +60,7 @@ mod builtin_set_condensed;
 mod builtin_shift;
 mod builtin_source;
 mod builtin_test;
+mod builtin_times;
 mod builtin_trap;
 mod builtin_type;
 mod builtin_unalias;
@@ -113,6 +114,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_set_condensed::SetCondensedBuiltin),
         Box::new(builtin_shift::ShiftBuiltin),
         Box::new(builtin_declare::DeclareBuiltin),
+        Box::new(builtin_times::TimesBuiltin),
         Box::new(builtin_trap::TrapBuiltin),
         Box::new(builtin_type::TypeBuiltin),
         Box::new(builtin_return::ReturnBuiltin),
@@ -447,6 +449,7 @@ mod tests {
         assert!(commands.contains(&"continue".to_string()));
         assert!(commands.contains(&"set".to_string()));
         assert!(commands.contains(&":".to_string()));
-        assert_eq!(commands.len(), 28);
+        assert!(commands.contains(&"times".to_string()));
+        assert_eq!(commands.len(), 29);
     }
 }

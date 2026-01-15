@@ -16,12 +16,13 @@
 
 - **Compliance Level**: ~94% POSIX compliant
 - **Test Coverage**: 499+ test functions across all components
-- **Built-in Commands**: 26 implemented commands
+- **Built-in Commands**: 27 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
 ### Recently Implemented Features
 
+- **Times Builtin**: POSIX-compliant `times` command displaying accumulated user and system CPU times for the shell and child processes, with proper time formatting (XmY.ZZs) and 7 comprehensive test cases
 - **PS4 Variable Expansion**: Full variable expansion support in PS4 prompt for xtrace output (`set -x`), including special variables like `$LINENO` and support for both `$VAR` and `${VAR}` brace syntax
 - **${VAR} Brace Syntax**: Complete support for brace syntax in variable expansion for all variable types, including special variables like `$LINENO`, `$?`, `$$`, etc.
 - **Set Builtin**: POSIX-compliant `set` command with comprehensive shell option management (errexit, nounset, xtrace, verbose, noexec, noglob, noclobber, allexport), positional parameter control, named options (-o/+o), and display modes - 86+ test cases covering all functionality
@@ -93,7 +94,7 @@ src/
 ├── script_engine.rs     # Script execution engine
 ├── builtins.rs          # Builtin dispatcher
 ├── builtins/            # Individual builtin commands
-│   ├── builtin_*.rs     # 25+ builtin implementations
+│   ├── builtin_*.rs     # 26+ builtin implementations
 └── lib.rs               # Library exports
 ```
 

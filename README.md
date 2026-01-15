@@ -7,7 +7,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 26 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 27 built-in commands.
 
 ## Table of Contents
 
@@ -119,7 +119,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (26 total):
+- **Built-in Commands** (27 total):
   - `:` (colon): Null command that always returns success
   - `alias`: Define or display aliases
   - `break`: Exit from for, while, or until loops with optional [n] for nested loops
@@ -142,6 +142,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
   - `shift`: Shift positional parameters
   - `source` / `.`: Execute a script file with rush (bypasses shebang and comment lines)
   - `test` / `[`: POSIX-compatible test builtin with string and file tests
+  - `times`: Display accumulated user and system CPU times for the shell and its child processes
   - `trap`: Set or display signal handlers
   - `type`: Display information about command type (alias, keyword, function, builtin, or external command)
   - `unalias`: Remove alias definitions
@@ -2208,7 +2209,7 @@ Rush features a modular architecture with well-organized components for maintain
 
 ### Supporting Components
 
-- **Built-in Commands** ([`src/builtins/`](src/builtins/)): 25 optimized built-in commands with direct state access
+- **Built-in Commands** ([`src/builtins/`](src/builtins/)): 27 optimized built-in commands with direct state access
 - **Completion** ([`src/completion.rs`](src/completion.rs)): Intelligent tab-completion for commands, files, and directories
 - **Script Engine** ([`src/script_engine.rs`](src/script_engine.rs)): Script file execution with proper error handling
 
@@ -2396,7 +2397,7 @@ This benchmark suite provides a foundation for maintaining optimal shell perform
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (all 26 built-in commands including : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, trap, type, unalias, unset)
+- Built-in command functionality (all 27 built-in commands including : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, times, trap, type, unalias, unset)
 - **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
 - **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
