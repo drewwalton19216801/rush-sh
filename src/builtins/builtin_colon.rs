@@ -3,9 +3,9 @@ use std::io::Write;
 use crate::parser::ShellCommand;
 use crate::state::ShellState;
 
-/// The POSIX no-op (`:`) builtin command.
+/// The no-op (`:`) builtin command.
 ///
-/// Per POSIX.1-2008, the colon utility does nothing and always returns exit status 0.
+/// The colon utility does nothing and always returns exit status 0.
 /// It is primarily used for:
 /// - Placeholder in control structures (e.g., `if :; then ...`)
 /// - Forcing variable expansion without executing commands (e.g., `: ${VAR:?error}`)
@@ -14,9 +14,10 @@ use crate::state::ShellState;
 ///
 /// # POSIX Compliance
 ///
-/// The colon command accepts any number of arguments, which are subject to normal
-/// shell expansions (variable expansion, command substitution, etc.), but the
-/// arguments are then ignored. The command always exits with status 0.
+/// This builtin is *not* part of POSIX standards. The colon command accepts any 
+/// number of arguments, which are subject to normal shell expansions (variable 
+/// expansion, command substitution, etc.), but the arguments are then ignored. 
+/// The command always exits with status 0.
 ///
 /// # Examples
 ///
@@ -66,7 +67,7 @@ impl super::Builtin for ColonBuiltin {
         _shell_state: &mut ShellState,
         _output_writer: &mut dyn Write,
     ) -> i32 {
-        // Per POSIX: The colon utility does nothing and always returns exit status 0.
+        // The colon utility does nothing and always returns exit status 0.
         // Arguments are already expanded by the shell before reaching this point,
         // so we simply ignore them and return success.
         0
