@@ -260,6 +260,51 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     result.push_str(&sub_command);
                     result.push(')');
                 }
+            } else if let Some(&'{') = chars.peek() {
+                // ${VAR} syntax
+                chars.next(); // consume the {
+                let mut var_name = String::new();
+                let mut found_closing = false;
+
+                // Read until we find the closing }
+                while let Some(c) = chars.next() {
+                    if c == '}' {
+                        found_closing = true;
+                        break;
+                    }
+                    var_name.push(c);
+                }
+
+                if found_closing && !var_name.is_empty() {
+                    if let Some(value) = shell_state.get_var(&var_name) {
+                        result.push_str(&value);
+                    } else {
+                        // Variable not found - for positional parameters, expand to empty string
+                        // For other variables, keep the literal
+                        if var_name.chars().next().unwrap().is_ascii_digit()
+                            || var_name == "?"
+                            || var_name == "$"
+                            || var_name == "0"
+                            || var_name == "#"
+                            || var_name == "*"
+                            || var_name == "@"
+                        {
+                            // Expand to empty string for undefined positional parameters
+                        } else {
+                            // Keep the literal for regular variables
+                            result.push_str("${");
+                            result.push_str(&var_name);
+                            result.push('}');
+                        }
+                    }
+                } else {
+                    // Malformed ${...} - keep as literal
+                    result.push_str("${");
+                    result.push_str(&var_name);
+                    if !found_closing {
+                        // No closing brace found
+                    }
+                }
             } else {
                 // Regular variable
                 let mut var_name = String::new();

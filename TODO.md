@@ -49,13 +49,14 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 ### 1.5 Parameters and Variables
 
 - ✅ Variable assignment (VAR=value)
-- ✅ Variable expansion (`$VAR`)
-- ✅ Special parameters: `$?`, `$$`, `$0`, `$LINENO`
+- ✅ Variable expansion (`$VAR` and `${VAR}` - both syntaxes supported for all variable types)
+- ✅ Special parameters: `$?`, `$$`, `$0`, `$LINENO` (with full `${VAR}` brace syntax support)
 - ✅ Positional parameters (`$1`, `$2`, ...)
 - ✅ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
 - ✅ Parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, etc.)
 - ✅ Indirect expansion (`${!name}`, `${!prefix*}`) - bash extension
 - ✅ Arithmetic expansion (`$((...))`)
+- ✅ PS4 variable expansion for xtrace output (`set -x`)
 
 ### 1.6 Word Expansions
 

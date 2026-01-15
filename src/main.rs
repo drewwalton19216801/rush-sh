@@ -476,6 +476,18 @@ mod tests {
         assert_eq!(shell_state.last_exit_code, 0);
     }
 
+    #[test]
+    fn test_xtrace_with_ps4_expansion() {
+        let mut shell_state = state::ShellState::new();
+        shell_state.current_line_number = 42;
+        shell_state.set_var("PS4", "+ [${LINENO}] ".to_string());
+        shell_state.options.xtrace = true;
+        
+        script_engine::execute_line("echo test", &mut shell_state);
+        
+        assert_eq!(shell_state.last_exit_code, 0);
+    }
+
     /// Test nounset option (-u): Unset variables should cause errors during execution
     #[test]
     fn test_nounset_basic() {

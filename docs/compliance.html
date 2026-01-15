@@ -240,11 +240,11 @@
                             </div>
                             <div class="compliance-item implemented">
                                 <span class="status-icon">✅</span>
-                                <span class="item-text">Variable expansion ($VAR)</span>
+                                <span class="item-text">Variable expansion ($VAR and ${VAR} - both syntaxes supported)</span>
                             </div>
                             <div class="compliance-item implemented">
                                 <span class="status-icon">✅</span>
-                                <span class="item-text">Special parameters: $? $$ $0</span>
+                                <span class="item-text">Special parameters: $? $$ $0 $LINENO (with ${VAR} brace syntax support)</span>
                             </div>
                             <div class="compliance-item implemented">
                                 <span class="status-icon">✅</span>
@@ -261,6 +261,10 @@
                             <div class="compliance-item implemented">
                                 <span class="status-icon">✅</span>
                                 <span class="item-text">Arithmetic expansion ($((...)))</span>
+                            </div>
+                            <div class="compliance-item implemented">
+                                <span class="status-icon">✅</span>
+                                <span class="item-text">PS4 variable expansion for xtrace output (set -x)</span>
                             </div>
                         </div>
                     </div>
