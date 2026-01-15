@@ -223,6 +223,9 @@ pub fn execute_script(
     shell_state: &mut state::ShellState,
     shutdown_flag: Option<&AtomicBool>,
 ) {
+    // Reset line number for script execution
+    shell_state.current_line_number = 1;
+    
     let mut current_block = String::new();
     let mut in_if_block = false;
     let mut if_depth = 0;
@@ -246,6 +249,10 @@ pub fn execute_script(
 
     while i < lines.len() {
         let line = lines[i];
+        
+        // Update current line number for $LINENO - must be before any continue statements
+        shell_state.current_line_number = i + 1;
+        
         // Process pending signals at the start of each line
         state::process_pending_signals(shell_state);
 

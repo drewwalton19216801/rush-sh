@@ -127,6 +127,10 @@ pub struct ShellState {
     pub in_negation: bool,
     /// Track if the last command executed was a negation (to skip errexit check on inverted code)
     pub last_was_negation: bool,
+    /// Current line number in script execution (for $LINENO)
+    pub current_line_number: usize,
+    /// Stack of line numbers for function calls (to restore after function returns)
+    pub line_number_stack: Vec<usize>,
 }
 
 impl ShellState {
@@ -213,6 +217,8 @@ impl ShellState {
             in_logical_chain: false,
             in_negation: false,
             last_was_negation: false,
+            current_line_number: 1,
+            line_number_stack: Vec::new(),
         }
     }
 
@@ -223,6 +229,7 @@ impl ShellState {
             "?" => Some(self.last_exit_code.to_string()),
             "$" => Some(self.shell_pid.to_string()),
             "0" => Some(self.script_name.clone()),
+            "LINENO" => Some(self.current_line_number.to_string()),
             "*" => {
                 // $* - all positional parameters as single string (space-separated)
                 if self.positional_params.is_empty() {

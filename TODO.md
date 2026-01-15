@@ -50,7 +50,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 - ✅ Variable assignment (VAR=value)
 - ✅ Variable expansion (`$VAR`)
-- ✅ Special parameters: `$?`, `$$`, `$0`
+- ✅ Special parameters: `$?`, `$$`, `$0`, `$LINENO`
 - ✅ Positional parameters (`$1`, `$2`, ...)
 - ✅ Special parameters: `$*`, `$@`, `$#`, `$!`, `$-`
 - ✅ Parameter expansion with modifiers (`${VAR:-default}`, `${VAR#pattern}`, `${VAR/pattern/replacement}`, etc.)

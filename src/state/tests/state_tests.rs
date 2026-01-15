@@ -119,3 +119,11 @@ fn test_prompt_with_condensed_setting() {
     assert!(prompt_condensed.ends_with("$ ") || prompt_condensed.ends_with("# "));
     assert!(prompt_full.ends_with("$ ") || prompt_full.ends_with("# "));
 }
+
+#[test]
+fn test_lineno_special_variable() {
+    let mut state = ShellState::new();
+    state.current_line_number = 42;
+    
+    assert_eq!(state.get_var("LINENO"), Some("42".to_string()));
+}
