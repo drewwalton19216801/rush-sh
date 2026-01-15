@@ -7,7 +7,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 25 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 26 built-in commands.
 
 ## Table of Contents
 
@@ -119,7 +119,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (25 total):
+- **Built-in Commands** (26 total):
+  - `:` (colon): Null command that always returns success
   - `alias`: Define or display aliases
   - `break`: Exit from for, while, or until loops with optional [n] for nested loops
   - `cd`: Change directory
@@ -171,7 +172,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
 
 **Advanced Arithmetic Expansion** - Complete `$((...))` arithmetic expression evaluator with proper operator precedence, variable integration, bitwise operations, logical operations, and comprehensive error handling using the Shunting-yard algorithm.
 
-**Enhanced Built-in Command Suite** - Comprehensive set of 25 built-in commands including loop control (`break`/`continue`), directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), function returns (`return`), shell options (`set`), and POSIX-compliant `test` builtin.
+**Enhanced Built-in Command Suite** - Comprehensive set of 26 built-in commands including the colon (`:`) null command, loop control (`break`/`continue`), directory stack management (`pushd`/`popd`/`dirs`), alias management (`alias`/`unalias`), color theming (`set_colors`/`set_color_scheme`), function introspection (`declare`), signal handling (`trap`), command type inspection (`type`), function returns (`return`), shell options (`set`), and POSIX-compliant `test` builtin.
 
 **Intelligent Tab Completion** - Advanced completion system for commands, files, directories, and paths with support for nested directory traversal and home directory expansion.
 
@@ -2395,7 +2396,7 @@ This benchmark suite provides a foundation for maintaining optimal shell perform
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (all 25 built-in commands including alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, trap, type, unalias, unset)
+- Built-in command functionality (all 26 built-in commands including : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, trap, type, unalias, unset)
 - **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
 - **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
