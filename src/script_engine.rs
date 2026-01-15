@@ -249,6 +249,10 @@ pub fn execute_script(
 
     while i < lines.len() {
         let line = lines[i];
+        
+        // Update current line number for $LINENO - must be before any continue statements
+        shell_state.current_line_number = i + 1;
+        
         // Process pending signals at the start of each line
         state::process_pending_signals(shell_state);
 
@@ -465,7 +469,5 @@ pub fn execute_script(
             }
         }
         i += 1;
-        // Update current line number for $LINENO
-        shell_state.current_line_number = i + 1;
     }
 }
