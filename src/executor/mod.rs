@@ -12,6 +12,7 @@ mod expansion;
 mod redirection;
 mod command;
 mod subshell;
+mod async_exec;
 
 // Re-export expansion functions
 pub use expansion::expand_variables_in_string;
@@ -21,6 +22,9 @@ pub(crate) use command::{execute_and_capture_output, execute_single_command, exe
 
 // Re-export subshell functions
 pub(crate) use subshell::{execute_compound_with_redirections, execute_compound_in_pipeline};
+
+// Re-export async execution functions
+pub(crate) use async_exec::execute_async;
 
 
 /// Execute a trap handler command
@@ -693,10 +697,8 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
         }
         Ast::CommandGroup { body } => execute(*body, shell_state),
         Ast::AsyncCommand { command } => {
-            // Phase 1: Parse and recognize & operator, but execute synchronously
-            // Job control implementation will be added in future phases
-            // For now, just execute the command normally and return immediately
-            execute(*command, shell_state)
+            // Execute command asynchronously in the background
+            execute_async(*command, shell_state)
         }
     }
 }

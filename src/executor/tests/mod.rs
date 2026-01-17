@@ -7,3 +7,4 @@ mod redirection_tests;
 mod command_tests;
 mod subshell_tests;
 mod execution_tests;
+mod async_tests;
