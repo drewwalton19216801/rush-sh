@@ -81,7 +81,8 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
 - **Environment Variables**: Full support for variable assignment, expansion, and export.
   - Variable assignment: `VAR=value` and `VAR="quoted value"`
   - Variable expansion: `$VAR` and `${VAR}` (both syntaxes supported for all variable types)
-  - Special variables: `$?`, `$$`, `$0`, `$LINENO` (with full `${VAR}` brace syntax support)
+  - Special variables: `$?`, `$$`, `$0`, `$!`, `$LINENO` (with full `${VAR}` brace syntax support)
+  - **$! Variable**: PID of the last background process started (e.g., `sleep 10 & echo $!`)
   - **Parameter Expansion with Modifiers**: Advanced variable expansion with POSIX sh modifiers
     - `${VAR:-default}` - use default if VAR is unset or null
     - `${VAR:=default}` - assign default if VAR is unset or null
@@ -119,9 +120,10 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (27 total):
+- **Built-in Commands** (32 total):
   - `:` (colon): Null command that always returns success
   - `alias`: Define or display aliases
+  - `bg`: Resume stopped jobs in the background
   - `break`: Exit from for, while, or until loops with optional [n] for nested loops
   - `cd`: Change directory
   - `continue`: Skip to next iteration of for, while, or until loops with optional [n] for nested loops
@@ -130,7 +132,10 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
   - `env`: List environment variables
   - `exit`: Exit the shell
   - `export`: Export variables to child processes
+  - `fg`: Bring background jobs to foreground
   - `help`: Show available commands
+  - `jobs`: List background jobs
+  - `kill`: Send signals to jobs or processes
   - `popd`: Pop directory from stack and change to it
   - `pushd`: Push directory onto stack and change to it
   - `pwd`: Print working directory
@@ -147,6 +152,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
   - `type`: Display information about command type (alias, keyword, function, builtin, or external command)
   - `unalias`: Remove alias definitions
   - `unset`: Remove variables
+  - `wait`: Wait for background jobs to complete
 - **Configuration File**: Automatic sourcing of `~/.rushrc` on interactive shell startup
 - **Tab Completion**: Intelligent completion for commands, files, and directories.
   - **Command Completion**: Built-in commands and executables from PATH
@@ -155,6 +161,16 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~94% POSIX compliant). 
   - **Home Directory Expansion**: Completion for `~/` and `~/Documents/` paths
   - **Multi-Match Cycling**: Subsequent tab presses cycle through available completions when multiple matches exist
 - **Real-Time Signal Handling**: Enhanced trap system with signal normalization, multiple handlers, trap display/reset, and signal queue with overflow protection. Traps execute immediately when signals are received during interactive sessions and script execution.
+- **Job Control**: Background job management with comprehensive jobspec support
+  - Background execution: `command &` runs commands in the background
+  - Job listing: `jobs` displays all background jobs with status
+  - Foreground control: `fg [jobspec]` brings jobs to foreground
+  - Background control: `bg [jobspec]` resumes stopped jobs in background
+  - Job termination: `kill [signal] jobspec` sends signals to jobs
+  - Wait for jobs: `wait [jobspec]` waits for job completion
+  - **$! Variable**: Access PID of last background process
+  - **Jobspec Matching**: Flexible job selection with `%n`, `%`, `%-`, `%string`, `%?string`
+  - **Smart Matching**: Prefix and contains patterns skip completed jobs
 - **Line Editing and History**: Enhanced interactive experience with rustyline.
 
 ## What's New

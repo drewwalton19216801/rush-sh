@@ -14,14 +14,23 @@
 
 ### Current Status
 
-- **Compliance Level**: ~94% POSIX compliant
+- **Compliance Level**: ~96% POSIX compliant
 - **Test Coverage**: 499+ test functions across all components
-- **Built-in Commands**: 27 implemented commands
-- **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options
+- **Built-in Commands**: 32 implemented commands
+- **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options, job control
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
 ### Recently Implemented Features
 
+- **Job Control**: Complete background job management with comprehensive jobspec support
+  - Background execution with `&` operator
+  - Job listing with `jobs` builtin
+  - Foreground control with `fg` builtin
+  - Background control with `bg` builtin
+  - Job termination with `kill` builtin
+  - Wait for jobs with `wait` builtin
+  - **$! Special Variable**: PID of last background process
+  - **Smart Jobspec Matching**: Prefix and contains patterns skip completed jobs
 - **Times Builtin**: POSIX-compliant `times` command displaying accumulated user and system CPU times for the shell and child processes, with proper time formatting (XmY.ZZs) and 7 comprehensive test cases
 - **PS4 Variable Expansion**: Full variable expansion support in PS4 prompt for xtrace output (`set -x`), including special variables like `$LINENO` and support for both `$VAR` and `${VAR}` brace syntax
 - **${VAR} Brace Syntax**: Complete support for brace syntax in variable expansion for all variable types, including special variables like `$LINENO`, `$?`, `$$`, etc.
@@ -638,8 +647,7 @@ impl ShellState {
 
 ### High Priority (Core POSIX Features)
 
-1. **Missing Built-ins**: `eval`, `exec`, `readonly`
-2. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
+1. **Missing Built-ins**: `eval`, `exec`, `readonly`, `umask`
 
 ### Medium Priority
 
