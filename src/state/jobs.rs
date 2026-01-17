@@ -652,7 +652,12 @@ impl JobTable {
             // %string - job whose command begins with string
             // Try to parse as number first
             if let Ok(job_id) = spec.parse::<usize>() {
-                return Ok(job_id);
+                // Check if the job exists
+                if self.get_job(job_id).is_some() {
+                    return Ok(job_id);
+                } else {
+                    return Err(format!("{}: {}: no such job", builtin_name, jobspec));
+                }
             }
             
             // Otherwise, search for command prefix
@@ -666,9 +671,17 @@ impl JobTable {
             Err(format!("{}: {}: no such job", builtin_name, jobspec))
         } else {
             // Direct job number
-            jobspec
-                .parse::<usize>()
-                .map_err(|_| format!("{}: {}: no such job", builtin_name, jobspec))
+            match jobspec.parse::<usize>() {
+                Ok(job_id) => {
+                    // Check if the job exists
+                    if self.get_job(job_id).is_some() {
+                        Ok(job_id)
+                    } else {
+                        Err(format!("{}: {}: no such job", builtin_name, jobspec))
+                    }
+                }
+                Err(_) => Err(format!("{}: {}: no such job", builtin_name, jobspec)),
+            }
         }
     }
 }
