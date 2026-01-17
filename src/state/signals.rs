@@ -415,7 +415,11 @@ pub fn check_background_jobs(shell_state: &mut ShellState) {
             job_table
                 .get_all_jobs()
                 .iter()
-                .filter(|job| !job.is_active())
+                .filter(|job| {
+                    // Include both Stopped and Done jobs for notification
+                    // Only Running jobs should be excluded
+                    matches!(job.status, crate::state::JobStatus::Stopped | crate::state::JobStatus::Done(_))
+                })
                 .map(|job| {
                     let is_current = Some(job.job_id) == current_job;
                     let is_previous = Some(job.job_id) == previous_job;
