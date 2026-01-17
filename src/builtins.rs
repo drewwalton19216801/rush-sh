@@ -68,6 +68,7 @@ mod builtin_times;
 mod builtin_trap;
 mod builtin_type;
 mod builtin_unalias;
+mod builtin_umask;
 mod builtin_unset;
 mod builtin_wait;
 
@@ -131,6 +132,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_bg::BgBuiltin),
         Box::new(builtin_kill::KillBuiltin),
         Box::new(builtin_wait::WaitBuiltin),
+        Box::new(builtin_umask::UmaskBuiltin),
     ]
 }
 
@@ -465,6 +467,7 @@ mod tests {
         assert!(commands.contains(&"bg".to_string()));
         assert!(commands.contains(&"kill".to_string()));
         assert!(commands.contains(&"wait".to_string()));
-        assert_eq!(commands.len(), 34);
+        assert!(commands.contains(&"umask".to_string()));
+        assert_eq!(commands.len(), 35);
     }
 }
