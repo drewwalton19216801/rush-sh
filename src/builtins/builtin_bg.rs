@@ -43,7 +43,8 @@ impl BgBuiltin {
                 if result == -1 {
                     let err = std::io::Error::last_os_error();
                     // ESRCH means the process doesn't exist - this is okay, continue with others
-                    if err.raw_os_error() != Some(libc::ESRCH) {
+                    // EPERM means permission denied - this is also okay, continue with others
+                    if err.raw_os_error() != Some(libc::ESRCH) && err.raw_os_error() != Some(libc::EPERM) {
                         let _ = writeln!(output_writer, "bg: failed to send SIGCONT to PID {}: {}", pid, err);
                         return 1;
                     }
