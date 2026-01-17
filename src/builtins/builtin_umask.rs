@@ -47,6 +47,12 @@ impl super::Builtin for UmaskBuiltin {
 
         // Check for mask operand
         if arg_index < args.len() {
+            // Check for extra operands
+            if args.len() > arg_index + 1 {
+                let _ = writeln!(output_writer, "umask: extra operand");
+                return 1;
+            }
+
             // Setting umask
             let mask_str = &args[arg_index];
 
