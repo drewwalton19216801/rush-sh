@@ -484,7 +484,7 @@ fn parse_single_command(tokens: &[Token]) -> Result<(Ast, usize), String> {
                                 break;
                             }
                         }
-                        Token::Newline | Token::Semicolon => {
+                        Token::Newline | Token::Semicolon | Token::Ampersand => {
                             if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
                                 break;
                             }
@@ -533,7 +533,16 @@ fn parse_single_command(tokens: &[Token]) -> Result<(Ast, usize), String> {
         return Err("Internal parser error: parse_single_command consumed no tokens".to_string());
     }
 
-    let ast = parse_slice(command_tokens)?;
+    let mut ast = parse_slice(command_tokens)?;
+    
+    // Check if this command should be executed asynchronously (ends with &)
+    if i < tokens.len() && tokens[i] == Token::Ampersand {
+        i += 1; // Consume the &
+        ast = Ast::AsyncCommand {
+            command: Box::new(ast),
+        };
+    }
+    
     Ok((ast, i))
 }
 
@@ -814,6 +823,21 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }]);
             }
 
+            // Check if this subshell should be executed asynchronously (ends with &)
+            if i < tokens.len() && tokens[i] == Token::Ampersand {
+                i += 1; // Consume the &
+                subshell_ast = Ast::AsyncCommand {
+                    command: Box::new(subshell_ast),
+                };
+                commands.push(subshell_ast);
+                
+                // Skip semicolon or newline after async subshell
+                if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                    i += 1;
+                }
+                continue;
+            }
+
             // Handle operators after subshell (&&, ||, ;, newline)
             if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
                 let operator = tokens[i].clone();
@@ -1037,6 +1061,21 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }]);
             }
 
+            // Check if this command group should be executed asynchronously (ends with &)
+            if i < tokens.len() && tokens[i] == Token::Ampersand {
+                i += 1; // Consume the &
+                group_ast = Ast::AsyncCommand {
+                    command: Box::new(group_ast),
+                };
+                commands.push(group_ast);
+                
+                // Skip semicolon or newline after async command group
+                if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                    i += 1;
+                }
+                continue;
+            }
+
             // Handle operators after group (&&, ||, ;, newline)
             if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
                 let operator = tokens[i].clone();
@@ -1226,7 +1265,7 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                         last_was_pipe = false;
                     }
                     Token::Pipe => last_was_pipe = true,
-                    Token::Newline | Token::Semicolon | Token::And | Token::Or => {
+                    Token::Newline | Token::Semicolon | Token::And | Token::Or | Token::Ampersand => {
                         if brace_depth == 0 && paren_depth == 0 && !last_was_pipe {
                             break;
                         }
@@ -1257,8 +1296,16 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
             }
 
             // Use parse_next_command to handle operators
-            let (ast, consumed) = parse_next_command(&tokens[start..])?;
+            let (mut ast, consumed) = parse_next_command(&tokens[start..])?;
             i = start + consumed;
+
+            // Check if this command should be executed asynchronously (ends with &)
+            if i < tokens.len() && tokens[i] == Token::Ampersand {
+                i += 1; // Consume the &
+                ast = Ast::AsyncCommand {
+                    command: Box::new(ast),
+                };
+            }
 
             commands.push(ast);
         }

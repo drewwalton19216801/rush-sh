@@ -182,6 +182,9 @@ pub enum Token {
 
     /// Bang operator `!` - negates the exit status of a command.
     Bang,
+
+    /// Ampersand `&` - runs command in background (async execution).
+    Ampersand,
 }
 
 /// Map a keyword string to its corresponding shell Token.

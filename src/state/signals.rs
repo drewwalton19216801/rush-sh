@@ -282,6 +282,11 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
     // Process all signals without holding the lock
     // This prevents deadlock if a trap handler enqueues a signal
     for signal_event in pending_signals {
+        // Handle SIGCHLD specially - reap children and update job status
+        if signal_event.signal_name == "CHLD" {
+            handle_sigchld(shell_state);
+        }
+        
         // Check if a trap is set for this signal
         if let Some(trap_cmd) = shell_state.get_trap(&signal_event.signal_name)
             && !trap_cmd.is_empty()
@@ -305,6 +310,179 @@ pub fn process_pending_signals(shell_state: &mut ShellState) {
             // Execute the trap handler
             // Note: This preserves the exit code as per POSIX requirements
             crate::executor::execute_trap_handler(&trap_cmd, shell_state);
+        }
+    }
+}
+
+/// Handle SIGCHLD signal by reaping terminated/stopped children
+///
+/// This function uses waitpid() with WNOHANG and WUNTRACED flags to check for
+/// child process state changes without blocking. It updates the job table with
+/// the new status of any changed processes.
+///
+/// # Arguments
+///
+/// * `shell_state` - Mutable reference to the shell state containing the job table
+///
+/// # Behavior
+///
+/// - Loops to reap all terminated/stopped children
+/// - Updates job status in the job table
+/// - Distinguishes between Exited, Stopped, and Signaled states
+/// - Does not print notifications (that's done by check_background_jobs)
+fn handle_sigchld(shell_state: &mut ShellState) {
+    loop {
+        // Use waitpid with WNOHANG to check for any child state changes without blocking
+        // WUNTRACED allows us to detect stopped children (SIGTSTP, SIGSTOP, etc.)
+        let result = unsafe {
+            let mut status: libc::c_int = 0;
+            let pid = libc::waitpid(
+                -1, // Wait for any child process
+                &mut status as *mut libc::c_int,
+                libc::WNOHANG | libc::WUNTRACED, // Don't block, report stopped children
+            );
+            
+            if pid > 0 {
+                // Child state changed
+                Some((pid as u32, status))
+            } else if pid == 0 {
+                // No children ready (WNOHANG returned immediately)
+                None
+            } else {
+                // pid < 0: error occurred
+                // Check errno to distinguish EINTR from other errors
+                let errno = *libc::__errno_location();
+                if errno == libc::EINTR {
+                    // Interrupted by signal, retry the waitpid call
+                    Some((0, 0)) // Sentinel value to indicate retry
+                } else {
+                    // Other error (e.g., ECHILD - no children), give up
+                    None
+                }
+            }
+        };
+        
+        match result {
+            Some((pid, status)) if pid > 0 => {
+                // Determine the new job status based on the wait status
+                let job_status = if libc::WIFEXITED(status) {
+                    // Process exited normally
+                    let exit_code = libc::WEXITSTATUS(status);
+                    crate::state::JobStatus::Done(exit_code)
+                } else if libc::WIFSIGNALED(status) {
+                    // Process was terminated by a signal
+                    let signal = libc::WTERMSIG(status);
+                    crate::state::JobStatus::Done(128 + signal)
+                } else if libc::WIFSTOPPED(status) {
+                    // Process was stopped (e.g., by SIGTSTP)
+                    crate::state::JobStatus::Stopped
+                } else {
+                    // Unknown status, treat as done with error
+                    crate::state::JobStatus::Done(1)
+                };
+                
+                // Update the job status in the job table
+                if let Ok(mut job_table) = shell_state.job_table.try_borrow_mut() {
+                    job_table.update_job_status(pid, job_status);
+                }
+            }
+            Some((0, 0)) => {
+                // Sentinel value indicating EINTR - retry the loop
+                continue;
+            }
+            None | Some(_) => {
+                // No more children to reap, or invalid state
+                break;
+            }
+        }
+    }
+}
+
+/// Check for completed or stopped background jobs and print notifications
+///
+/// This function should be called before displaying the prompt in interactive mode.
+/// It checks the job table for jobs that have completed or stopped, prints appropriate
+/// notifications, and removes completed jobs from the table.
+///
+/// # Arguments
+///
+/// * `shell_state` - Mutable reference to the shell state containing the job table
+///
+/// # Output Format
+///
+/// - Completed jobs: `[job_id]+ Done    command`
+/// - Stopped jobs: `[job_id]+ Stopped command`
+/// - The `+` indicates the current job, `-` indicates the previous job
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use rush_sh::state::{ShellState, check_background_jobs};
+///
+/// let mut shell_state = ShellState::new();
+/// check_background_jobs(&mut shell_state);
+/// ```
+pub fn check_background_jobs(shell_state: &mut ShellState) {
+    // Collect job IDs and their status to avoid borrowing issues
+    let jobs_to_notify: Vec<(usize, crate::state::JobStatus, String, char)> = {
+        if let Ok(job_table) = shell_state.job_table.try_borrow() {
+            let current_job = job_table.get_current_job();
+            let previous_job = job_table.get_previous_job();
+            
+            job_table
+                .get_all_jobs()
+                .iter()
+                .filter(|job| {
+                    // Include both Stopped and Done jobs for notification
+                    // Only Running jobs should be excluded
+                    matches!(job.status, crate::state::JobStatus::Stopped | crate::state::JobStatus::Done(_))
+                })
+                .map(|job| {
+                    let is_current = Some(job.job_id) == current_job;
+                    let is_previous = Some(job.job_id) == previous_job;
+                    let marker = if is_current {
+                        '+'
+                    } else if is_previous {
+                        '-'
+                    } else {
+                        ' '
+                    };
+                    (
+                        job.job_id,
+                        job.status.clone(),
+                        job.command.clone(),
+                        marker,
+                    )
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    };
+    
+    // Print notifications and collect completed job IDs
+    let mut completed_jobs = Vec::new();
+    for (job_id, status, command, marker) in jobs_to_notify {
+        match status {
+            crate::state::JobStatus::Done(exit_code) => {
+                if exit_code == 0 {
+                    println!("[{}]{} Done    {}", job_id, marker, command);
+                } else {
+                    println!("[{}]{} Done({})    {}", job_id, marker, exit_code, command);
+                }
+                completed_jobs.push((job_id, marker));
+            }
+            crate::state::JobStatus::Stopped => {
+                println!("[{}]{} Stopped {}", job_id, marker, command);
+            }
+            _ => {}
+        }
+    }
+    
+    // Remove completed jobs from the table
+    if let Ok(mut job_table) = shell_state.job_table.try_borrow_mut() {
+        for (job_id, _marker) in completed_jobs {
+            job_table.remove_job(job_id);
         }
     }
 }

@@ -14,14 +14,23 @@
 
 ### Current Status
 
-- **Compliance Level**: ~94% POSIX compliant
+- **Compliance Level**: ~96% POSIX compliant
 - **Test Coverage**: 499+ test functions across all components
-- **Built-in Commands**: 27 implemented commands
-- **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options
+- **Built-in Commands**: 32 implemented commands
+- **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options, job control
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
 ### Recently Implemented Features
 
+- **Job Control**: Complete background job management with comprehensive jobspec support
+  - Background execution with `&` operator
+  - Job listing with `jobs` builtin
+  - Foreground control with `fg` builtin
+  - Background control with `bg` builtin
+  - Job termination with `kill` builtin
+  - Wait for jobs with `wait` builtin
+  - **$! Special Variable**: PID of last background process
+  - **Smart Jobspec Matching**: Prefix and contains patterns skip completed jobs
 - **Times Builtin**: POSIX-compliant `times` command displaying accumulated user and system CPU times for the shell and child processes, with proper time formatting (XmY.ZZs) and 7 comprehensive test cases
 - **PS4 Variable Expansion**: Full variable expansion support in PS4 prompt for xtrace output (`set -x`), including special variables like `$LINENO` and support for both `$VAR` and `${VAR}` brace syntax
 - **${VAR} Brace Syntax**: Complete support for brace syntax in variable expansion for all variable types, including special variables like `$LINENO`, `$?`, `$$`, etc.
@@ -45,13 +54,15 @@ src/
 │   ├── redirection.rs   # I/O redirection handling
 │   ├── command.rs       # Single command and pipeline execution
 │   ├── subshell.rs      # Subshell and compound commands
+│   ├── async_exec.rs    # Asynchronous job execution
 │   └── tests/           # Focused test modules
 │       ├── mod.rs
 │       ├── execution_tests.rs
 │       ├── expansion_tests.rs
 │       ├── redirection_tests.rs
 │       ├── command_tests.rs
-│       └── subshell_tests.rs
+│       ├── subshell_tests.rs
+│       └── async_tests.rs
 ├── parser/              # AST construction (modular)
 │   ├── mod.rs           # Main parsing logic
 │   ├── ast.rs           # AST type definitions
@@ -81,12 +92,14 @@ src/
 │   ├── fd_table.rs      # File descriptor table
 │   ├── options.rs       # Shell options
 │   ├── signals.rs       # Signal handling
+│   ├── jobs.rs          # Job control and job table
 │   └── tests/           # Focused test modules
 │       ├── mod.rs
 │       ├── state_tests.rs
 │       ├── variable_tests.rs
 │       ├── fd_table_tests.rs
-│       └── options_tests.rs
+│       ├── options_tests.rs
+│       └── jobs_tests.rs
 ├── arithmetic.rs        # Arithmetic evaluation
 ├── parameter_expansion.rs # Parameter expansion
 ├── brace_expansion.rs   # Brace expansion
@@ -94,7 +107,12 @@ src/
 ├── script_engine.rs     # Script execution engine
 ├── builtins.rs          # Builtin dispatcher
 ├── builtins/            # Individual builtin commands
-│   ├── builtin_*.rs     # 26+ builtin implementations
+│   ├── builtin_*.rs     # 32 builtin implementations
+│   ├── builtin_bg.rs    # Background job control
+│   ├── builtin_fg.rs    # Foreground job control
+│   ├── builtin_jobs.rs  # Job listing
+│   ├── builtin_kill.rs  # Signal sending to jobs
+│   └── builtin_wait.rs  # Wait for job completion
 └── lib.rs               # Library exports
 ```
 
@@ -638,8 +656,7 @@ impl ShellState {
 
 ### High Priority (Core POSIX Features)
 
-1. **Missing Built-ins**: `eval`, `exec`, `readonly`
-2. **Job Control**: Background jobs (`&`), job management (`bg`, `fg`, `jobs`)
+1. **Missing Built-ins**: `eval`, `exec`, `readonly`, `umask`
 
 ### Medium Priority
 

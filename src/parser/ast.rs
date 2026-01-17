@@ -318,6 +318,19 @@ pub enum Ast {
         /// Command to negate
         command: Box<Ast>,
     },
+
+    /// Asynchronous command execution: `command &`.
+    ///
+    /// Executes the command in the background, allowing the shell to continue
+    /// processing subsequent commands without waiting for completion.
+    ///
+    /// # Examples
+    /// - `sleep 10 &`
+    /// - `long_running_task &`
+    AsyncCommand {
+        /// Command to execute asynchronously
+        command: Box<Ast>,
+    },
 }
 
 /// Represents a single I/O redirection operation.

@@ -111,6 +111,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                                         || c == '#'
                                         || c == '*'
                                         || c == '@'
+                                        || c == '!'
                                         || c.is_ascii_digit()
                                     {
                                         var_name.push(c);
@@ -279,7 +280,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     if let Some(value) = shell_state.get_var(&var_name) {
                         result.push_str(&value);
                     } else {
-                        // Variable not found - for positional parameters, expand to empty string
+                        // Variable not found - for positional parameters and special variables, expand to empty string
                         // For other variables, keep the literal
                         if var_name.chars().next().unwrap().is_ascii_digit()
                             || var_name == "?"
@@ -288,8 +289,9 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                             || var_name == "#"
                             || var_name == "*"
                             || var_name == "@"
+                            || var_name == "!"
                         {
-                            // Expand to empty string for undefined positional parameters
+                            // Expand to empty string for undefined positional parameters and special variables
                         } else {
                             // Keep the literal for regular variables
                             result.push_str("${");
@@ -312,7 +314,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
 
                 // Handle special single-character variables first
                 if let Some(&c) = next_ch {
-                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' {
+                    if c == '?' || c == '$' || c == '0' || c == '#' || c == '*' || c == '@' || c == '!' {
                         var_name.push(c);
                         chars.next(); // consume the character
                     } else if c.is_ascii_digit() {
@@ -337,7 +339,7 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                     if let Some(value) = shell_state.get_var(&var_name) {
                         result.push_str(&value);
                     } else {
-                        // Variable not found - for positional parameters, expand to empty string
+                        // Variable not found - for positional parameters and special variables, expand to empty string
                         // For other variables, keep the literal
                         if var_name.chars().next().unwrap().is_ascii_digit()
                             || var_name == "?"
@@ -346,8 +348,9 @@ pub fn expand_variables_in_string(input: &str, shell_state: &mut ShellState) -> 
                             || var_name == "#"
                             || var_name == "*"
                             || var_name == "@"
+                            || var_name == "!"
                         {
-                            // Expand to empty string for undefined positional parameters
+                            // Expand to empty string for undefined positional parameters and special variables
                         } else {
                             // Keep the literal for regular variables
                             result.push('$');

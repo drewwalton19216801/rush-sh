@@ -363,3 +363,117 @@ fn test_bang_as_part_of_word() {
         ]
     );
 }
+
+// ===== Ampersand (&) Background Job Tests =====
+
+#[test]
+fn test_ampersand_single() {
+    // Single & should be tokenized as Ampersand for background execution
+    let shell_state = ShellState::new();
+    let result = lex("sleep 10 &", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("sleep".to_string()),
+            Token::Word("10".to_string()),
+            Token::Ampersand
+        ]
+    );
+}
+
+#[test]
+fn test_ampersand_double() {
+    // Double && should be tokenized as And operator
+    let shell_state = ShellState::new();
+    let result = lex("true && echo yes", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("true".to_string()),
+            Token::And,
+            Token::Word("echo".to_string()),
+            Token::Word("yes".to_string())
+        ]
+    );
+}
+
+#[test]
+fn test_ampersand_multiple_commands() {
+    // Multiple commands with & separator
+    let shell_state = ShellState::new();
+    let result = lex("cmd1 & cmd2 &", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("cmd1".to_string()),
+            Token::Ampersand,
+            Token::Word("cmd2".to_string()),
+            Token::Ampersand
+        ]
+    );
+}
+
+#[test]
+fn test_ampersand_with_semicolon() {
+    // & followed by semicolon
+    let shell_state = ShellState::new();
+    let result = lex("cmd1 &; cmd2", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("cmd1".to_string()),
+            Token::Ampersand,
+            Token::Semicolon,
+            Token::Word("cmd2".to_string())
+        ]
+    );
+}
+
+#[test]
+fn test_ampersand_with_newline() {
+    // & followed by newline
+    let shell_state = ShellState::new();
+    let result = lex("cmd1 &\ncmd2", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("cmd1".to_string()),
+            Token::Ampersand,
+            Token::Newline,
+            Token::Word("cmd2".to_string())
+        ]
+    );
+}
+
+#[test]
+fn test_ampersand_with_pipeline() {
+    // Pipeline with & at the end
+    let shell_state = ShellState::new();
+    let result = lex("ls | grep txt &", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("ls".to_string()),
+            Token::Pipe,
+            Token::Word("grep".to_string()),
+            Token::Word("txt".to_string()),
+            Token::Ampersand
+        ]
+    );
+}
+
+#[test]
+fn test_ampersand_with_redirection() {
+    // Command with redirection and &
+    let shell_state = ShellState::new();
+    let result = lex("cmd > output.txt &", &shell_state).unwrap();
+    assert_eq!(
+        result,
+        vec![
+            Token::Word("cmd".to_string()),
+            Token::RedirOut,
+            Token::Word("output.txt".to_string()),
+            Token::Ampersand
+        ]
+    );
+}

@@ -593,8 +593,10 @@ pub fn lex(input: &str, shell_state: &ShellState) -> Result<Vec<Token>, String> 
                     // Skip any whitespace after &&
                     skip_whitespace(&mut chars);
                 } else {
-                    // Single & is not supported, treat as part of word
-                    current.push('&');
+                    // Single & for background execution
+                    tokens.push(Token::Ampersand);
+                    // Skip any whitespace after &
+                    skip_whitespace(&mut chars);
                 }
             }
             '!' if !in_double_quote && !in_single_quote => {

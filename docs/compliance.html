@@ -58,7 +58,7 @@
             <div class="sidebar-footer">
                 <div class="version-info">
                     <span class="version">v0.7.4</span>
-                    <span class="status">~94% POSIX Compliant</span>
+                    <span class="status">~96% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
                     <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
@@ -108,19 +108,19 @@
                         <div class="compliance-meter">
                             <div class="meter-container">
                                 <div class="meter-bar">
-                                    <div class="meter-fill" style="width: 94%"></div>
+                                    <div class="meter-fill" style="width: 96%"></div>
                                 </div>
-                                <div class="meter-label">94% Complete</div>
+                                <div class="meter-label">96% Complete</div>
                             </div>
                         </div>
 
                         <div class="compliance-stats">
                             <div class="stat-item">
-                                <div class="stat-number">94%</div>
+                                <div class="stat-number">96%</div>
                                 <div class="stat-label">Overall Compliance</div>
                             </div>
                             <div class="stat-item">
-                                <div class="stat-number">27</div>
+                                <div class="stat-number">32</div>
                                 <div class="stat-label">Built-in Commands</div>
                             </div>
                             <div class="stat-item">
@@ -471,8 +471,8 @@
                         <div class="status-summary">
                             <h3>Implementation Status</h3>
                             <div class="status-badges">
-                                <span class="badge implemented">27 Implemented</span>
-                                <span class="badge missing">5 Missing</span>
+                                <span class="badge implemented">32 Implemented</span>
+                                <span class="badge missing">4 Missing</span>
                             </div>
                         </div>
 
@@ -540,18 +540,19 @@
                                         <span class="status-icon">✅</span>
                                         <span class="item-text">unset</span>
                                     </div>
-                                    <div class="compliance-item missing">
-                                        <span class="status-icon">❌</span>
+                                    <div class="compliance-item implemented">
+                                        <span class="status-icon">✅</span>
                                         <span class="item-text">wait</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="builtins-column">
-                                <h4>Currently Implemented (27)</h4>
+                                <h4>Currently Implemented (32)</h4>
                                 <div class="implemented-list">
                                     <div class="builtin-tag">: (colon)</div>
                                     <div class="builtin-tag">alias</div>
+                                    <div class="builtin-tag">bg</div>
                                     <div class="builtin-tag">break</div>
                                     <div class="builtin-tag">cd</div>
                                     <div class="builtin-tag">continue</div>
@@ -560,7 +561,10 @@
                                     <div class="builtin-tag">env</div>
                                     <div class="builtin-tag">exit</div>
                                     <div class="builtin-tag">export</div>
+                                    <div class="builtin-tag">fg</div>
                                     <div class="builtin-tag">help</div>
+                                    <div class="builtin-tag">jobs</div>
+                                    <div class="builtin-tag">kill</div>
                                     <div class="builtin-tag">popd</div>
                                     <div class="builtin-tag">pushd</div>
                                     <div class="builtin-tag">pwd</div>
@@ -577,6 +581,7 @@
                                     <div class="builtin-tag">type</div>
                                     <div class="builtin-tag">unalias</div>
                                     <div class="builtin-tag">unset</div>
+                                    <div class="builtin-tag">wait</div>
                                 </div>
                             </div>
                         </div>
@@ -595,19 +600,8 @@
                                     <ul>
                                         <li>eval</li>
                                         <li>exec</li>
-                                        <li>readonly, etc.</li>
-                                    </ul>
-                                </li>
-                            </ol>
-                        </div>
-
-                        <div class="priority-section medium">
-                            <h3>Medium Priority</h3>
-                            <ol>
-                                <li><strong>Job Control</strong> (optional)
-                                    <ul>
-                                        <li>Background jobs (&)</li>
-                                        <li>Job management (bg, fg, jobs, kill)</li>
+                                        <li>readonly</li>
+                                        <li>umask</li>
                                     </ul>
                                 </li>
                             </ol>
@@ -643,7 +637,7 @@
                                 <div class="test-label">Core Components Covered</div>
                             </div>
                             <div class="test-stat">
-                                <div class="test-number">27</div>
+                                <div class="test-number">32</div>
                                 <div class="test-label">Built-ins Tested</div>
                             </div>
                         </div>
@@ -704,6 +698,11 @@
                             <div class="compliance-grid">
                                 <div class="compliance-item implemented">
                                     <span class="status-icon">✅</span>
+                                    <span class="item-text">Job control: bg, fg, jobs, kill, wait (100+ test
+                                        cases)</span>
+                                </div>
+                                <div class="compliance-item implemented">
+                                    <span class="status-icon">✅</span>
                                     <span class="item-text">Loop control builtins: break and continue (29 test
                                         cases)</span>
                                 </div>
@@ -731,12 +730,8 @@
                             <div class="compliance-grid">
                                 <div class="compliance-item missing">
                                     <span class="status-icon">❌</span>
-                                    <span class="item-text">Missing built-in functionality (eval, exec,
-                                        etc.)</span>
-                                </div>
-                                <div class="compliance-item missing">
-                                    <span class="status-icon">❌</span>
-                                    <span class="item-text">Job control features</span>
+                                    <span class="item-text">Missing built-in functionality (eval, exec, readonly,
+                                        umask)</span>
                                 </div>
                             </div>
                         </div>
@@ -761,7 +756,7 @@
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Built-in Commands</span>
-                                    <span class="percentage implemented">87%</span>
+                                    <span class="percentage implemented">96%</span>
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Expansions</span>
@@ -773,7 +768,7 @@
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Job Control</span>
-                                    <span class="percentage missing">0%</span>
+                                    <span class="percentage implemented">100%</span>
                                 </div>
                                 <div class="breakdown-item">
                                     <span class="category">Advanced Features</span>
