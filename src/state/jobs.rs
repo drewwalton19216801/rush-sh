@@ -55,6 +55,7 @@ pub struct Job {
     /// Exit code of the job (if completed)
     pub exit_code: Option<i32>,
     /// Whether this job is a builtin command (affects job control)
+    #[allow(dead_code)]
     pub is_builtin: bool,
 }
 
@@ -468,38 +469,6 @@ impl JobTable {
     /// ```
     pub fn get_previous_job(&self) -> Option<usize> {
         self.previous_job
-    }
-
-    /// Sets the current job ID
-    ///
-    /// # Arguments
-    ///
-    /// * `job_id` - The ID of the job to set as current
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rush_sh::state::{Job, JobTable};
-    ///
-    /// let mut job_table = JobTable::new();
-    /// let job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
-    /// let job2 = Job::new(2, Some(1235), "sleep 20 &".to_string(), vec![1235], false);
-    /// job_table.add_job(job1);
-    /// job_table.add_job(job2);
-    /// 
-    /// job_table.set_current_job(1);
-    /// assert_eq!(job_table.get_current_job(), Some(1));
-    /// assert_eq!(job_table.get_previous_job(), Some(2));
-    /// ```
-    pub fn set_current_job(&mut self, job_id: usize) {
-        if self.jobs.contains_key(&job_id) {
-            if let Some(current) = self.current_job {
-                if current != job_id {
-                    self.previous_job = Some(current);
-                }
-            }
-            self.current_job = Some(job_id);
-        }
     }
 
     /// Parse jobspec argument to job ID

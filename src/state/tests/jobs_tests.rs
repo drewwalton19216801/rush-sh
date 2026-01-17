@@ -283,42 +283,6 @@ fn test_job_table_update_job_status_not_found() {
 }
 
 #[test]
-fn test_job_table_set_current_job() {
-    let mut job_table = JobTable::new();
-    
-    let job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
-    let job2 = Job::new(2, Some(1235), "sleep 20 &".to_string(), vec![1235], false);
-    
-    job_table.add_job(job1);
-    job_table.add_job(job2);
-    
-    assert_eq!(job_table.get_current_job(), Some(2));
-    assert_eq!(job_table.get_previous_job(), Some(1));
-    
-    // Set job 1 as current
-    job_table.set_current_job(1);
-    
-    assert_eq!(job_table.get_current_job(), Some(1));
-    assert_eq!(job_table.get_previous_job(), Some(2));
-}
-
-#[test]
-fn test_job_table_set_current_job_nonexistent() {
-    let mut job_table = JobTable::new();
-    
-    let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
-    job_table.add_job(job);
-    
-    assert_eq!(job_table.get_current_job(), Some(1));
-    
-    // Try to set nonexistent job as current
-    job_table.set_current_job(999);
-    
-    // Should not change
-    assert_eq!(job_table.get_current_job(), Some(1));
-}
-
-#[test]
 fn test_job_table_get_all_jobs_sorted() {
     let mut job_table = JobTable::new();
     
