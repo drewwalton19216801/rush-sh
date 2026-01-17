@@ -48,6 +48,7 @@ mod builtin_dirs;
 mod builtin_env;
 mod builtin_exit;
 mod builtin_export;
+mod builtin_fg;
 mod builtin_help;
 mod builtin_jobs;
 mod builtin_popd;
@@ -124,6 +125,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_continue::ContinueBuiltin),
         Box::new(builtin_colon::ColonBuiltin),
         Box::new(builtin_jobs::JobsBuiltin),
+        Box::new(builtin_fg::FgBuiltin),
         Box::new(builtin_wait::WaitBuiltin),
     ]
 }
@@ -455,7 +457,8 @@ mod tests {
         assert!(commands.contains(&":".to_string()));
         assert!(commands.contains(&"times".to_string()));
         assert!(commands.contains(&"jobs".to_string()));
+        assert!(commands.contains(&"fg".to_string()));
         assert!(commands.contains(&"wait".to_string()));
-        assert_eq!(commands.len(), 31);
+        assert_eq!(commands.len(), 32);
     }
 }
