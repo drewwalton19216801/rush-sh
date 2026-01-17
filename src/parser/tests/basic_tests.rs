@@ -194,3 +194,133 @@ fn test_parse_function_definition_legacy_format() {
         panic!("should be parsed as function definition");
     }
 }
+
+// ===== Background Job (&) Parser Tests =====
+
+#[test]
+fn test_parse_async_command_simple() {
+    // Simple command with & should be parsed as AsyncCommand
+    let tokens = vec![
+        Token::Word("sleep".to_string()),
+        Token::Word("10".to_string()),
+        Token::Ampersand,
+    ];
+    let result = parse(tokens).unwrap();
+    if let Ast::AsyncCommand { command } = result {
+        if let Ast::Pipeline(cmds) = *command {
+            assert_eq!(cmds[0].args, vec!["sleep", "10"]);
+        } else {
+            panic!("async command should contain a pipeline");
+        }
+    } else {
+        panic!("should be parsed as AsyncCommand");
+    }
+}
+
+#[test]
+fn test_parse_async_command_with_redirection() {
+    // Command with redirection and & should be parsed as AsyncCommand
+    let tokens = vec![
+        Token::Word("cmd".to_string()),
+        Token::RedirOut,
+        Token::Word("output.txt".to_string()),
+        Token::Ampersand,
+    ];
+    let result = parse(tokens).unwrap();
+    if let Ast::AsyncCommand { command } = result {
+        if let Ast::Pipeline(cmds) = *command {
+            assert_eq!(cmds[0].args, vec!["cmd"]);
+            assert_eq!(cmds[0].redirections.len(), 1);
+        } else {
+            panic!("async command should contain a pipeline");
+        }
+    } else {
+        panic!("should be parsed as AsyncCommand");
+    }
+}
+
+#[test]
+fn test_parse_async_command_pipeline() {
+    // Pipeline with & should be parsed as AsyncCommand
+    let tokens = vec![
+        Token::Word("ls".to_string()),
+        Token::Pipe,
+        Token::Word("grep".to_string()),
+        Token::Word("txt".to_string()),
+        Token::Ampersand,
+    ];
+    let result = parse(tokens).unwrap();
+    if let Ast::AsyncCommand { command } = result {
+        if let Ast::Pipeline(cmds) = *command {
+            assert_eq!(cmds.len(), 2);
+            assert_eq!(cmds[0].args, vec!["ls"]);
+            assert_eq!(cmds[1].args, vec!["grep", "txt"]);
+        } else {
+            panic!("async command should contain a pipeline");
+        }
+    } else {
+        panic!("should be parsed as AsyncCommand");
+    }
+}
+
+#[test]
+fn test_parse_multiple_async_commands() {
+    // Multiple commands with & should each be parsed as AsyncCommand
+    let tokens = vec![
+        Token::Word("cmd1".to_string()),
+        Token::Ampersand,
+        Token::Word("cmd2".to_string()),
+        Token::Ampersand,
+    ];
+    let result = parse(tokens).unwrap();
+    if let Ast::Sequence(cmds) = result {
+        assert_eq!(cmds.len(), 2);
+        // Both should be AsyncCommand
+        assert!(matches!(cmds[0], Ast::AsyncCommand { .. }));
+        assert!(matches!(cmds[1], Ast::AsyncCommand { .. }));
+    } else {
+        panic!("should be parsed as Sequence of AsyncCommands");
+    }
+}
+
+#[test]
+fn test_parse_async_command_with_semicolon() {
+    // & followed by semicolon
+    let tokens = vec![
+        Token::Word("cmd1".to_string()),
+        Token::Ampersand,
+        Token::Semicolon,
+        Token::Word("cmd2".to_string()),
+    ];
+    let result = parse(tokens).unwrap();
+    if let Ast::Sequence(cmds) = result {
+        assert_eq!(cmds.len(), 2);
+        // First should be AsyncCommand
+        assert!(matches!(cmds[0], Ast::AsyncCommand { .. }));
+        // Second should be regular Pipeline
+        assert!(matches!(cmds[1], Ast::Pipeline(_)));
+    } else {
+        panic!("should be parsed as Sequence");
+    }
+}
+
+#[test]
+fn test_parse_async_command_with_newline() {
+    // & followed by newline
+    let tokens = vec![
+        Token::Word("cmd1".to_string()),
+        Token::Ampersand,
+        Token::Newline,
+        Token::Word("cmd2".to_string()),
+    ];
+    let result = parse(tokens).unwrap();
+    if let Ast::Sequence(cmds) = result {
+        assert_eq!(cmds.len(), 2);
+        // First should be AsyncCommand
+        assert!(matches!(cmds[0], Ast::AsyncCommand { .. }));
+        // Second should be regular Pipeline
+        assert!(matches!(cmds[1], Ast::Pipeline(_)));
+    } else {
+        panic!("should be parsed as Sequence");
+    }
+}
