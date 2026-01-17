@@ -422,11 +422,21 @@ pub fn execute_script(
         if keywords_active {
             if in_subshell_block && paren_depth == 0 {
                 in_subshell_block = false;
-                execute_line(&current_block, shell_state);
-                current_block.clear();
+                // Only execute if we're not inside any other control structure
+                if !in_for_block
+                    && !in_while_block
+                    && !in_until_block
+                    && !in_function_block
+                    && !in_group_block
+                    && !in_case_block
+                    && !in_if_block
+                {
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
 
-                if shell_state.exit_requested {
-                    break;
+                    if shell_state.exit_requested {
+                        break;
+                    }
                 }
             } else if (in_function_block || in_group_block) && brace_depth == 0 {
                 in_function_block = false;
