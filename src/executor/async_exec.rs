@@ -350,13 +350,13 @@ fn execute_compound_in_background_pipeline(
 
         let pid_u32 = pid as u32;
         drop(write_fd);
-        
+
         let next_stdout = if let Some(reader) = read_fd {
             Some(File::from_raw_fd(reader.into_raw_fd()))
         } else {
             None
         };
-        
+
         Ok((pid_u32, next_stdout))
     }
 }
