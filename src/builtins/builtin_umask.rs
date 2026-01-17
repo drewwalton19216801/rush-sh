@@ -258,6 +258,10 @@ fn set_process_umask(mask: u32) {
 mod tests {
     use super::*;
     use crate::builtins::Builtin;
+    use std::sync::Mutex;
+
+    // Mutex to serialize tests that modify the process umask (global state)
+    static UMASK_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_umask_display_numeric() {
@@ -299,6 +303,7 @@ mod tests {
 
     #[test]
     fn test_umask_set_octal() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "027".to_string()],
             redirections: Vec::new(),
@@ -316,6 +321,7 @@ mod tests {
 
     #[test]
     fn test_umask_set_octal_with_leading_zero() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "0027".to_string()],
             redirections: Vec::new(),
@@ -333,6 +339,7 @@ mod tests {
 
     #[test]
     fn test_umask_set_symbolic() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "u=rwx,g=rx,o=".to_string()],
             redirections: Vec::new(),
@@ -484,6 +491,7 @@ mod tests {
 
     #[test]
     fn test_umask_set_zero() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "0".to_string()],
             redirections: Vec::new(),
@@ -501,6 +509,7 @@ mod tests {
 
     #[test]
     fn test_umask_set_max() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "777".to_string()],
             redirections: Vec::new(),
@@ -536,6 +545,7 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_all_permissions() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "a=rwx".to_string()],
             redirections: Vec::new(),
@@ -553,6 +563,7 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_no_permissions() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "a=".to_string()],
             redirections: Vec::new(),
@@ -570,6 +581,7 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_add_permission() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "g+w".to_string()],
             redirections: Vec::new(),
@@ -588,6 +600,7 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_remove_permission() {
+        let _lock = UMASK_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "g-r".to_string()],
             redirections: Vec::new(),
