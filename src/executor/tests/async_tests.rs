@@ -303,9 +303,9 @@ fn test_background_command_with_variable_expansion() {
     let jobs = job_table.get_all_jobs();
     assert_eq!(jobs.len(), 1);
     
-    // Command string should show expanded variable
+    // Command string should show original unexpanded variable (to avoid re-running command substitutions)
     let job = jobs[0];
-    assert!(job.command.contains("0.1"));
+    assert!(job.command.contains("$DELAY"));
 }
 
 #[test]
@@ -829,15 +829,15 @@ fn test_integration_background_with_variable_expansion() {
     let exit_code = execute(ast, &mut shell_state);
     assert_eq!(exit_code, 0);
     
-    // Verify job was created with expanded command
+    // Verify job was created with original unexpanded command (to avoid re-running command substitutions)
     {
         let job_table = shell_state.job_table.borrow();
         let jobs = job_table.get_all_jobs();
         assert_eq!(jobs.len(), 1);
         
         let job = jobs[0];
-        assert!(job.command.contains("sleep"));
-        assert!(job.command.contains("0.1"));
+        assert!(job.command.contains("$CMD"));
+        assert!(job.command.contains("$ARG"));
     }
 }
 
