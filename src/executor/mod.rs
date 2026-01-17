@@ -692,6 +692,12 @@ pub fn execute(ast: Ast, shell_state: &mut ShellState) -> i32 {
             exit_code
         }
         Ast::CommandGroup { body } => execute(*body, shell_state),
+        Ast::AsyncCommand { command } => {
+            // Phase 1: Parse and recognize & operator, but execute synchronously
+            // Job control implementation will be added in future phases
+            // For now, just execute the command normally and return immediately
+            execute(*command, shell_state)
+        }
     }
 }
 
