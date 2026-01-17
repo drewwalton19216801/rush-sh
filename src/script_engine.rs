@@ -223,6 +223,9 @@ pub fn execute_script(
     shell_state: &mut state::ShellState,
     shutdown_flag: Option<&AtomicBool>,
 ) {
+    // Maximum parenthesis depth to prevent overflow in subshell tracking
+    const MAX_PAREN_DEPTH: i32 = 100;
+    
     // Reset line number for script execution
     shell_state.current_line_number = 1;
     
@@ -399,11 +402,23 @@ pub fn execute_script(
                     }
                     
                     match ch {
+                        '#' => {
+                            // Stop processing at unquoted, unescaped comment
+                            if !in_sq && !in_dq && !esc {
+                                break;
+                            }
+                        }
                         '\'' => in_sq = true,
                         '"' => in_dq = true,
                         '\\' => esc = true,
-                        '(' => paren_depth += 1,
+                        '(' => {
+                            // Only increment if below max depth
+                            if paren_depth < MAX_PAREN_DEPTH {
+                                paren_depth += 1;
+                            }
+                        }
                         ')' => {
+                            // Only decrement if above 0
                             if paren_depth > 0 {
                                 paren_depth -= 1;
                             }
