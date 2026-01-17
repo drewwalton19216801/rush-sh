@@ -7,10 +7,14 @@ pub mod options;
 // Signal management module
 pub mod signals;
 
+// Job management module
+pub mod jobs;
+
 // Re-export types for backward compatibility
 pub use fd_table::FileDescriptorTable;
 pub use options::ShellOptions;
 pub use signals::{enqueue_signal, process_pending_signals};
+pub use jobs::{Job, JobStatus, JobTable};
 
 use super::parser::Ast;
 use std::cell::RefCell;
@@ -131,6 +135,12 @@ pub struct ShellState {
     pub current_line_number: usize,
     /// Stack of line numbers for function calls (to restore after function returns)
     pub line_number_stack: Vec<usize>,
+    /// Job table for managing background jobs
+    pub job_table: Rc<RefCell<JobTable>>,
+    /// Whether the shell is running in interactive mode
+    pub interactive: bool,
+    /// Terminal file descriptor for job control (None if not interactive)
+    pub terminal_fd: Option<RawFd>,
 }
 
 impl ShellState {
@@ -219,6 +229,13 @@ impl ShellState {
             last_was_negation: false,
             current_line_number: 1,
             line_number_stack: Vec::new(),
+            job_table: Rc::new(RefCell::new(JobTable::new())),
+            interactive: std::io::stdin().is_terminal(),
+            terminal_fd: if std::io::stdin().is_terminal() {
+                Some(libc::STDIN_FILENO)
+            } else {
+                None
+            },
         }
     }
 
