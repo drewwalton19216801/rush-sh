@@ -1,7 +1,7 @@
 use clap::Parser;
 use rustyline::Editor;
 use rustyline::history::FileHistory;
-use signal_hook::{consts::SIGINT, consts::SIGTERM, iterator::Signals};
+use signal_hook::{consts::SIGINT, consts::SIGTERM, consts::SIGCHLD, iterator::Signals};
 use std::env;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -67,7 +67,7 @@ fn main() {
     }
 
     // Set up signal handling
-    let mut signals = Signals::new([SIGINT, SIGTERM]).expect("Failed to create signal handler");
+    let mut signals = Signals::new([SIGINT, SIGTERM, SIGCHLD]).expect("Failed to create signal handler");
 
     // Spawn a thread to handle signals
     thread::spawn(move || {
@@ -86,6 +86,11 @@ fn main() {
 
                     // Enqueue signal for trap execution
                     state::enqueue_signal("TERM", 15);
+                }
+                SIGCHLD => {
+                    // SIGCHLD indicates a child process state change
+                    // Enqueue signal for job status updates
+                    state::enqueue_signal("CHLD", 17);
                 }
                 _ => {}
             }
@@ -150,6 +155,11 @@ fn main() {
             loop {
                 // Process any pending signals before showing prompt
                 state::process_pending_signals(&mut shell_state);
+                
+                // Check for completed/stopped background jobs
+                if shell_state.interactive {
+                    state::check_background_jobs(&mut shell_state);
+                }
 
                 if SHUTDOWN.load(Ordering::Relaxed) {
                     println!("\nReceived SIGTERM, exiting gracefully.");

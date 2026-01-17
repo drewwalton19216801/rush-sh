@@ -13,7 +13,7 @@ pub mod jobs;
 // Re-export types for backward compatibility
 pub use fd_table::FileDescriptorTable;
 pub use options::ShellOptions;
-pub use signals::{enqueue_signal, process_pending_signals};
+pub use signals::{enqueue_signal, process_pending_signals, check_background_jobs};
 pub use jobs::{Job, JobStatus, JobTable};
 
 use super::parser::Ast;

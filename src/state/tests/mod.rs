@@ -6,9 +6,11 @@
 //! - `variable_tests`: Variable scoping and management
 //! - `state_tests`: General state management
 //! - `jobs_tests`: Job management and job table operations
+//! - `signal_tests`: Signal handling and SIGCHLD processing
 
 mod fd_table_tests;
 mod jobs_tests;
 mod options_tests;
+mod signal_tests;
 mod state_tests;
 mod variable_tests;
