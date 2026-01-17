@@ -11,7 +11,7 @@ impl KillBuiltin {
     /// Supports:
     /// - Signal names: TERM, KILL, INT, HUP, STOP, CONT, etc.
     /// - Signal names with SIG prefix: SIGTERM, SIGKILL, etc.
-    /// - Signal numbers: 1-31
+    /// - Non-negative signal numbers: 0 and higher
     /// - Returns signal number on success, error message on failure
     fn parse_signal(signal_str: &str) -> Result<i32, String> {
         // Try to parse as number first
