@@ -151,13 +151,22 @@ fn display_umask_symbolic(umask: u32, output_writer: &mut dyn Write) -> i32 {
 
 /// Parse octal mask string (e.g., "022", "0022")
 fn parse_octal_mask(mask_str: &str) -> Result<u32, String> {
-    // Remove optional leading zero
-    let mask_str = mask_str.strip_prefix('0').unwrap_or(mask_str);
-
     // Validate: only octal digits
     if !mask_str.chars().all(|c| c.is_ascii_digit() && c <= '7') {
         return Err(format!("invalid octal number: {}", mask_str));
     }
+
+    // Handle empty string after validation
+    if mask_str.is_empty() {
+        return Err(format!("invalid octal number: {}", mask_str));
+    }
+
+    // Remove optional leading zero (but keep at least one digit)
+    let mask_str = if mask_str.len() > 1 && mask_str.starts_with('0') {
+        &mask_str[1..]
+    } else {
+        mask_str
+    };
 
     // Parse as octal
     match u32::from_str_radix(mask_str, 8) {
