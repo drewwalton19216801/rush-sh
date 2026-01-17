@@ -58,7 +58,7 @@
             <div class="sidebar-footer">
                 <div class="version-info">
                     <span class="version">v0.7.4</span>
-                    <span class="status">~94% POSIX Compliant</span>
+                    <span class="status">~96% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
                     <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
@@ -414,6 +414,41 @@ find . -name "*.log" -exec wc -l {} \; | \
 
 # Chained commands
 cat file.txt | grep "pattern" | sort | uniq -c</code></pre>
+                            </div>
+                        </div>
+
+                        <div class="advanced-section">
+                            <h3>Job Control</h3>
+                            <div class="code-block">
+                                <pre><code># Run command in background
+sleep 10 &
+echo "PID of background job: $!"
+
+# List all jobs
+jobs
+jobs -l  # Show PIDs
+jobs -p  # Show PIDs only
+
+# Bring job to foreground
+fg %1        # By job number
+fg %sleep    # By command prefix
+fg %?eep     # By command substring
+
+# Resume job in background
+bg %1
+
+# Send signal to job
+kill %1      # SIGTERM
+kill -9 %2   # SIGKILL
+
+# Wait for job completion
+wait %1      # Wait for specific job
+wait         # Wait for all jobs
+
+# Multiple background jobs
+sleep 5 & sleep 10 & sleep 15 &
+jobs
+wait  # Wait for all to complete</code></pre>
                             </div>
                         </div>
 

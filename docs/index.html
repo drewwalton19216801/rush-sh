@@ -58,7 +58,7 @@
             <div class="sidebar-footer">
                 <div class="version-info">
                     <span class="version">v0.7.4</span>
-                    <span class="status">~94% POSIX Compliant</span>
+                    <span class="status">~96% POSIX Compliant</span>
                 </div>
                 <div class="external-links">
                     <a href="https://github.com/drewwalton19216801/rush-sh" target="_blank" class="external-link">
@@ -118,11 +118,11 @@
 
                             <div class="hero-stats">
                                 <div class="stat">
-                                    <div class="stat-value">~94%</div>
+                                    <div class="stat-value">~96%</div>
                                     <div class="stat-label">POSIX Compliant</div>
                                 </div>
                                 <div class="stat">
-                                    <div class="stat-value">27</div>
+                                    <div class="stat-value">32</div>
                                     <div class="stat-label">Built-in Commands</div>
                                 </div>
                                 <div class="stat">
@@ -248,6 +248,16 @@
                         <div class="update-item">
                             <div class="update-badge">🚀</div>
                             <div class="update-content">
+                                <h4>Job Control</h4>
+                                <p>Full POSIX-compliant job control with background execution (&), job listing (jobs),
+                                    foreground/background control (fg/bg), job termination (kill), wait for jobs (wait),
+                                    and $! special variable for last background PID</p>
+                            </div>
+                        </div>
+
+                        <div class="update-item">
+                            <div class="update-badge">⚡</div>
+                            <div class="update-content">
                                 <h4>Subshell Support</h4>
                                 <p>Full POSIX-compliant subshells with state isolation, exit code propagation, trap
                                     inheritance, and depth limit protection (60+ test cases)</p>
@@ -255,7 +265,7 @@
                         </div>
 
                         <div class="update-item">
-                            <div class="update-badge">⚡</div>
+                            <div class="update-badge">🔧</div>
                             <div class="update-content">
                                 <h4>File Descriptor Operations</h4>
                                 <p>Complete FD table management with duplication (N>&M, N<&M), closing (N>&-, N<&-), and
@@ -278,15 +288,6 @@
                                 <h4>Enhanced Trap System</h4>
                                 <p>Signal normalization, multiple handlers, trap display/reset, and signal queue with
                                     overflow protection</p>
-                            </div>
-                        </div>
-
-                        <div class="update-item">
-                            <div class="update-badge">📦</div>
-                            <div class="update-content">
-                                <h4>Command Grouping</h4>
-                                <p>POSIX-compliant command grouping <code>{...}</code> for executing commands in the
-                                    current shell context with shared state</p>
                             </div>
                         </div>
                     </div>
