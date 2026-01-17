@@ -41,7 +41,8 @@ impl FgBuiltin {
             if let Some(search_str) = spec.strip_prefix('?') {
                 let job_table = shell_state.job_table.borrow();
                 for job in job_table.get_all_jobs() {
-                    if job.command.contains(search_str) {
+                    // Skip completed jobs when matching by command
+                    if job.is_active() && job.command.contains(search_str) {
                         return Ok(job.job_id);
                     }
                 }
@@ -57,7 +58,8 @@ impl FgBuiltin {
             // Otherwise, search for command prefix
             let job_table = shell_state.job_table.borrow();
             for job in job_table.get_all_jobs() {
-                if job.command.starts_with(spec) {
+                // Skip completed jobs when matching by command prefix
+                if job.is_active() && job.command.starts_with(spec) {
                     return Ok(job.job_id);
                 }
             }
@@ -510,56 +512,32 @@ mod tests {
 
     #[test]
     fn test_fg_command_prefix_match() {
-        let mut shell_state = ShellState::new();
+        let shell_state = ShellState::new();
         
-        // Add jobs with different commands
-        let mut job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
-        job1.update_status(JobStatus::Done(0));
+        // Add jobs with different commands - both running so prefix match works
+        let job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         let job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
         shell_state.job_table.borrow_mut().add_job(job1);
         shell_state.job_table.borrow_mut().add_job(job2);
 
-        let mut output = Vec::new();
-        let cmd = ShellCommand {
-            args: vec!["fg".to_string(), "%sleep".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-
-        let builtin = FgBuiltin;
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-
-        assert_eq!(exit_code, 0);
-        let output_str = String::from_utf8(output).unwrap();
-        // The command is printed, followed by "job has terminated"
-        assert!(output_str.contains("sleep 10 &") || output_str.contains("job has terminated"));
+        // Should match job 1 (sleep)
+        let result = FgBuiltin::parse_jobspec("%sleep", &shell_state);
+        assert_eq!(result.unwrap(), 1);
     }
 
     #[test]
     fn test_fg_command_contains_match() {
-        let mut shell_state = ShellState::new();
+        let shell_state = ShellState::new();
         
-        // Add jobs with different commands
+        // Add jobs with different commands - both running so contains match works
         let job1 = Job::new(1, Some(1234), "cat file.txt &".to_string(), vec![1234], false);
-        let mut job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
-        job2.update_status(JobStatus::Done(0));
+        let job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
         shell_state.job_table.borrow_mut().add_job(job1);
         shell_state.job_table.borrow_mut().add_job(job2);
 
-        let mut output = Vec::new();
-        let cmd = ShellCommand {
-            args: vec!["fg".to_string(), "%?pattern".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-
-        let builtin = FgBuiltin;
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
-
-        assert_eq!(exit_code, 0);
-        let output_str = String::from_utf8(output).unwrap();
-        // The command is printed, followed by "job has terminated"
-        assert!(output_str.contains("grep pattern file &") || output_str.contains("job has terminated"));
+        // Should match job 2 (contains "pattern")
+        let result = FgBuiltin::parse_jobspec("%?pattern", &shell_state);
+        assert_eq!(result.unwrap(), 2);
     }
 
     #[test]
@@ -631,5 +609,43 @@ mod tests {
         // Job should be removed from table
         let job_table = shell_state.job_table.borrow();
         assert!(job_table.get_job(1).is_none());
+    }
+
+    #[test]
+    fn test_fg_command_prefix_skips_completed_jobs() {
+        let shell_state = ShellState::new();
+        
+        // Add a completed job with "sleep" command
+        let mut job1 = Job::new(1, Some(1234), "sleep 5 &".to_string(), vec![1234], false);
+        job1.update_status(JobStatus::Done(0));
+        
+        // Add a running job with "sleep" command
+        let job2 = Job::new(2, Some(1235), "sleep 10 &".to_string(), vec![1235], false);
+        
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (running), not job 1 (completed)
+        let result = FgBuiltin::parse_jobspec("%sleep", &shell_state);
+        assert_eq!(result.unwrap(), 2);
+    }
+
+    #[test]
+    fn test_fg_command_contains_skips_completed_jobs() {
+        let shell_state = ShellState::new();
+        
+        // Add a completed job containing "pattern"
+        let mut job1 = Job::new(1, Some(1234), "grep pattern file1 &".to_string(), vec![1234], false);
+        job1.update_status(JobStatus::Done(0));
+        
+        // Add a running job containing "pattern"
+        let job2 = Job::new(2, Some(1235), "grep pattern file2 &".to_string(), vec![1235], false);
+        
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (running), not job 1 (completed)
+        let result = FgBuiltin::parse_jobspec("%?pattern", &shell_state);
+        assert_eq!(result.unwrap(), 2);
     }
 }

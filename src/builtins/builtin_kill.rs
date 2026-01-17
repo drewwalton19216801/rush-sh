@@ -141,7 +141,8 @@ impl KillBuiltin {
             if let Some(search_str) = spec.strip_prefix('?') {
                 let job_table = shell_state.job_table.borrow();
                 for job in job_table.get_all_jobs() {
-                    if job.command.contains(search_str) {
+                    // Skip completed jobs when matching by command
+                    if job.is_active() && job.command.contains(search_str) {
                         return Ok(job.job_id);
                     }
                 }
@@ -157,7 +158,8 @@ impl KillBuiltin {
             // Otherwise, search for command prefix
             let job_table = shell_state.job_table.borrow();
             for job in job_table.get_all_jobs() {
-                if job.command.starts_with(spec) {
+                // Skip completed jobs when matching by command prefix
+                if job.is_active() && job.command.starts_with(spec) {
                     return Ok(job.job_id);
                 }
             }

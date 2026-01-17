@@ -148,3 +148,23 @@ fn test_push_positional_param() {
     assert_eq!(state.get_var("2"), Some("arg2".to_string()));
     assert_eq!(state.get_var("#"), Some("2".to_string()));
 }
+
+#[test]
+fn test_last_background_pid() {
+    let mut state = ShellState::new();
+    
+    // Initially, $! should be None (expands to empty string)
+    assert_eq!(state.get_var("!"), None);
+    
+    // Set last background PID
+    state.last_background_pid = Some(1234);
+    assert_eq!(state.get_var("!"), Some("1234".to_string()));
+    
+    // Update to a different PID
+    state.last_background_pid = Some(5678);
+    assert_eq!(state.get_var("!"), Some("5678".to_string()));
+    
+    // Clear it
+    state.last_background_pid = None;
+    assert_eq!(state.get_var("!"), None);
+}

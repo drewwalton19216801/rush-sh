@@ -141,6 +141,8 @@ pub struct ShellState {
     pub interactive: bool,
     /// Terminal file descriptor for job control (None if not interactive)
     pub terminal_fd: Option<RawFd>,
+    /// PID of the last background process started ($!)
+    pub last_background_pid: Option<u32>,
 }
 
 impl ShellState {
@@ -236,6 +238,7 @@ impl ShellState {
             } else {
                 None
             },
+            last_background_pid: None,
         }
     }
 
@@ -246,6 +249,7 @@ impl ShellState {
             "?" => Some(self.last_exit_code.to_string()),
             "$" => Some(self.shell_pid.to_string()),
             "0" => Some(self.script_name.clone()),
+            "!" => self.last_background_pid.map(|pid| pid.to_string()),
             "LINENO" => Some(self.current_line_number.to_string()),
             "*" => {
                 // $* - all positional parameters as single string (space-separated)

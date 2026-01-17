@@ -168,6 +168,9 @@ pub fn execute_builtin_async(cmd: &ShellCommand, shell_state: &mut ShellState) -
             // Add job to job table
             shell_state.job_table.borrow_mut().add_job(job);
 
+            // Set $! to the PID of the background process
+            shell_state.last_background_pid = Some(pid_u32);
+
             return 0;
         }
     }
@@ -335,6 +338,12 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
 
     // Add job to job table
     shell_state.job_table.borrow_mut().add_job(job);
+
+    // Set $! to the PID of the last process in the pipeline (or the only process)
+    // This matches POSIX behavior where $! is the PID of the last process in a background pipeline
+    if let Some(&last_pid) = pids.last() {
+        shell_state.last_background_pid = Some(last_pid);
+    }
 
     0
 }

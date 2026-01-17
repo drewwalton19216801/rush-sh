@@ -13,6 +13,8 @@ impl JobsBuiltin {
     /// - %: Current job
     /// - %+: Current job
     /// - %-: Previous job
+    /// - %string: Job whose command begins with string
+    /// - %?string: Job whose command contains string
     /// - n: Job number n (direct number)
     fn parse_jobspec(jobspec: &str, shell_state: &ShellState) -> Result<usize, String> {
         if jobspec.starts_with('%') {
@@ -36,9 +38,34 @@ impl JobsBuiltin {
                     .ok_or_else(|| "jobs: no previous job".to_string());
             }
             
-            // %n - job number
-            spec.parse::<usize>()
-                .map_err(|_| format!("jobs: {}: no such job", jobspec))
+            // %?string - job whose command contains string
+            if let Some(search_str) = spec.strip_prefix('?') {
+                let job_table = shell_state.job_table.borrow();
+                for job in job_table.get_all_jobs() {
+                    // Skip completed jobs when matching by command
+                    if job.is_active() && job.command.contains(search_str) {
+                        return Ok(job.job_id);
+                    }
+                }
+                return Err(format!("jobs: {}: no such job", jobspec));
+            }
+            
+            // %string - job whose command begins with string
+            // Try to parse as number first
+            if let Ok(job_id) = spec.parse::<usize>() {
+                return Ok(job_id);
+            }
+            
+            // Otherwise, search for command prefix
+            let job_table = shell_state.job_table.borrow();
+            for job in job_table.get_all_jobs() {
+                // Skip completed jobs when matching by command prefix
+                if job.is_active() && job.command.starts_with(spec) {
+                    return Ok(job.job_id);
+                }
+            }
+            
+            Err(format!("jobs: {}: no such job", jobspec))
         } else {
             // Direct job number
             jobspec
@@ -761,5 +788,131 @@ mod tests {
         assert!(output_str.contains("sleep 10 &"));
         assert!(output_str.contains("sleep 30 &"));
         assert!(!output_str.contains("sleep 20 &"));
+    }
+
+    #[test]
+    fn test_jobs_command_prefix_match() {
+        let shell_state = ShellState::new();
+        
+        // Add jobs with different commands - both running so prefix match works
+        let job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
+        let job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 1 (sleep)
+        let result = JobsBuiltin::parse_jobspec("%sleep", &shell_state);
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_jobs_command_contains_match() {
+        let shell_state = ShellState::new();
+        
+        // Add jobs with different commands - both running so contains match works
+        let job1 = Job::new(1, Some(1234), "cat file.txt &".to_string(), vec![1234], false);
+        let job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (contains "pattern")
+        let result = JobsBuiltin::parse_jobspec("%?pattern", &shell_state);
+        assert_eq!(result.unwrap(), 2);
+    }
+
+    #[test]
+    fn test_jobs_command_prefix_skips_completed_jobs() {
+        let shell_state = ShellState::new();
+        
+        // Add a completed job with "sleep" command
+        let mut job1 = Job::new(1, Some(1234), "sleep 5 &".to_string(), vec![1234], false);
+        job1.update_status(JobStatus::Done(0));
+        
+        // Add a running job with "sleep" command
+        let job2 = Job::new(2, Some(1235), "sleep 10 &".to_string(), vec![1235], false);
+        
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (running), not job 1 (completed)
+        let result = JobsBuiltin::parse_jobspec("%sleep", &shell_state);
+        assert_eq!(result.unwrap(), 2);
+    }
+
+    #[test]
+    fn test_jobs_command_contains_skips_completed_jobs() {
+        let shell_state = ShellState::new();
+        
+        // Add a completed job containing "pattern"
+        let mut job1 = Job::new(1, Some(1234), "grep pattern file1 &".to_string(), vec![1234], false);
+        job1.update_status(JobStatus::Done(0));
+        
+        // Add a running job containing "pattern"
+        let job2 = Job::new(2, Some(1235), "grep pattern file2 &".to_string(), vec![1235], false);
+        
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (running), not job 1 (completed)
+        let result = JobsBuiltin::parse_jobspec("%?pattern", &shell_state);
+        assert_eq!(result.unwrap(), 2);
+    }
+
+    #[test]
+    fn test_jobs_command_prefix_with_jobspec() {
+        let mut shell_state = ShellState::new();
+        
+        // Add jobs with different commands
+        let job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
+        let job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        let mut output = Vec::new();
+        let cmd = ShellCommand {
+            args: vec!["jobs".to_string(), "%sleep".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = JobsBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        
+        // Should only show job 1
+        assert!(output_str.contains("[1]"));
+        assert!(output_str.contains("sleep 10 &"));
+        assert!(!output_str.contains("grep pattern file &"));
+    }
+
+    #[test]
+    fn test_jobs_command_contains_with_jobspec() {
+        let mut shell_state = ShellState::new();
+        
+        // Add jobs with different commands
+        let job1 = Job::new(1, Some(1234), "cat file.txt &".to_string(), vec![1234], false);
+        let job2 = Job::new(2, Some(1235), "grep pattern file &".to_string(), vec![1235], false);
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        let mut output = Vec::new();
+        let cmd = ShellCommand {
+            args: vec!["jobs".to_string(), "%?pattern".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = JobsBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 0);
+        let output_str = String::from_utf8(output).unwrap();
+        
+        // Should only show job 2
+        assert!(output_str.contains("[2]"));
+        assert!(output_str.contains("grep pattern file &"));
+        assert!(!output_str.contains("cat file.txt &"));
     }
 }

@@ -41,7 +41,8 @@ impl BgBuiltin {
             if let Some(search_str) = spec.strip_prefix('?') {
                 let job_table = shell_state.job_table.borrow();
                 for job in job_table.get_all_jobs() {
-                    if job.command.contains(search_str) {
+                    // Skip completed jobs when matching by command
+                    if job.is_active() && job.command.contains(search_str) {
                         return Ok(job.job_id);
                     }
                 }
@@ -57,7 +58,8 @@ impl BgBuiltin {
             // Otherwise, search for command prefix
             let job_table = shell_state.job_table.borrow();
             for job in job_table.get_all_jobs() {
-                if job.command.starts_with(spec) {
+                // Skip completed jobs when matching by command prefix
+                if job.is_active() && job.command.starts_with(spec) {
                     return Ok(job.job_id);
                 }
             }
@@ -664,5 +666,45 @@ mod tests {
         let job_table = shell_state.job_table.borrow();
         assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
         assert_eq!(job_table.get_job(2).unwrap().status, JobStatus::Running);
+    }
+
+    #[test]
+    fn test_bg_command_prefix_skips_completed_jobs() {
+        let shell_state = ShellState::new();
+        
+        // Add a completed job with "sleep" command
+        let mut job1 = Job::new(1, Some(1234), "sleep 5 &".to_string(), vec![1234], false);
+        job1.update_status(JobStatus::Done(0));
+        
+        // Add a stopped job with "sleep" command
+        let mut job2 = Job::new(2, Some(1235), "sleep 10 &".to_string(), vec![1235], false);
+        job2.update_status(JobStatus::Stopped);
+        
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (stopped), not job 1 (completed)
+        let result = BgBuiltin::parse_jobspec("%sleep", &shell_state);
+        assert_eq!(result.unwrap(), 2);
+    }
+
+    #[test]
+    fn test_bg_command_contains_skips_completed_jobs() {
+        let shell_state = ShellState::new();
+        
+        // Add a completed job containing "pattern"
+        let mut job1 = Job::new(1, Some(1234), "grep pattern file1 &".to_string(), vec![1234], false);
+        job1.update_status(JobStatus::Done(0));
+        
+        // Add a stopped job containing "pattern"
+        let mut job2 = Job::new(2, Some(1235), "grep pattern file2 &".to_string(), vec![1235], false);
+        job2.update_status(JobStatus::Stopped);
+        
+        shell_state.job_table.borrow_mut().add_job(job1);
+        shell_state.job_table.borrow_mut().add_job(job2);
+
+        // Should match job 2 (stopped), not job 1 (completed)
+        let result = BgBuiltin::parse_jobspec("%?pattern", &shell_state);
+        assert_eq!(result.unwrap(), 2);
     }
 }
