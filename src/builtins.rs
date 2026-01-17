@@ -39,6 +39,7 @@ impl Write for BadFdWriter {
 }
 
 mod builtin_alias;
+mod builtin_bg;
 mod builtin_break;
 mod builtin_cd;
 mod builtin_colon;
@@ -126,6 +127,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_colon::ColonBuiltin),
         Box::new(builtin_jobs::JobsBuiltin),
         Box::new(builtin_fg::FgBuiltin),
+        Box::new(builtin_bg::BgBuiltin),
         Box::new(builtin_wait::WaitBuiltin),
     ]
 }
@@ -458,7 +460,8 @@ mod tests {
         assert!(commands.contains(&"times".to_string()));
         assert!(commands.contains(&"jobs".to_string()));
         assert!(commands.contains(&"fg".to_string()));
+        assert!(commands.contains(&"bg".to_string()));
         assert!(commands.contains(&"wait".to_string()));
-        assert_eq!(commands.len(), 32);
+        assert_eq!(commands.len(), 33);
     }
 }
