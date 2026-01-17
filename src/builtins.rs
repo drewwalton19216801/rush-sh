@@ -52,6 +52,7 @@ mod builtin_export;
 mod builtin_fg;
 mod builtin_help;
 mod builtin_jobs;
+mod builtin_kill;
 mod builtin_popd;
 mod builtin_pushd;
 mod builtin_pwd;
@@ -128,6 +129,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_jobs::JobsBuiltin),
         Box::new(builtin_fg::FgBuiltin),
         Box::new(builtin_bg::BgBuiltin),
+        Box::new(builtin_kill::KillBuiltin),
         Box::new(builtin_wait::WaitBuiltin),
     ]
 }
@@ -461,7 +463,8 @@ mod tests {
         assert!(commands.contains(&"jobs".to_string()));
         assert!(commands.contains(&"fg".to_string()));
         assert!(commands.contains(&"bg".to_string()));
+        assert!(commands.contains(&"kill".to_string()));
         assert!(commands.contains(&"wait".to_string()));
-        assert_eq!(commands.len(), 33);
+        assert_eq!(commands.len(), 34);
     }
 }
