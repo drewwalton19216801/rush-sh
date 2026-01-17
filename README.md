@@ -7,7 +7,7 @@
 
 ![Rush Logo](images/rush_logo.png)
 
-Rush is a POSIX sh-compatible shell implemented in Rust (~96% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 32 built-in commands.
+Rush is a POSIX sh-compatible shell implemented in Rust (~96% POSIX compliant). It provides both interactive mode with a REPL prompt and script mode for executing commands from files. The shell supports comprehensive shell features including command execution, pipes, redirections, subshells, file descriptor operations, environment variables, and 33 built-in commands.
 
 ## Table of Contents
 
@@ -120,7 +120,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~96% POSIX compliant). 
     - Return statements: `return [value]`
     - Function introspection: `declare -f [function_name]`
   - **Command Grouping**: Group commands in the current shell context using `{ commands; }` syntax
-- **Built-in Commands** (32 total):
+- **Built-in Commands** (33 total):
   - `:` (colon): Null command that always returns success
   - `alias`: Define or display aliases
   - `bg`: Resume stopped jobs in the background
@@ -150,6 +150,7 @@ Rush is a POSIX sh-compatible shell implemented in Rust (~96% POSIX compliant). 
   - `times`: Display accumulated user and system CPU times for the shell and its child processes
   - `trap`: Set or display signal handlers
   - `type`: Display information about command type (alias, keyword, function, builtin, or external command)
+  - `umask`: Display or set the file creation mask
   - `unalias`: Remove alias definitions
   - `unset`: Remove variables
   - `wait`: Wait for background jobs to complete
@@ -2413,7 +2414,7 @@ This benchmark suite provides a foundation for maintaining optimal shell perform
 The test suite provides extensive coverage of:
 
 - Command parsing and execution
-- Built-in command functionality (all 27 built-in commands including : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, times, trap, type, unalias, unset)
+- Built-in command functionality (all 33 built-in commands including : (colon), alias, break, cd, continue, declare, dirs, env, exit, export, help, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, [, times, trap, type, umask, unalias, unset)
 - **Subshells** (state isolation, exit code propagation, trap inheritance, depth limits, 60+ test cases)
 - **File descriptor operations** (duplication, closing, read/write modes, 30+ test cases)
 - Pipeline and redirection handling
