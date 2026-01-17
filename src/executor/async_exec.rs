@@ -147,7 +147,7 @@ fn execute_compound_async(ast: Ast, description: &str, shell_state: &mut ShellSt
             let exit_code = super::execute(ast, shell_state);
 
             // Exit the child process
-            libc::exit(exit_code);
+            libc::_exit(exit_code);
         } else {
             // Parent process
             let pid_u32 = pid as u32;
@@ -254,7 +254,7 @@ pub fn execute_builtin_async(
             let exit_code = crate::builtins::execute_builtin(&temp_cmd, shell_state, None);
 
             // Exit the child process
-            libc::exit(exit_code);
+            libc::_exit(exit_code);
         } else {
             // Parent process
             let pid_u32 = pid as u32;
@@ -359,14 +359,14 @@ fn execute_compound_in_background_pipeline(
             if let Err(e) = super::redirection::apply_redirections(redirections, shell_state, None)
             {
                 eprintln!("Redirection error: {}", e);
-                libc::exit(1);
+                libc::_exit(1);
             }
 
             // Execute the compound command
             let exit_code = super::execute(compound_ast.clone(), shell_state);
 
             // Exit the child process
-            libc::exit(exit_code);
+            libc::_exit(exit_code);
         }
 
         let pid_u32 = pid as u32;
