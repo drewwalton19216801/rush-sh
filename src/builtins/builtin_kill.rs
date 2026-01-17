@@ -107,9 +107,15 @@ impl KillBuiltin {
     }
 
     /// Get PIDs for a target (either PID or jobspec)
-    fn get_target_pids(target: &str, shell_state: &ShellState) -> Result<Vec<u32>, String> {
+    ///
+    /// Returns signed PIDs to support POSIX process group signaling:
+    /// - Positive PID: signal a single process
+    /// - Zero: signal all processes in current process group
+    /// - -1: signal all processes (with permissions)
+    /// - Negative PID < -1: signal all processes in process group |PID|
+    fn get_target_pids(target: &str, shell_state: &ShellState) -> Result<Vec<i32>, String> {
         if target.starts_with('%') {
-            // It's a jobspec
+            // It's a jobspec - convert u32 PIDs to i32
             let job_id = shell_state.job_table.borrow().parse_jobspec(target, "kill")?;
             let job_table = shell_state.job_table.borrow();
             match job_table.get_job(job_id) {
@@ -117,29 +123,44 @@ impl KillBuiltin {
                     if job.pids.is_empty() {
                         Err(format!("kill: %{}: no such job", job_id))
                     } else {
-                        Ok(job.pids.clone())
+                        // Convert u32 PIDs to i32 (job PIDs are always positive)
+                        Ok(job.pids.iter().map(|&pid| pid as i32).collect())
                     }
                 }
                 None => Err(format!("kill: %{}: no such job", job_id)),
             }
         } else {
             // It's a PID (or process group if negative)
+            // Preserve the sign to support POSIX process group signaling
             match target.parse::<i32>() {
-                Ok(pid) => Ok(vec![pid.unsigned_abs()]),
+                Ok(pid) => Ok(vec![pid]),
                 Err(_) => Err(format!("kill: {}: arguments must be process or job IDs", target)),
             }
         }
     }
 
-    /// Send signal to a PID
-    fn send_signal(pid: u32, signal: i32) -> Result<(), String> {
+    /// Send signal to a PID or process group
+    ///
+    /// Supports POSIX process group signaling:
+    /// - pid > 0: Signal the process with ID pid
+    /// - pid == 0: Signal all processes in current process group
+    /// - pid == -1: Signal all processes (with permissions)
+    /// - pid < -1: Signal all processes in process group |pid|
+    fn send_signal(pid: i32, signal: i32) -> Result<(), String> {
         // SAFETY: kill is a standard POSIX function for sending signals to processes
+        // Pass pid directly to libc::kill to preserve sign for process group signaling
         let result = unsafe { libc::kill(pid as libc::pid_t, signal) };
         
         if result == -1 {
             let err = std::io::Error::last_os_error();
             match err.raw_os_error() {
-                Some(libc::ESRCH) => Err(format!("kill: ({}): No such process", pid)),
+                Some(libc::ESRCH) => {
+                    if pid < -1 {
+                        Err(format!("kill: ({}): No such process group", pid.abs()))
+                    } else {
+                        Err(format!("kill: ({}): No such process", pid))
+                    }
+                }
                 Some(libc::EPERM) => Err(format!("kill: ({}): Operation not permitted", pid)),
                 _ => Err(format!("kill: ({}): {}", pid, err)),
             }
@@ -646,5 +667,198 @@ mod tests {
         let output_str = String::from_utf8(output).unwrap();
         // Should have error messages for both PIDs
         assert!(output_str.contains("999998") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_get_target_pids_negative_pid() {
+        let shell_state = ShellState::new();
+
+        // Test negative PID (process group)
+        let result = KillBuiltin::get_target_pids("-123", &shell_state);
+        assert!(result.is_ok());
+        let pids = result.unwrap();
+        assert_eq!(pids.len(), 1);
+        assert_eq!(pids[0], -123);
+    }
+
+    #[test]
+    fn test_get_target_pids_zero() {
+        let shell_state = ShellState::new();
+
+        // Test PID 0 (current process group)
+        let result = KillBuiltin::get_target_pids("0", &shell_state);
+        assert!(result.is_ok());
+        let pids = result.unwrap();
+        assert_eq!(pids.len(), 1);
+        assert_eq!(pids[0], 0);
+    }
+
+    #[test]
+    fn test_get_target_pids_minus_one() {
+        let shell_state = ShellState::new();
+
+        // Test PID -1 (all processes)
+        let result = KillBuiltin::get_target_pids("-1", &shell_state);
+        assert!(result.is_ok());
+        let pids = result.unwrap();
+        assert_eq!(pids.len(), 1);
+        assert_eq!(pids[0], -1);
+    }
+
+    #[test]
+    fn test_get_target_pids_positive_pid() {
+        let shell_state = ShellState::new();
+
+        // Test positive PID (single process)
+        let result = KillBuiltin::get_target_pids("1234", &shell_state);
+        assert!(result.is_ok());
+        let pids = result.unwrap();
+        assert_eq!(pids.len(), 1);
+        assert_eq!(pids[0], 1234);
+    }
+
+    #[test]
+    fn test_send_signal_preserves_negative_pid() {
+        // Test that send_signal correctly passes negative PIDs to libc::kill
+        // We use a non-existent process group to avoid actually signaling anything
+        let result = KillBuiltin::send_signal(-999999, libc::SIGTERM);
+        
+        // Should fail with ESRCH (no such process group)
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("No such process group") || err_msg.contains("999999"));
+    }
+
+    #[test]
+    fn test_send_signal_zero_pid() {
+        // Test that send_signal handles PID 0 (current process group)
+        // This should succeed if we have permission to signal our own process group
+        let result = KillBuiltin::send_signal(0, 0);
+        
+        // Signal 0 is a null signal used to check if we can signal the process
+        // This should succeed for our own process group
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_kill_negative_pid_process_group() {
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Try to kill a non-existent process group
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-TERM".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail because process group doesn't exist
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("No such process") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_zero_current_process_group() {
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Signal 0 to current process group (should succeed)
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-s".to_string(), "0".to_string(), "0".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Signal 0 is invalid (not in range 1-31), should fail
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_kill_minus_one_all_processes() {
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Try to signal all processes (will likely fail due to permissions)
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-s".to_string(), "0".to_string(), "-1".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Signal 0 is invalid, should fail
+        assert_eq!(exit_code, 1);
+    }
+
+    #[test]
+    fn test_parse_signal_rejects_zero() {
+        // Signal 0 should be rejected (not in valid range 1-31)
+        let result = KillBuiltin::parse_signal("0");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid signal specification"));
+    }
+
+    #[test]
+    fn test_kill_multiple_negative_pids() {
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Try to kill multiple non-existent process groups
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-999998".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail for both process groups
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        // Should have error messages for both process groups
+        assert!(output_str.contains("999998") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_mixed_positive_and_negative_pids() {
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Mix of positive PID and negative PID (process group)
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "999998".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail for both
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("999998") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_get_target_pids_preserves_sign_for_large_negative() {
+        let shell_state = ShellState::new();
+
+        // Test large negative PID
+        let result = KillBuiltin::get_target_pids("-32768", &shell_state);
+        assert!(result.is_ok());
+        let pids = result.unwrap();
+        assert_eq!(pids.len(), 1);
+        assert_eq!(pids[0], -32768);
     }
 }
