@@ -38,7 +38,7 @@ pub fn execute_async(ast: Ast, shell_state: &mut ShellState) -> i32 {
             // For single commands, check if it's a builtin
             if commands.len() == 1 {
                 let cmd = &commands[0];
-                
+
                 // Handle compound commands (subshells, etc.)
                 if cmd.compound.is_some() {
                     return execute_external_async(&commands, shell_state);
@@ -70,27 +70,13 @@ pub fn execute_async(ast: Ast, shell_state: &mut ShellState) -> i32 {
             execute_external_async(&commands, shell_state)
         }
         // Handle other AST types asynchronously by forking
-        Ast::Subshell { .. } => {
-            execute_compound_async(ast, "subshell", shell_state)
-        }
-        Ast::CommandGroup { .. } => {
-            execute_compound_async(ast, "command group", shell_state)
-        }
-        Ast::If { .. } => {
-            execute_compound_async(ast, "if statement", shell_state)
-        }
-        Ast::For { .. } => {
-            execute_compound_async(ast, "for loop", shell_state)
-        }
-        Ast::While { .. } => {
-            execute_compound_async(ast, "while loop", shell_state)
-        }
-        Ast::Until { .. } => {
-            execute_compound_async(ast, "until loop", shell_state)
-        }
-        Ast::Case { .. } => {
-            execute_compound_async(ast, "case statement", shell_state)
-        }
+        Ast::Subshell { .. } => execute_compound_async(ast, "subshell", shell_state),
+        Ast::CommandGroup { .. } => execute_compound_async(ast, "command group", shell_state),
+        Ast::If { .. } => execute_compound_async(ast, "if statement", shell_state),
+        Ast::For { .. } => execute_compound_async(ast, "for loop", shell_state),
+        Ast::While { .. } => execute_compound_async(ast, "while loop", shell_state),
+        Ast::Until { .. } => execute_compound_async(ast, "until loop", shell_state),
+        Ast::Case { .. } => execute_compound_async(ast, "case statement", shell_state),
         _ => {
             // For other AST types (assignments, etc.), execute synchronously
             // These don't make sense to run in background
@@ -134,7 +120,7 @@ fn execute_compound_async(ast: Ast, description: &str, shell_state: &mut ShellSt
             1
         } else if pid == 0 {
             // Child process
-            
+
             // Create new process group
             let child_pid = libc::getpid();
             libc::setpgid(child_pid, child_pid);
@@ -225,7 +211,7 @@ pub fn execute_builtin_async(cmd: &ShellCommand, shell_state: &mut ShellState) -
             1
         } else if pid == 0 {
             // Child process
-            
+
             // Create new process group
             let child_pid = libc::getpid();
             libc::setpgid(child_pid, child_pid);
@@ -276,6 +262,105 @@ pub fn execute_builtin_async(cmd: &ShellCommand, shell_state: &mut ShellState) -
     }
 }
 
+/// Execute a compound command as part of a background pipeline.
+///
+/// This function forks a child process to execute the compound command,
+/// properly handling pipeline I/O and process group management.
+///
+/// # Arguments
+///
+/// * `compound_ast` - The compound command AST to execute
+/// * `redirections` - Redirections to apply to the compound command
+/// * `stdin` - Optional stdin file from previous pipeline stage
+/// * `is_first` - Whether this is the first command in the pipeline
+/// * `is_last` - Whether this is the last command in the pipeline
+/// * `pgid` - Optional process group ID to join
+/// * `shell_state` - Mutable reference to the shell state
+///
+/// # Returns
+///
+/// Result containing (PID, optional stdout file for next stage) or error message
+fn execute_compound_in_background_pipeline(
+    compound_ast: &Ast,
+    redirections: &[crate::parser::Redirection],
+    stdin: Option<File>,
+    is_first: bool,
+    is_last: bool,
+    pgid: Option<u32>,
+    shell_state: &mut ShellState,
+) -> Result<(u32, Option<File>), String> {
+    use std::os::unix::io::AsRawFd;
+
+    // Create pipe for stdout if not last command
+    let (read_fd, write_fd) = if !is_last {
+        let (reader, writer) =
+            std::io::pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
+        (Some(reader), Some(writer))
+    } else {
+        (None, None)
+    };
+
+    unsafe {
+        let pid = libc::fork();
+
+        if pid < 0 {
+            return Err("Failed to fork for compound command".to_string());
+        }
+        if pid == 0 {
+            // Child process
+
+            // Set process group
+            let child_pid = libc::getpid();
+            if let Some(group_id) = pgid {
+                libc::setpgid(child_pid, group_id as i32);
+            } else {
+                libc::setpgid(child_pid, child_pid);
+            }
+
+            // Setup stdin
+            if let Some(stdin_file) = stdin {
+                libc::dup2(stdin_file.as_raw_fd(), 0);
+            } else if is_first {
+                // First command - redirect stdin to /dev/null
+                let dev_null = libc::open(b"/dev/null\0".as_ptr() as *const i8, libc::O_RDONLY);
+                if dev_null >= 0 {
+                    libc::dup2(dev_null, 0);
+                    libc::close(dev_null);
+                }
+            }
+
+            // Setup stdout
+            if let Some(writer) = write_fd {
+                libc::dup2(writer.as_raw_fd(), 1);
+            }
+
+            // Apply redirections
+            if let Err(e) = super::redirection::apply_redirections(redirections, shell_state, None)
+            {
+                eprintln!("Redirection error: {}", e);
+                libc::exit(1);
+            }
+
+            // Execute the compound command
+            let exit_code = super::execute(compound_ast.clone(), shell_state);
+
+            // Exit the child process
+            libc::exit(exit_code);
+        }
+
+        let pid_u32 = pid as u32;
+        drop(write_fd);
+        
+        let next_stdout = if let Some(reader) = read_fd {
+            Some(File::from_raw_fd(reader.into_raw_fd()))
+        } else {
+            None
+        };
+        
+        Ok((pid_u32, next_stdout))
+    }
+}
+
 /// Execute external commands or pipelines asynchronously.
 ///
 /// Spawns the command(s) in the background with proper process group setup,
@@ -306,24 +391,48 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
             // Warn about compound commands in background pipelines
             if shell_state.colors_enabled {
                 eprintln!(
-                    "{}Warning: Compound command in background pipeline - executing via subshell\x1b[0m",
+                    "{}Warning: Compound command in background pipeline - executing via fork\x1b[0m",
                     shell_state.color_scheme.error
                 );
             } else {
-                eprintln!("Warning: Compound command in background pipeline - executing via subshell");
+                eprintln!("Warning: Compound command in background pipeline - executing via fork");
             }
-            
-            // Execute compound command in background by spawning a shell process
-            // This handles subshells, command groups, and other compound structures
-            let _compound_str = match compound.as_ref() {
-                Ast::Subshell { .. } => "(...)",
-                Ast::CommandGroup { .. } => "{...}",
-                _ => "compound",
-            };
-            
-            // For now, we'll skip compound commands in pipelines as they require
-            // more complex handling (need to serialize AST back to shell syntax)
-            // This is a known limitation that will be addressed in a future update
+
+            // Execute compound command in background by forking
+            match execute_compound_in_background_pipeline(
+                compound.as_ref(),
+                &cmd.redirections,
+                previous_stdout.take(),
+                i == 0,
+                is_last,
+                pgid,
+                shell_state,
+            ) {
+                Ok((pid, stdout)) => {
+                    pids.push(pid);
+
+                    // Set pgid to first process's PID
+                    if pgid.is_none() {
+                        pgid = Some(pid);
+                    }
+
+                    // Save stdout for next command if not last
+                    if !is_last {
+                        previous_stdout = stdout;
+                    }
+                }
+                Err(e) => {
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}Error executing compound command in pipeline: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
+                        );
+                    } else {
+                        eprintln!("Error executing compound command in pipeline: {}", e);
+                    }
+                    return 1;
+                }
+            }
             continue;
         }
 
@@ -388,7 +497,7 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
         unsafe {
             command.pre_exec(move || {
                 let pid = libc::getpid();
-                
+
                 // Set process group
                 if let Some(group_id) = current_pgid {
                     // Join existing process group (for pipeline)
@@ -397,7 +506,7 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
                     // Create new process group (first process in pipeline)
                     libc::setpgid(pid, pid);
                 }
-                
+
                 Ok(())
             });
         }
@@ -524,7 +633,7 @@ mod tests {
     #[test]
     fn test_format_pipeline_string() {
         let mut shell_state = ShellState::new();
-        
+
         let commands = vec![
             ShellCommand {
                 args: vec!["ls".to_string(), "-la".to_string()],
@@ -547,7 +656,7 @@ mod tests {
     #[test]
     fn test_format_pipeline_with_subshell() {
         let mut shell_state = ShellState::new();
-        
+
         let commands = vec![
             ShellCommand {
                 args: vec![],
