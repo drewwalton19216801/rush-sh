@@ -122,7 +122,7 @@ pub fn execute_builtin_async(cmd: &ShellCommand, shell_state: &mut ShellState) -
             } else {
                 eprintln!("Failed to fork for background builtin");
             }
-            return 1;
+            1
         } else if pid == 0 {
             // Child process
             
@@ -171,7 +171,7 @@ pub fn execute_builtin_async(cmd: &ShellCommand, shell_state: &mut ShellState) -
             // Set $! to the PID of the background process
             shell_state.last_background_pid = Some(pid_u32);
 
-            return 0;
+            0
         }
     }
 }

@@ -15,10 +15,8 @@ impl WaitBuiltin {
     /// - %-: Previous job
     /// - n: Process ID n (direct number)
     fn parse_argument(arg: &str, shell_state: &ShellState) -> Result<WaitTarget, String> {
-        if arg.starts_with('%') {
+        if let Some(spec) = arg.strip_prefix('%') {
             // Jobspec
-            let spec = &arg[1..];
-            
             // %+ or % - current job
             if spec.is_empty() || spec == "+" {
                 let job_id = shell_state
@@ -84,11 +82,10 @@ impl WaitBuiltin {
         // Check if this PID is in a job and if it's already done
         {
             let job_table = shell_state.job_table.borrow();
-            if let Some(job) = job_table.find_job_by_pid(pid) {
-                if let JobStatus::Done(code) = job.status {
+            if let Some(job) = job_table.find_job_by_pid(pid)
+                && let JobStatus::Done(code) = job.status {
                     return Ok(code);
                 }
-            }
         }
 
         // Use waitpid to wait for the process

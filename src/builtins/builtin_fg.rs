@@ -166,11 +166,10 @@ impl FgBuiltin {
         // Update job status if all processes completed
         {
             let mut job_table = shell_state.job_table.borrow_mut();
-            if let Some(job) = job_table.get_job_mut(job.job_id) {
-                if job.status != JobStatus::Stopped {
+            if let Some(job) = job_table.get_job_mut(job.job_id)
+                && job.status != JobStatus::Stopped {
                     job.update_status(JobStatus::Done(last_exit_code));
                 }
-            }
         }
 
         last_exit_code

@@ -218,11 +218,10 @@ impl Job {
         } else if all_done {
             // All PIDs have exited - job is done
             // Use the exit code from the last PID in the pipeline
-            if let Some(&last_pid) = self.pids.last() {
-                if let Some(JobStatus::Done(code)) = self.pid_status.get(&last_pid) {
+            if let Some(&last_pid) = self.pids.last()
+                && let Some(JobStatus::Done(code)) = self.pid_status.get(&last_pid) {
                     last_exit_code = *code;
                 }
-            }
             self.status = JobStatus::Done(last_exit_code);
             self.exit_code = Some(last_exit_code);
         } else if any_stopped {
@@ -625,9 +624,7 @@ impl JobTable {
     /// assert_eq!(job_table.parse_jobspec("%+", "fg").unwrap(), 1);
     /// ```
     pub fn parse_jobspec(&self, jobspec: &str, builtin_name: &str) -> Result<usize, String> {
-        if jobspec.starts_with('%') {
-            let spec = &jobspec[1..];
-            
+        if let Some(spec) = jobspec.strip_prefix('%') {
             // %+ or % - current job
             if spec.is_empty() || spec == "+" {
                 return self
