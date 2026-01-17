@@ -343,14 +343,27 @@ fn handle_sigchld(shell_state: &mut ShellState) {
             );
             
             if pid > 0 {
+                // Child state changed
                 Some((pid as u32, status))
-            } else {
+            } else if pid == 0 {
+                // No children ready (WNOHANG returned immediately)
                 None
+            } else {
+                // pid < 0: error occurred
+                // Check errno to distinguish EINTR from other errors
+                let errno = *libc::__errno_location();
+                if errno == libc::EINTR {
+                    // Interrupted by signal, retry the waitpid call
+                    Some((0, 0)) // Sentinel value to indicate retry
+                } else {
+                    // Other error (e.g., ECHILD - no children), give up
+                    None
+                }
             }
         };
         
         match result {
-            Some((pid, status)) => {
+            Some((pid, status)) if pid > 0 => {
                 // Determine the new job status based on the wait status
                 let job_status = if libc::WIFEXITED(status) {
                     // Process exited normally
@@ -373,8 +386,12 @@ fn handle_sigchld(shell_state: &mut ShellState) {
                     job_table.update_job_status(pid, job_status);
                 }
             }
-            None => {
-                // No more children to reap
+            Some((0, 0)) => {
+                // Sentinel value indicating EINTR - retry the loop
+                continue;
+            }
+            None | Some(_) => {
+                // No more children to reap, or invalid state
                 break;
             }
         }
