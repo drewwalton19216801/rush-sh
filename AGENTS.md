@@ -54,13 +54,15 @@ src/
 │   ├── redirection.rs   # I/O redirection handling
 │   ├── command.rs       # Single command and pipeline execution
 │   ├── subshell.rs      # Subshell and compound commands
+│   ├── async_exec.rs    # Asynchronous job execution
 │   └── tests/           # Focused test modules
 │       ├── mod.rs
 │       ├── execution_tests.rs
 │       ├── expansion_tests.rs
 │       ├── redirection_tests.rs
 │       ├── command_tests.rs
-│       └── subshell_tests.rs
+│       ├── subshell_tests.rs
+│       └── async_tests.rs
 ├── parser/              # AST construction (modular)
 │   ├── mod.rs           # Main parsing logic
 │   ├── ast.rs           # AST type definitions
@@ -90,12 +92,14 @@ src/
 │   ├── fd_table.rs      # File descriptor table
 │   ├── options.rs       # Shell options
 │   ├── signals.rs       # Signal handling
+│   ├── jobs.rs          # Job control and job table
 │   └── tests/           # Focused test modules
 │       ├── mod.rs
 │       ├── state_tests.rs
 │       ├── variable_tests.rs
 │       ├── fd_table_tests.rs
-│       └── options_tests.rs
+│       ├── options_tests.rs
+│       └── jobs_tests.rs
 ├── arithmetic.rs        # Arithmetic evaluation
 ├── parameter_expansion.rs # Parameter expansion
 ├── brace_expansion.rs   # Brace expansion
@@ -103,7 +107,12 @@ src/
 ├── script_engine.rs     # Script execution engine
 ├── builtins.rs          # Builtin dispatcher
 ├── builtins/            # Individual builtin commands
-│   ├── builtin_*.rs     # 26+ builtin implementations
+│   ├── builtin_*.rs     # 32 builtin implementations
+│   ├── builtin_bg.rs    # Background job control
+│   ├── builtin_fg.rs    # Foreground job control
+│   ├── builtin_jobs.rs  # Job listing
+│   ├── builtin_kill.rs  # Signal sending to jobs
+│   └── builtin_wait.rs  # Wait for job completion
 └── lib.rs               # Library exports
 ```
 
