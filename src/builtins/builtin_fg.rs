@@ -6,73 +6,6 @@ use std::io::Write;
 pub struct FgBuiltin;
 
 impl FgBuiltin {
-    /// Parse jobspec argument to job ID
-    ///
-    /// Supports:
-    /// - %n: Job number n
-    /// - %: Current job
-    /// - %+: Current job
-    /// - %-: Previous job
-    /// - %string: Job whose command begins with string
-    /// - %?string: Job whose command contains string
-    fn parse_jobspec(jobspec: &str, shell_state: &ShellState) -> Result<usize, String> {
-        if jobspec.starts_with('%') {
-            let spec = &jobspec[1..];
-            
-            // %+ or % - current job
-            if spec.is_empty() || spec == "+" {
-                return shell_state
-                    .job_table
-                    .borrow()
-                    .get_current_job()
-                    .ok_or_else(|| "fg: no current job".to_string());
-            }
-            
-            // %- - previous job
-            if spec == "-" {
-                return shell_state
-                    .job_table
-                    .borrow()
-                    .get_previous_job()
-                    .ok_or_else(|| "fg: no previous job".to_string());
-            }
-            
-            // %?string - job whose command contains string
-            if let Some(search_str) = spec.strip_prefix('?') {
-                let job_table = shell_state.job_table.borrow();
-                for job in job_table.get_all_jobs() {
-                    // Skip completed jobs when matching by command
-                    if job.is_active() && job.command.contains(search_str) {
-                        return Ok(job.job_id);
-                    }
-                }
-                return Err(format!("fg: {}: no such job", jobspec));
-            }
-            
-            // %string - job whose command begins with string
-            // Try to parse as number first
-            if let Ok(job_id) = spec.parse::<usize>() {
-                return Ok(job_id);
-            }
-            
-            // Otherwise, search for command prefix
-            let job_table = shell_state.job_table.borrow();
-            for job in job_table.get_all_jobs() {
-                // Skip completed jobs when matching by command prefix
-                if job.is_active() && job.command.starts_with(spec) {
-                    return Ok(job.job_id);
-                }
-            }
-            
-            Err(format!("fg: {}: no such job", jobspec))
-        } else {
-            // Direct job number
-            jobspec
-                .parse::<usize>()
-                .map_err(|_| format!("fg: {}: no such job", jobspec))
-        }
-    }
-
     /// Bring a job to the foreground
     fn foreground_job(job_id: usize, shell_state: &mut ShellState, output_writer: &mut dyn Write) -> i32 {
         // Get the job
@@ -277,7 +210,7 @@ impl Builtin for FgBuiltin {
             }
         } else if args.len() == 2 {
             // Parse jobspec argument
-            match Self::parse_jobspec(&args[1], shell_state) {
+            match shell_state.job_table.borrow().parse_jobspec(&args[1], "fg") {
                 Ok(id) => id,
                 Err(e) => {
                     let _ = writeln!(output_writer, "{}", e);
@@ -521,7 +454,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 1 (sleep)
-        let result = FgBuiltin::parse_jobspec("%sleep", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%sleep", "fg");
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -536,7 +469,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 2 (contains "pattern")
-        let result = FgBuiltin::parse_jobspec("%?pattern", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%?pattern", "fg");
         assert_eq!(result.unwrap(), 2);
     }
 
@@ -626,7 +559,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 2 (running), not job 1 (completed)
-        let result = FgBuiltin::parse_jobspec("%sleep", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%sleep", "fg");
         assert_eq!(result.unwrap(), 2);
     }
 
@@ -645,7 +578,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 2 (running), not job 1 (completed)
-        let result = FgBuiltin::parse_jobspec("%?pattern", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%?pattern", "fg");
         assert_eq!(result.unwrap(), 2);
     }
 }

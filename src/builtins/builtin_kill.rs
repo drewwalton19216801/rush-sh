@@ -106,78 +106,11 @@ impl KillBuiltin {
         0
     }
 
-    /// Parse jobspec argument to job ID
-    ///
-    /// Supports:
-    /// - %n: Job number n
-    /// - %: Current job
-    /// - %+: Current job
-    /// - %-: Previous job
-    /// - %string: Job whose command begins with string
-    /// - %?string: Job whose command contains string
-    fn parse_jobspec(jobspec: &str, shell_state: &ShellState) -> Result<usize, String> {
-        if jobspec.starts_with('%') {
-            let spec = &jobspec[1..];
-            
-            // %+ or % - current job
-            if spec.is_empty() || spec == "+" {
-                return shell_state
-                    .job_table
-                    .borrow()
-                    .get_current_job()
-                    .ok_or_else(|| "kill: no current job".to_string());
-            }
-            
-            // %- - previous job
-            if spec == "-" {
-                return shell_state
-                    .job_table
-                    .borrow()
-                    .get_previous_job()
-                    .ok_or_else(|| "kill: no previous job".to_string());
-            }
-            
-            // %?string - job whose command contains string
-            if let Some(search_str) = spec.strip_prefix('?') {
-                let job_table = shell_state.job_table.borrow();
-                for job in job_table.get_all_jobs() {
-                    // Skip completed jobs when matching by command
-                    if job.is_active() && job.command.contains(search_str) {
-                        return Ok(job.job_id);
-                    }
-                }
-                return Err(format!("kill: {}: no such job", jobspec));
-            }
-            
-            // %string - job whose command begins with string
-            // Try to parse as number first
-            if let Ok(job_id) = spec.parse::<usize>() {
-                return Ok(job_id);
-            }
-            
-            // Otherwise, search for command prefix
-            let job_table = shell_state.job_table.borrow();
-            for job in job_table.get_all_jobs() {
-                // Skip completed jobs when matching by command prefix
-                if job.is_active() && job.command.starts_with(spec) {
-                    return Ok(job.job_id);
-                }
-            }
-            
-            Err(format!("kill: {}: no such job", jobspec))
-        } else {
-            // Direct job number
-            jobspec
-                .parse::<usize>()
-                .map_err(|_| format!("kill: {}: arguments must be process or job IDs", jobspec))
-        }
-    }
-
     /// Get PIDs for a target (either PID or jobspec)
     fn get_target_pids(target: &str, shell_state: &ShellState) -> Result<Vec<u32>, String> {
         if target.starts_with('%') {
             // It's a jobspec
-            let job_id = Self::parse_jobspec(target, shell_state)?;
+            let job_id = shell_state.job_table.borrow().parse_jobspec(target, "kill")?;
             let job_table = shell_state.job_table.borrow();
             match job_table.get_job(job_id) {
                 Some(job) => {
@@ -617,10 +550,10 @@ mod tests {
         let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
 
-        let result = KillBuiltin::parse_jobspec("%", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%", "kill");
         assert_eq!(result.unwrap(), 1);
 
-        let result = KillBuiltin::parse_jobspec("%+", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%+", "kill");
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -632,7 +565,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job1);
         shell_state.job_table.borrow_mut().add_job(job2);
 
-        let result = KillBuiltin::parse_jobspec("%-", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%-", "kill");
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -642,7 +575,7 @@ mod tests {
         let job = Job::new(5, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
 
-        let result = KillBuiltin::parse_jobspec("%5", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%5", "kill");
         assert_eq!(result.unwrap(), 5);
     }
 
@@ -652,7 +585,7 @@ mod tests {
         let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
 
-        let result = KillBuiltin::parse_jobspec("%sleep", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%sleep", "kill");
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -662,7 +595,7 @@ mod tests {
         let job = Job::new(1, Some(1234), "grep pattern file &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
 
-        let result = KillBuiltin::parse_jobspec("%?pattern", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%?pattern", "kill");
         assert_eq!(result.unwrap(), 1);
     }
 

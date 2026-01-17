@@ -501,6 +501,95 @@ impl JobTable {
             self.current_job = Some(job_id);
         }
     }
+
+    /// Parse jobspec argument to job ID
+    ///
+    /// Supports:
+    /// - %n: Job number n
+    /// - %: Current job
+    /// - %+: Current job
+    /// - %-: Previous job
+    /// - %string: Job whose command begins with string
+    /// - %?string: Job whose command contains string
+    /// - n: Direct job number (without % prefix)
+    ///
+    /// # Arguments
+    ///
+    /// * `jobspec` - The jobspec string to parse
+    /// * `builtin_name` - Name of the builtin command (for error messages)
+    ///
+    /// # Returns
+    ///
+    /// The job ID on success, or an error message on failure
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rush_sh::state::{Job, JobTable};
+    ///
+    /// let mut job_table = JobTable::new();
+    /// let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
+    /// job_table.add_job(job);
+    ///
+    /// // Parse by number
+    /// assert_eq!(job_table.parse_jobspec("%1", "fg").unwrap(), 1);
+    /// assert_eq!(job_table.parse_jobspec("1", "fg").unwrap(), 1);
+    ///
+    /// // Parse current job
+    /// assert_eq!(job_table.parse_jobspec("%", "fg").unwrap(), 1);
+    /// assert_eq!(job_table.parse_jobspec("%+", "fg").unwrap(), 1);
+    /// ```
+    pub fn parse_jobspec(&self, jobspec: &str, builtin_name: &str) -> Result<usize, String> {
+        if jobspec.starts_with('%') {
+            let spec = &jobspec[1..];
+            
+            // %+ or % - current job
+            if spec.is_empty() || spec == "+" {
+                return self
+                    .get_current_job()
+                    .ok_or_else(|| format!("{}: no current job", builtin_name));
+            }
+            
+            // %- - previous job
+            if spec == "-" {
+                return self
+                    .get_previous_job()
+                    .ok_or_else(|| format!("{}: no previous job", builtin_name));
+            }
+            
+            // %?string - job whose command contains string
+            if let Some(search_str) = spec.strip_prefix('?') {
+                for job in self.get_all_jobs() {
+                    // Skip completed jobs when matching by command
+                    if job.is_active() && job.command.contains(search_str) {
+                        return Ok(job.job_id);
+                    }
+                }
+                return Err(format!("{}: {}: no such job", builtin_name, jobspec));
+            }
+            
+            // %string - job whose command begins with string
+            // Try to parse as number first
+            if let Ok(job_id) = spec.parse::<usize>() {
+                return Ok(job_id);
+            }
+            
+            // Otherwise, search for command prefix
+            for job in self.get_all_jobs() {
+                // Skip completed jobs when matching by command prefix
+                if job.is_active() && job.command.starts_with(spec) {
+                    return Ok(job.job_id);
+                }
+            }
+            
+            Err(format!("{}: {}: no such job", builtin_name, jobspec))
+        } else {
+            // Direct job number
+            jobspec
+                .parse::<usize>()
+                .map_err(|_| format!("{}: {}: no such job", builtin_name, jobspec))
+        }
+    }
 }
 
 impl Default for JobTable {

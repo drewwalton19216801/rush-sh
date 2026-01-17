@@ -6,74 +6,6 @@ use std::io::Write;
 pub struct JobsBuiltin;
 
 impl JobsBuiltin {
-    /// Parse jobspec argument to job ID
-    ///
-    /// Supports:
-    /// - %n: Job number n
-    /// - %: Current job
-    /// - %+: Current job
-    /// - %-: Previous job
-    /// - %string: Job whose command begins with string
-    /// - %?string: Job whose command contains string
-    /// - n: Job number n (direct number)
-    fn parse_jobspec(jobspec: &str, shell_state: &ShellState) -> Result<usize, String> {
-        if jobspec.starts_with('%') {
-            let spec = &jobspec[1..];
-            
-            // %+ or % - current job
-            if spec.is_empty() || spec == "+" {
-                return shell_state
-                    .job_table
-                    .borrow()
-                    .get_current_job()
-                    .ok_or_else(|| "jobs: no current job".to_string());
-            }
-            
-            // %- - previous job
-            if spec == "-" {
-                return shell_state
-                    .job_table
-                    .borrow()
-                    .get_previous_job()
-                    .ok_or_else(|| "jobs: no previous job".to_string());
-            }
-            
-            // %?string - job whose command contains string
-            if let Some(search_str) = spec.strip_prefix('?') {
-                let job_table = shell_state.job_table.borrow();
-                for job in job_table.get_all_jobs() {
-                    // Skip completed jobs when matching by command
-                    if job.is_active() && job.command.contains(search_str) {
-                        return Ok(job.job_id);
-                    }
-                }
-                return Err(format!("jobs: {}: no such job", jobspec));
-            }
-            
-            // %string - job whose command begins with string
-            // Try to parse as number first
-            if let Ok(job_id) = spec.parse::<usize>() {
-                return Ok(job_id);
-            }
-            
-            // Otherwise, search for command prefix
-            let job_table = shell_state.job_table.borrow();
-            for job in job_table.get_all_jobs() {
-                // Skip completed jobs when matching by command prefix
-                if job.is_active() && job.command.starts_with(spec) {
-                    return Ok(job.job_id);
-                }
-            }
-            
-            Err(format!("jobs: {}: no such job", jobspec))
-        } else {
-            // Direct job number
-            jobspec
-                .parse::<usize>()
-                .map_err(|_| format!("jobs: {}: no such job", jobspec))
-        }
-    }
-
     /// Format job marker (+ for current, - for previous, space otherwise)
     fn get_job_marker(job_id: usize, shell_state: &ShellState) -> char {
         let job_table = shell_state.job_table.borrow();
@@ -278,7 +210,7 @@ impl Builtin for JobsBuiltin {
                 }
             } else {
                 // Parse jobspec
-                match Self::parse_jobspec(arg, shell_state) {
+                match shell_state.job_table.borrow().parse_jobspec(arg, "jobs") {
                     Ok(job_id) => jobspecs.push(job_id),
                     Err(e) => {
                         let _ = writeln!(output_writer, "{}", e);
@@ -801,7 +733,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 1 (sleep)
-        let result = JobsBuiltin::parse_jobspec("%sleep", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%sleep", "jobs");
         assert_eq!(result.unwrap(), 1);
     }
 
@@ -816,7 +748,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 2 (contains "pattern")
-        let result = JobsBuiltin::parse_jobspec("%?pattern", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%?pattern", "jobs");
         assert_eq!(result.unwrap(), 2);
     }
 
@@ -835,7 +767,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 2 (running), not job 1 (completed)
-        let result = JobsBuiltin::parse_jobspec("%sleep", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%sleep", "jobs");
         assert_eq!(result.unwrap(), 2);
     }
 
@@ -854,7 +786,7 @@ mod tests {
         shell_state.job_table.borrow_mut().add_job(job2);
 
         // Should match job 2 (running), not job 1 (completed)
-        let result = JobsBuiltin::parse_jobspec("%?pattern", &shell_state);
+        let result = shell_state.job_table.borrow().parse_jobspec("%?pattern", "jobs");
         assert_eq!(result.unwrap(), 2);
     }
 
