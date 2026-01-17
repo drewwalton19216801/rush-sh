@@ -72,7 +72,8 @@ pub fn execute_async(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 // Check if it's a builtin command
                 if crate::builtins::is_builtin(&expanded_args[0]) {
                     // Execute builtin in background by forking
-                    return execute_builtin_async(cmd, shell_state);
+                    // Pass the already-expanded arguments to prevent double expansion
+                    return execute_builtin_async(cmd, shell_state, Some(expanded_args));
                 }
             }
 
@@ -185,16 +186,26 @@ fn execute_compound_async(ast: Ast, description: &str, shell_state: &mut ShellSt
 ///
 /// * `cmd` - The shell command to execute (must be a builtin)
 /// * `shell_state` - Mutable reference to the shell state
+/// * `pre_expanded_args` - Optional pre-expanded arguments to avoid double expansion
 ///
 /// # Returns
 ///
 /// 0 on success, 1 on error
-pub fn execute_builtin_async(cmd: &ShellCommand, shell_state: &mut ShellState) -> i32 {
-    // Expand arguments
-    let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-    let expanded_args = match expand_wildcards(&var_expanded_args, shell_state) {
-        Ok(args) => args,
-        Err(_) => return 1,
+pub fn execute_builtin_async(
+    cmd: &ShellCommand,
+    shell_state: &mut ShellState,
+    pre_expanded_args: Option<Vec<String>>,
+) -> i32 {
+    // Use pre-expanded arguments if provided, otherwise expand them here
+    let expanded_args = if let Some(args) = pre_expanded_args {
+        args
+    } else {
+        // Expand arguments
+        let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
+        match expand_wildcards(&var_expanded_args, shell_state) {
+            Ok(args) => args,
+            Err(_) => return 1,
+        }
     };
 
     if expanded_args.is_empty() {
