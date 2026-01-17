@@ -244,9 +244,6 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - `readonly` (mark variables as read-only)
     - `umask` (set file creation mask)
 
-2. **Known Issues**
-    - **Kill builtin negative PID parsing**: The `kill` builtin cannot properly handle negative PIDs (process groups) when they appear as command-line arguments starting with `-`. The argument parser interprets `-999999` as a signal specification rather than a negative PID. This affects process group signaling functionality. Workaround: Use `-s SIGNAL` format explicitly, but even this doesn't fully resolve the issue. Needs command-line parsing refactor to support `--` separator or special handling for negative numbers after signal specification.
-
 ### Medium Priority
 
 1. **Advanced Features**
