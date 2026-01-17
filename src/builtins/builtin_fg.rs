@@ -136,19 +136,6 @@ impl FgBuiltin {
             let mut status: libc::c_int = 0;
             
             // Use WUNTRACED to detect if the job is stopped again
-            // Retry on EINTR (interrupted system call)
-            // SAFETY: waitpid is a standard POSIX function for waiting on child processes
-            let result = loop {
-                let res = unsafe {
-                    libc::waitpid(*pid as libc::pid_t, &mut status, libc::WUNTRACED)
-                };
-                
-                if res == -1 {
-        // Wait for all PIDs in the job
-        for pid in &job.pids {
-            let mut status: libc::c_int = 0;
-            
-            // Use WUNTRACED to detect if the job is stopped again
             // SAFETY: waitpid is a standard POSIX function for waiting on child processes
             let result = loop {
                 let res = unsafe {
