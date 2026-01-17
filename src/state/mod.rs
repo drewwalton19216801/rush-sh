@@ -143,6 +143,8 @@ pub struct ShellState {
     pub terminal_fd: Option<RawFd>,
     /// PID of the last background process started ($!)
     pub last_background_pid: Option<u32>,
+    /// File mode creation mask (umask value)
+    pub umask: u32,
 }
 
 impl ShellState {
@@ -239,6 +241,15 @@ impl ShellState {
                 None
             },
             last_background_pid: None,
+            umask: {
+                // Get current process umask
+                let mask = unsafe {
+                    let current = libc::umask(0o022);
+                    libc::umask(current);
+                    current
+                };
+                mask as u32
+            },
         }
     }
 
