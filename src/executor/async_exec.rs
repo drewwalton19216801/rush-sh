@@ -40,8 +40,18 @@ pub fn execute_async(ast: Ast, shell_state: &mut ShellState) -> i32 {
                 let cmd = &commands[0];
 
                 // Handle compound commands (subshells, etc.)
-                if cmd.compound.is_some() {
-                    return execute_external_async(&commands, shell_state);
+                if let Some(ref compound) = cmd.compound {
+                    let description = match compound.as_ref() {
+                        Ast::Subshell { .. } => "subshell",
+                        Ast::CommandGroup { .. } => "command group",
+                        Ast::If { .. } => "if statement",
+                        Ast::For { .. } => "for loop",
+                        Ast::While { .. } => "while loop",
+                        Ast::Until { .. } => "until loop",
+                        Ast::Case { .. } => "case statement",
+                        _ => "compound command",
+                    };
+                    return execute_compound_async(*compound.clone(), description, shell_state);
                 }
 
                 if cmd.args.is_empty() {
