@@ -144,22 +144,29 @@ impl FgBuiltin {
                 };
                 
                 if res == -1 {
+        // Wait for all PIDs in the job
+        for pid in &job.pids {
+            let mut status: libc::c_int = 0;
+            
+            // Use WUNTRACED to detect if the job is stopped again
+            // SAFETY: waitpid is a standard POSIX function for waiting on child processes
+            let result = loop {
+                let res = unsafe {
+                    libc::waitpid(*pid as libc::pid_t, &mut status, libc::WUNTRACED)
+                };
+                if res == -1 {
                     let err = std::io::Error::last_os_error();
-                    // Retry on EINTR, break on other errors
                     if err.raw_os_error() == Some(libc::EINTR) {
                         continue;
                     }
-                    break res;
+                    // ECHILD means the process doesn't exist or isn't a child
+                    if err.raw_os_error() != Some(libc::ECHILD) {
+                        eprintln!("fg: waitpid failed: {}", err);
+                    }
                 }
                 break res;
             };
-
             if result == -1 {
-                let err = std::io::Error::last_os_error();
-                // ECHILD means the process doesn't exist or isn't a child
-                if err.raw_os_error() != Some(libc::ECHILD) {
-                    eprintln!("fg: waitpid failed: {}", err);
-                }
                 continue;
             }
 
