@@ -283,6 +283,111 @@ pub fn execute_builtin_async(
     }
 }
 
+/// Execute a builtin command as part of a background pipeline.
+///
+/// This function forks a child process to execute the builtin command,
+/// properly handling pipeline I/O and process group management.
+///
+/// # Arguments
+///
+/// * `expanded_args` - The already-expanded command arguments
+/// * `redirections` - Redirections to apply to the builtin command
+/// * `stdin` - Optional stdin file from previous pipeline stage
+/// * `is_first` - Whether this is the first command in the pipeline
+/// * `is_last` - Whether this is the last command in the pipeline
+/// * `pgid` - Optional process group ID to join
+/// * `shell_state` - Mutable reference to the shell state
+///
+/// # Returns
+///
+/// Result containing (PID, optional stdout file for next stage) or error message
+fn execute_builtin_in_background_pipeline(
+    expanded_args: &[String],
+    redirections: &[crate::parser::Redirection],
+    stdin: Option<File>,
+    is_first: bool,
+    is_last: bool,
+    pgid: Option<u32>,
+    shell_state: &mut ShellState,
+) -> Result<(u32, Option<File>), String> {
+    use std::os::unix::io::AsRawFd;
+
+    // Create pipe for stdout if not last command
+    let (read_fd, write_fd) = if !is_last {
+        let (reader, writer) =
+            std::io::pipe().map_err(|e| format!("Failed to create pipe: {}", e))?;
+        (Some(reader), Some(writer))
+    } else {
+        (None, None)
+    };
+
+    unsafe {
+        let pid = libc::fork();
+
+        if pid < 0 {
+            return Err("Failed to fork for builtin command".to_string());
+        }
+        if pid == 0 {
+            // Child process
+
+            // Set process group
+            let child_pid = libc::getpid();
+            if let Some(group_id) = pgid {
+                libc::setpgid(child_pid, group_id as i32);
+            } else {
+                libc::setpgid(child_pid, child_pid);
+            }
+
+            // Setup stdin
+            if let Some(stdin_file) = stdin {
+                libc::dup2(stdin_file.as_raw_fd(), 0);
+            } else if is_first {
+                // First command - redirect stdin to /dev/null
+                let dev_null = libc::open(b"/dev/null\0".as_ptr() as *const i8, libc::O_RDONLY);
+                if dev_null >= 0 {
+                    libc::dup2(dev_null, 0);
+                    libc::close(dev_null);
+                }
+            }
+
+            // Setup stdout
+            if let Some(writer) = write_fd {
+                libc::dup2(writer.as_raw_fd(), 1);
+            }
+
+            // Apply redirections
+            if let Err(e) = super::redirection::apply_redirections(redirections, shell_state, None)
+            {
+                eprintln!("Redirection error: {}", e);
+                libc::_exit(1);
+            }
+
+            // Execute the builtin
+            let temp_cmd = ShellCommand {
+                args: expanded_args.to_vec(),
+                redirections: redirections.to_vec(),
+                compound: None,
+            };
+
+            let exit_code = crate::builtins::execute_builtin(&temp_cmd, shell_state, None);
+
+            // Exit the child process
+            libc::_exit(exit_code);
+        }
+
+        let pid_u32 = pid as u32;
+        drop(write_fd);
+
+        let next_stdout = if let Some(reader) = read_fd {
+            Some(File::from_raw_fd(reader.into_raw_fd()))
+        } else {
+            None
+        };
+
+        Ok((pid_u32, next_stdout))
+    }
+}
+
 /// Execute a compound command as part of a background pipeline.
 ///
 /// This function forks a child process to execute the compound command,
@@ -469,6 +574,46 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
         };
 
         if expanded_args.is_empty() {
+            continue;
+        }
+
+        // Check if it's a builtin command
+        if crate::builtins::is_builtin(&expanded_args[0]) {
+            // Execute builtin in background pipeline by forking
+            match execute_builtin_in_background_pipeline(
+                &expanded_args,
+                &cmd.redirections,
+                previous_stdout.take(),
+                i == 0,
+                is_last,
+                pgid,
+                shell_state,
+            ) {
+                Ok((pid, stdout)) => {
+                    pids.push(pid);
+
+                    // Set pgid to first process's PID
+                    if pgid.is_none() {
+                        pgid = Some(pid);
+                    }
+
+                    // Save stdout for next command if not last
+                    if !is_last {
+                        previous_stdout = stdout;
+                    }
+                }
+                Err(e) => {
+                    if shell_state.colors_enabled {
+                        eprintln!(
+                            "{}Error executing builtin command in pipeline: {}\x1b[0m",
+                            shell_state.color_scheme.error, e
+                        );
+                    } else {
+                        eprintln!("Error executing builtin command in pipeline: {}", e);
+                    }
+                    return 1;
+                }
+            }
             continue;
         }
 
