@@ -499,6 +499,26 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
             } else {
                 eprintln!("Redirection error: {}", e);
             }
+
+            // Cleanup: kill any already-spawned processes
+            unsafe {
+                if let Some(group_id) = pgid {
+                    // Kill the entire process group
+                    libc::killpg(group_id as i32, libc::SIGKILL);
+                } else {
+                    // Kill individual processes
+                    for &pid in &pids {
+                        libc::kill(pid as i32, libc::SIGKILL);
+                    }
+                }
+            }
+
+            // Close previous_stdout if present
+            drop(previous_stdout);
+
+            // Clear pids and pgid so no job entry is created
+            pids.clear();
+
             return 1;
         }
 
@@ -551,6 +571,26 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
                 } else {
                     eprintln!("Error spawning command '{}': {}", expanded_args[0], e);
                 }
+
+                // Cleanup: kill any already-spawned processes
+                unsafe {
+                    if let Some(group_id) = pgid {
+                        // Kill the entire process group
+                        libc::killpg(group_id as i32, libc::SIGKILL);
+                    } else {
+                        // Kill individual processes
+                        for &pid in &pids {
+                            libc::kill(pid as i32, libc::SIGKILL);
+                        }
+                    }
+                }
+
+                // Close previous_stdout if present
+                drop(previous_stdout);
+
+                // Clear pids and pgid so no job entry is created
+                pids.clear();
+
                 return 1;
             }
         }
