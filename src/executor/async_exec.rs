@@ -472,16 +472,33 @@ fn execute_compound_in_background_pipeline(
                 }
             }
 
-            // Setup stdout
-            if let Some(writer) = write_fd {
-                libc::dup2(writer.as_raw_fd(), 1);
-            }
+            // Setup stdout and save the pipe write end fd if present
+            let pipe_write_fd = if let Some(writer) = write_fd {
+                let write_raw_fd = writer.into_raw_fd();
+                libc::dup2(write_raw_fd, 1);
+                Some(write_raw_fd)
+            } else {
+                None
+            };
 
             // Apply redirections
             if let Err(e) = super::redirection::apply_redirections(redirections, shell_state, None)
             {
                 eprintln!("Redirection error: {}", e);
                 libc::_exit(1);
+            }
+
+            // If stdout was redirected, close the pipe write end to prevent blocking downstream
+            if let Some(pipe_fd) = pipe_write_fd {
+                // Check if fd 1 was redirected (either to a file or closed)
+                let fd_table = shell_state.fd_table.borrow();
+                let stdout_redirected = fd_table.is_open(1) || fd_table.is_closed(1);
+                drop(fd_table);
+                
+                if stdout_redirected {
+                    // Close the pipe write end since stdout is no longer using it
+                    libc::close(pipe_fd);
+                }
             }
 
             // Execute the compound command
