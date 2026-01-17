@@ -190,10 +190,10 @@ fn test_job_table_remove_job_updates_current() {
     // Remove current job (3)
     job_table.remove_job(3);
     
-    // Current should become previous (2), and previous should be cleared
-    // But since there's still job 2, it should find the highest ID
+    // After removing job 3, jobs 1 and 2 remain
+    // Current should be 2 (highest ID), previous should be 1 (second highest)
     assert_eq!(job_table.get_current_job(), Some(2));
-    assert_eq!(job_table.get_previous_job(), None);
+    assert_eq!(job_table.get_previous_job(), Some(1));
 }
 
 #[test]

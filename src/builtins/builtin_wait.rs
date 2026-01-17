@@ -13,34 +13,17 @@ impl WaitBuiltin {
     /// - %: Current job
     /// - %+: Current job
     /// - %-: Previous job
+    /// - %string: Job whose command begins with string
+    /// - %?string: Job whose command contains string
     /// - n: Process ID n (direct number)
     fn parse_argument(arg: &str, shell_state: &ShellState) -> Result<WaitTarget, String> {
-        if let Some(spec) = arg.strip_prefix('%') {
-            // Jobspec
-            // %+ or % - current job
-            if spec.is_empty() || spec == "+" {
-                let job_id = shell_state
-                    .job_table
-                    .borrow()
-                    .get_current_job()
-                    .ok_or_else(|| "wait: no current job".to_string())?;
-                return Ok(WaitTarget::JobId(job_id));
-            }
-            
-            // %- - previous job
-            if spec == "-" {
-                let job_id = shell_state
-                    .job_table
-                    .borrow()
-                    .get_previous_job()
-                    .ok_or_else(|| "wait: no previous job".to_string())?;
-                return Ok(WaitTarget::JobId(job_id));
-            }
-            
-            // %n - job number
-            spec.parse::<usize>()
-                .map(WaitTarget::JobId)
-                .map_err(|_| format!("wait: {}: no such job", arg))
+        if arg.starts_with('%') {
+            // Jobspec - delegate to JobTable::parse_jobspec
+            let job_id = shell_state
+                .job_table
+                .borrow()
+                .parse_jobspec(arg, "wait")?;
+            Ok(WaitTarget::JobId(job_id))
         } else {
             // Direct PID
             arg.parse::<u32>()
@@ -89,8 +72,21 @@ impl WaitBuiltin {
         }
 
         // Use waitpid to wait for the process
+        // Retry on EINTR (interrupted system call)
         let mut status: libc::c_int = 0;
-        let result = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, 0) };
+        let result = loop {
+            let res = unsafe { libc::waitpid(pid as libc::pid_t, &mut status, 0) };
+            
+            if res == -1 {
+                let err = std::io::Error::last_os_error();
+                // Retry on EINTR, break on other errors
+                if err.raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                break res;
+            }
+            break res;
+        };
 
         if result == -1 {
             let err = std::io::Error::last_os_error();

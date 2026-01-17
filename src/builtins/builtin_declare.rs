@@ -287,7 +287,7 @@ fn format_ast_body(ast: &Ast, indent_level: usize) -> String {
             format!("! {}", format_ast_body(command, 0).trim())
         }
         Ast::AsyncCommand { command } => {
-            format!("{} &", format_ast_body(command, 0).trim())
+            format!("{} &", format_ast_body(command, indent_level).trim_end())
         }
     }
 }

@@ -407,7 +407,7 @@ fn handle_sigchld(shell_state: &mut ShellState) {
 /// ```
 pub fn check_background_jobs(shell_state: &mut ShellState) {
     // Collect job IDs and their status to avoid borrowing issues
-    let jobs_to_notify: Vec<(usize, crate::state::JobStatus, String, bool)> = {
+    let jobs_to_notify: Vec<(usize, crate::state::JobStatus, String, char)> = {
         if let Ok(job_table) = shell_state.job_table.try_borrow() {
             let current_job = job_table.get_current_job();
             let previous_job = job_table.get_previous_job();
@@ -424,17 +424,17 @@ pub fn check_background_jobs(shell_state: &mut ShellState) {
                     let is_current = Some(job.job_id) == current_job;
                     let is_previous = Some(job.job_id) == previous_job;
                     let marker = if is_current {
-                        "+"
+                        '+'
                     } else if is_previous {
-                        "-"
+                        '-'
                     } else {
-                        " "
+                        ' '
                     };
                     (
                         job.job_id,
                         job.status.clone(),
                         job.command.clone(),
-                        marker == "+",
+                        marker,
                     )
                 })
                 .collect()
@@ -445,9 +445,7 @@ pub fn check_background_jobs(shell_state: &mut ShellState) {
     
     // Print notifications and collect completed job IDs
     let mut completed_jobs = Vec::new();
-    for (job_id, status, command, is_current) in jobs_to_notify {
-        let marker = if is_current { "+" } else { " " };
-        
+    for (job_id, status, command, marker) in jobs_to_notify {
         match status {
             crate::state::JobStatus::Done(exit_code) => {
                 if exit_code == 0 {
@@ -455,7 +453,7 @@ pub fn check_background_jobs(shell_state: &mut ShellState) {
                 } else {
                     println!("[{}]{} Done({})    {}", job_id, marker, exit_code, command);
                 }
-                completed_jobs.push(job_id);
+                completed_jobs.push((job_id, marker));
             }
             crate::state::JobStatus::Stopped => {
                 println!("[{}]{} Stopped {}", job_id, marker, command);
@@ -466,7 +464,7 @@ pub fn check_background_jobs(shell_state: &mut ShellState) {
     
     // Remove completed jobs from the table
     if let Ok(mut job_table) = shell_state.job_table.try_borrow_mut() {
-        for job_id in completed_jobs {
+        for (job_id, _marker) in completed_jobs {
             job_table.remove_job(job_id);
         }
     }

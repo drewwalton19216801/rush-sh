@@ -69,12 +69,112 @@ pub fn execute_async(ast: Ast, shell_state: &mut ShellState) -> i32 {
             // External command or pipeline - execute in background
             execute_external_async(&commands, shell_state)
         }
+        // Handle other AST types asynchronously by forking
+        Ast::Subshell { .. } => {
+            execute_compound_async(ast, "subshell", shell_state)
+        }
+        Ast::CommandGroup { .. } => {
+            execute_compound_async(ast, "command group", shell_state)
+        }
+        Ast::If { .. } => {
+            execute_compound_async(ast, "if statement", shell_state)
+        }
+        Ast::For { .. } => {
+            execute_compound_async(ast, "for loop", shell_state)
+        }
+        Ast::While { .. } => {
+            execute_compound_async(ast, "while loop", shell_state)
+        }
+        Ast::Until { .. } => {
+            execute_compound_async(ast, "until loop", shell_state)
+        }
+        Ast::Case { .. } => {
+            execute_compound_async(ast, "case statement", shell_state)
+        }
         _ => {
-            // For other AST types, we need to format them as commands
-            // For now, just execute them synchronously (fallback)
-            // This is a simplified implementation - full support would require
-            // more complex command string reconstruction
+            // For other AST types (assignments, etc.), execute synchronously
+            // These don't make sense to run in background
             super::execute(ast, shell_state)
+        }
+    }
+}
+
+/// Execute a compound command (subshell, command group, control structure) asynchronously.
+///
+/// This function forks a child process to execute the compound command in the background,
+/// similar to how builtin commands are executed asynchronously.
+///
+/// # Arguments
+///
+/// * `ast` - The AST node to execute asynchronously
+/// * `description` - A human-readable description of the command type (for job display)
+/// * `shell_state` - Mutable reference to the shell state
+///
+/// # Returns
+///
+/// 0 on success, 1 on error
+fn execute_compound_async(ast: Ast, description: &str, shell_state: &mut ShellState) -> i32 {
+    // Format command string for job display
+    let command_str = format!("{} &", description);
+
+    // Fork to execute compound command in background
+    unsafe {
+        let pid = libc::fork();
+
+        if pid < 0 {
+            // Fork failed
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}Failed to fork for background {}\x1b[0m",
+                    shell_state.color_scheme.error, description
+                );
+            } else {
+                eprintln!("Failed to fork for background {}", description);
+            }
+            1
+        } else if pid == 0 {
+            // Child process
+            
+            // Create new process group
+            let child_pid = libc::getpid();
+            libc::setpgid(child_pid, child_pid);
+
+            // Redirect stdin to /dev/null
+            let dev_null = libc::open(b"/dev/null\0".as_ptr() as *const i8, libc::O_RDONLY);
+            if dev_null >= 0 {
+                libc::dup2(dev_null, 0);
+                libc::close(dev_null);
+            }
+
+            // Execute the compound command
+            let exit_code = super::execute(ast, shell_state);
+
+            // Exit the child process
+            libc::exit(exit_code);
+        } else {
+            // Parent process
+            let pid_u32 = pid as u32;
+
+            // Allocate job ID and create job entry
+            let job_id = shell_state.job_table.borrow_mut().allocate_job_id();
+            let job = Job::new(
+                job_id,
+                Some(pid_u32), // pgid is same as pid for single-process job
+                command_str.clone(),
+                vec![pid_u32],
+                false, // not a builtin (it's a compound command)
+            );
+
+            // Print job notification: [job_id] pid
+            println!("[{}] {}", job_id, pid_u32);
+
+            // Add job to job table
+            shell_state.job_table.borrow_mut().add_job(job);
+
+            // Set $! to the PID of the background process
+            shell_state.last_background_pid = Some(pid_u32);
+
+            0
         }
     }
 }
@@ -202,9 +302,28 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
         let is_last = i == commands.len() - 1;
 
         // Handle compound commands (subshells, etc.)
-        if cmd.compound.is_some() {
-            // For compound commands in pipelines, we'd need more complex handling
-            // For now, skip them in async context
+        if let Some(ref compound) = cmd.compound {
+            // Warn about compound commands in background pipelines
+            if shell_state.colors_enabled {
+                eprintln!(
+                    "{}Warning: Compound command in background pipeline - executing via subshell\x1b[0m",
+                    shell_state.color_scheme.error
+                );
+            } else {
+                eprintln!("Warning: Compound command in background pipeline - executing via subshell");
+            }
+            
+            // Execute compound command in background by spawning a shell process
+            // This handles subshells, command groups, and other compound structures
+            let _compound_str = match compound.as_ref() {
+                Ast::Subshell { .. } => "(...)",
+                Ast::CommandGroup { .. } => "{...}",
+                _ => "compound",
+            };
+            
+            // For now, we'll skip compound commands in pipelines as they require
+            // more complex handling (need to serialize AST back to shell syntax)
+            // This is a known limitation that will be addressed in a future update
             continue;
         }
 

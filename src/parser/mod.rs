@@ -823,6 +823,21 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                 }]);
             }
 
+            // Check if this subshell should be executed asynchronously (ends with &)
+            if i < tokens.len() && tokens[i] == Token::Ampersand {
+                i += 1; // Consume the &
+                subshell_ast = Ast::AsyncCommand {
+                    command: Box::new(subshell_ast),
+                };
+                commands.push(subshell_ast);
+                
+                // Skip semicolon or newline after async subshell
+                if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                    i += 1;
+                }
+                continue;
+            }
+
             // Handle operators after subshell (&&, ||, ;, newline)
             if i < tokens.len() && (tokens[i] == Token::And || tokens[i] == Token::Or) {
                 let operator = tokens[i].clone();
@@ -1044,6 +1059,21 @@ fn parse_commands_sequentially(tokens: &[Token]) -> Result<Ast, String> {
                     redirections,
                     compound: Some(Box::new(group_ast)),
                 }]);
+            }
+
+            // Check if this command group should be executed asynchronously (ends with &)
+            if i < tokens.len() && tokens[i] == Token::Ampersand {
+                i += 1; // Consume the &
+                group_ast = Ast::AsyncCommand {
+                    command: Box::new(group_ast),
+                };
+                commands.push(group_ast);
+                
+                // Skip semicolon or newline after async command group
+                if i < tokens.len() && (tokens[i] == Token::Newline || tokens[i] == Token::Semicolon) {
+                    i += 1;
+                }
+                continue;
             }
 
             // Handle operators after group (&&, ||, ;, newline)

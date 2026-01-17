@@ -244,6 +244,9 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - `readonly` (mark variables as read-only)
     - `umask` (set file creation mask)
 
+2. **Known Issues**
+    - **Kill builtin negative PID parsing**: The `kill` builtin cannot properly handle negative PIDs (process groups) when they appear as command-line arguments starting with `-`. The argument parser interprets `-999999` as a signal specification rather than a negative PID. This affects process group signaling functionality. Workaround: Use `-s SIGNAL` format explicitly, but even this doesn't fully resolve the issue. Needs command-line parsing refactor to support `--` separator or special handling for negative numbers after signal specification.
+
 ### Medium Priority
 
 1. **Advanced Features**
@@ -258,7 +261,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ **Lexer tests** (tokenization, expansion, quoting, arithmetic, parameter expansion)
 - ✅ **Parser tests** (AST construction, control structures, if/elif/else, case statements)
 - ✅ **Executor tests** (command execution, pipelines, redirections, built-in commands)
-- ✅ **Built-in tests** (all 27 implemented commands with comprehensive coverage)
+- ✅ **Built-in tests** (all 32 implemented commands with comprehensive coverage)
 - ✅ **Integration tests** (end-to-end scenarios, variable expansion, control structures)
 - ✅ **Arithmetic expansion tests** (operators, precedence, variables, error handling)
 - ✅ **Parameter expansion tests** (all modifiers, pattern matching, indirect expansion, edge cases)
@@ -285,13 +288,13 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 ## Compliance Metrics
 
-### Estimated Current Compliance: ~97%
+### Estimated Current Compliance: ~96%
 
 ### Breakdown by Category
 
 - **Basic Execution**: 95% ✅
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while/until loops, functions with return, subshells, command grouping implemented)
-- **Built-in Commands**: 94% ✅ (32 built-ins implemented out of 34 POSIX required, including critical `set`, `times`, and job control builtins)
+- **Built-in Commands**: 89% ✅ (32 built-ins implemented out of 36 POSIX required, including critical `set`, `times`, and job control builtins)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)
 - **Job Control**: 100% ✅ (complete implementation with bg, fg, jobs, kill, wait, &, $!, and smart jobspec matching)

@@ -63,9 +63,16 @@ impl FgBuiltin {
 
             // If the job was stopped, send SIGCONT to resume it
             if job.status == JobStatus::Stopped {
-                for pid in &job.pids {
-                    // SAFETY: kill is a standard POSIX function; we're sending SIGCONT to resume the process
-                    let _ = unsafe { libc::kill(*pid as libc::pid_t, libc::SIGCONT) };
+                // Prefer signaling the process group if available
+                if let Some(pgid) = job.pgid {
+                    // SAFETY: kill is a standard POSIX function; we're sending SIGCONT to the process group
+                    let _ = unsafe { libc::kill(-(pgid as libc::pid_t), libc::SIGCONT) };
+                } else {
+                    // Fall back to signaling each PID individually
+                    for pid in &job.pids {
+                        // SAFETY: kill is a standard POSIX function; we're sending SIGCONT to resume the process
+                        let _ = unsafe { libc::kill(*pid as libc::pid_t, libc::SIGCONT) };
+                    }
                 }
                 // Update job status to running
                 shell_state.job_table.borrow_mut().get_job_mut(job_id).unwrap().update_status(JobStatus::Running);
@@ -92,9 +99,16 @@ impl FgBuiltin {
             // Non-interactive mode: just wait for the job
             // Send SIGCONT if stopped
             if job.status == JobStatus::Stopped {
-                for pid in &job.pids {
-                    // SAFETY: kill is a standard POSIX function; we're sending SIGCONT to resume the process
-                    let _ = unsafe { libc::kill(*pid as libc::pid_t, libc::SIGCONT) };
+                // Prefer signaling the process group if available
+                if let Some(pgid) = job.pgid {
+                    // SAFETY: kill is a standard POSIX function; we're sending SIGCONT to the process group
+                    let _ = unsafe { libc::kill(-(pgid as libc::pid_t), libc::SIGCONT) };
+                } else {
+                    // Fall back to signaling each PID individually
+                    for pid in &job.pids {
+                        // SAFETY: kill is a standard POSIX function; we're sending SIGCONT to resume the process
+                        let _ = unsafe { libc::kill(*pid as libc::pid_t, libc::SIGCONT) };
+                    }
                 }
                 shell_state.job_table.borrow_mut().get_job_mut(job_id).unwrap().update_status(JobStatus::Running);
             }
@@ -122,9 +136,22 @@ impl FgBuiltin {
             let mut status: libc::c_int = 0;
             
             // Use WUNTRACED to detect if the job is stopped again
+            // Retry on EINTR (interrupted system call)
             // SAFETY: waitpid is a standard POSIX function for waiting on child processes
-            let result = unsafe {
-                libc::waitpid(*pid as libc::pid_t, &mut status, libc::WUNTRACED)
+            let result = loop {
+                let res = unsafe {
+                    libc::waitpid(*pid as libc::pid_t, &mut status, libc::WUNTRACED)
+                };
+                
+                if res == -1 {
+                    let err = std::io::Error::last_os_error();
+                    // Retry on EINTR, break on other errors
+                    if err.raw_os_error() == Some(libc::EINTR) {
+                        continue;
+                    }
+                    break res;
+                }
+                break res;
             };
 
             if result == -1 {

@@ -49,9 +49,14 @@ impl BgBuiltin {
                     }
                 }
             }
-            
             // Update job status to running
-            shell_state.job_table.borrow_mut().get_job_mut(job_id).unwrap().update_status(JobStatus::Running);
+            if let Some(job) = shell_state.job_table.borrow_mut().get_job_mut(job_id) {
+                job.update_status(JobStatus::Running);
+            } else {
+                // Job disappeared between verification and update - silently continue
+                // This is a rare race condition that shouldn't cause failure
+            }
+            
             
             // Print job information: [job_id] command &
             let _ = writeln!(output_writer, "[{}] {}", job.job_id, job.command);

@@ -366,21 +366,20 @@ impl JobTable {
     pub fn remove_job(&mut self, job_id: usize) -> Option<Job> {
         let removed = self.jobs.remove(&job_id);
         
-        // Update current/previous job tracking if we removed one of them
-        if self.current_job == Some(job_id) {
-            self.current_job = self.previous_job;
+        // After removing a job, recompute current and previous from remaining jobs
+        let mut remaining_ids: Vec<usize> = self.jobs.keys().copied().collect();
+        remaining_ids.sort();
+        
+        if remaining_ids.is_empty() {
+            self.current_job = None;
             self.previous_job = None;
-            
-            // If there are other jobs, find the highest job ID as the new current
-            if !self.jobs.is_empty() {
-                let max_id = self.jobs.keys().max().copied();
-                if max_id != self.current_job {
-                    self.previous_job = self.current_job;
-                    self.current_job = max_id;
-                }
-            }
-        } else if self.previous_job == Some(job_id) {
+        } else if remaining_ids.len() == 1 {
+            self.current_job = Some(remaining_ids[0]);
             self.previous_job = None;
+        } else {
+            // Two or more jobs remain
+            self.current_job = Some(remaining_ids[remaining_ids.len() - 1]);
+            self.previous_job = Some(remaining_ids[remaining_ids.len() - 2]);
         }
         
         removed
