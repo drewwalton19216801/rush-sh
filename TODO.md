@@ -1,12 +1,12 @@
 # POSIX Compliance Progress for Rush Shell
 
-**Current Version**: 0.7.4
+**Current Version**: 0.8.0
 **POSIX Compliance Level**: ~96%
 **Test Coverage**: 499+ test functions across all components
 
 This document outlines the current progress toward full POSIX sh (IEEE Std 1003.1-2008) compliance for the Rush shell implementation. Features are categorized by POSIX specification sections and marked as implemented (✅), partially implemented (⚠️), or not implemented (❌).
 
-## Recently Completed Features (v0.7.4)
+## Recently Completed Features (v0.8.0)
 
 - ✅ **Job Control**: Complete background job management with comprehensive jobspec support
   - Background execution with `&` operator
