@@ -402,7 +402,7 @@ fn execute_external_async(commands: &[ShellCommand], shell_state: &mut ShellStat
     let mut pgid: Option<u32> = None;
 
     // Build command string for job display
-    let command_str = format_pipeline_string(commands, shell_state);
+    let command_str = format_pipeline_string(commands);
 
     for (i, cmd) in commands.iter().enumerate() {
         let is_last = i == commands.len() - 1;
@@ -655,12 +655,11 @@ fn format_command_string(args: &[String]) -> String {
 /// # Arguments
 ///
 /// * `commands` - The pipeline of commands
-/// * `shell_state` - Reference to shell state for variable expansion
 ///
 /// # Returns
 ///
 /// A formatted pipeline string
-fn format_pipeline_string(commands: &[ShellCommand], shell_state: &mut ShellState) -> String {
+fn format_pipeline_string(commands: &[ShellCommand]) -> String {
     let mut parts = Vec::new();
 
     for cmd in commands {
@@ -672,9 +671,8 @@ fn format_pipeline_string(commands: &[ShellCommand], shell_state: &mut ShellStat
                 _ => parts.push("compound".to_string()),
             }
         } else if !cmd.args.is_empty() {
-            // Expand variables for display
-            let var_expanded_args = expand_variables_in_args(&cmd.args, shell_state);
-            parts.push(var_expanded_args.join(" "));
+            // Use original unexpanded command as typed by the user
+            parts.push(cmd.args.join(" "));
         }
     }
 
@@ -693,8 +691,6 @@ mod tests {
 
     #[test]
     fn test_format_pipeline_string() {
-        let mut shell_state = ShellState::new();
-
         let commands = vec![
             ShellCommand {
                 args: vec!["ls".to_string(), "-la".to_string()],
@@ -709,15 +705,13 @@ mod tests {
         ];
 
         assert_eq!(
-            format_pipeline_string(&commands, &mut shell_state),
+            format_pipeline_string(&commands),
             "ls -la | grep txt"
         );
     }
 
     #[test]
     fn test_format_pipeline_with_subshell() {
-        let mut shell_state = ShellState::new();
-
         let commands = vec![
             ShellCommand {
                 args: vec![],
@@ -734,7 +728,7 @@ mod tests {
         ];
 
         assert_eq!(
-            format_pipeline_string(&commands, &mut shell_state),
+            format_pipeline_string(&commands),
             "(...) | grep txt"
         );
     }
