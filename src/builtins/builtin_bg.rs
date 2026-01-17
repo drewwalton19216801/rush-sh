@@ -140,9 +140,14 @@ impl Builtin for BgBuiltin {
 mod tests {
     use super::*;
     use crate::state::Job;
+    use std::sync::Mutex;
+
+    // Mutex to serialize tests that modify environment variables
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_bg_no_jobs() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -162,6 +167,7 @@ mod tests {
 
     #[test]
     fn test_bg_invalid_jobspec() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a job
@@ -185,6 +191,7 @@ mod tests {
 
     #[test]
     fn test_bg_completed_job() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a completed job
@@ -209,6 +216,7 @@ mod tests {
 
     #[test]
     fn test_bg_already_running_job() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a running job
@@ -234,6 +242,7 @@ mod tests {
 
     #[test]
     fn test_bg_stopped_job() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a stopped job
@@ -264,6 +273,7 @@ mod tests {
 
     #[test]
     fn test_bg_current_jobspec() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a stopped job as current
@@ -289,6 +299,7 @@ mod tests {
 
     #[test]
     fn test_bg_previous_jobspec() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add two jobs
@@ -316,6 +327,7 @@ mod tests {
 
     #[test]
     fn test_bg_no_current_job() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -335,6 +347,7 @@ mod tests {
 
     #[test]
     fn test_bg_no_previous_job() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add only one job (no previous)
@@ -358,6 +371,7 @@ mod tests {
 
     #[test]
     fn test_bg_direct_number_jobspec() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a stopped job
@@ -383,6 +397,7 @@ mod tests {
 
     #[test]
     fn test_bg_command_prefix_match() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add jobs with different commands
@@ -410,6 +425,7 @@ mod tests {
 
     #[test]
     fn test_bg_command_contains_match() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add jobs with different commands
@@ -437,6 +453,7 @@ mod tests {
 
     #[test]
     fn test_bg_multiple_jobspecs() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add multiple stopped jobs
@@ -477,6 +494,7 @@ mod tests {
 
     #[test]
     fn test_bg_multiple_jobspecs_with_invalid() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add one stopped job
@@ -505,6 +523,7 @@ mod tests {
 
     #[test]
     fn test_bg_pipeline_with_multiple_pids() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a stopped pipeline with multiple PIDs
@@ -540,6 +559,7 @@ mod tests {
 
     #[test]
     fn test_bg_no_arguments_uses_current_job() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a stopped job as current
@@ -569,6 +589,7 @@ mod tests {
 
     #[test]
     fn test_bg_mixed_jobspec_formats() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add multiple stopped jobs
@@ -608,6 +629,7 @@ mod tests {
 
     #[test]
     fn test_bg_command_prefix_skips_completed_jobs() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         
         // Add a completed job with "sleep" command
@@ -628,6 +650,7 @@ mod tests {
 
     #[test]
     fn test_bg_command_contains_skips_completed_jobs() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         
         // Add a completed job containing "pattern"
