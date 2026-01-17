@@ -223,6 +223,9 @@ pub fn execute_script(
     shell_state: &mut state::ShellState,
     shutdown_flag: Option<&AtomicBool>,
 ) {
+    // Maximum parenthesis depth to prevent overflow in subshell tracking
+    const MAX_PAREN_DEPTH: i32 = 100;
+    
     // Reset line number for script execution
     shell_state.current_line_number = 1;
     
@@ -239,6 +242,8 @@ pub fn execute_script(
     let mut while_depth = 0;
     let mut in_until_block = false;
     let mut until_depth = 0;
+    let mut in_subshell_block = false;
+    let mut paren_depth = 0;
 
     // Track quote state across lines to handle multiline strings correctly
     let mut in_double_quote = false;
@@ -358,13 +363,97 @@ pub fn execute_script(
             brace_depth -= line.matches('}').count() as i32;
         }
 
+        // Track parentheses for subshells (outside of quotes)
+        // Only track if line starts with '(' (after whitespace) to avoid function definitions
+        if keywords_active && !in_function_block {
+            let trimmed_line = line.trim_start();
+            
+            // Only start tracking if line begins with '(' (typical multi-line subshell pattern)
+            if trimmed_line.starts_with('(') && paren_depth == 0 {
+                in_subshell_block = true;
+            }
+            
+            // If we're tracking a subshell, count all parens on this line
+            if in_subshell_block || paren_depth > 0 {
+                let mut in_sq = false;
+                let mut in_dq = false;
+                let mut esc = false;
+                
+                for ch in line.chars() {
+                    if esc {
+                        esc = false;
+                        continue;
+                    }
+                    
+                    if in_sq {
+                        if ch == '\'' {
+                            in_sq = false;
+                        }
+                        continue;
+                    }
+                    
+                    if in_dq {
+                        if ch == '"' {
+                            in_dq = false;
+                        } else if ch == '\\' {
+                            esc = true;
+                        }
+                        continue;
+                    }
+                    
+                    match ch {
+                        '#' => {
+                            // Stop processing at unquoted, unescaped comment
+                            if !in_sq && !in_dq && !esc {
+                                break;
+                            }
+                        }
+                        '\'' => in_sq = true,
+                        '"' => in_dq = true,
+                        '\\' => esc = true,
+                        '(' => {
+                            // Only increment if below max depth
+                            if paren_depth < MAX_PAREN_DEPTH {
+                                paren_depth += 1;
+                            }
+                        }
+                        ')' => {
+                            // Only decrement if above 0
+                            if paren_depth > 0 {
+                                paren_depth -= 1;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         if !current_block.is_empty() {
             current_block.push('\n');
         }
         current_block.push_str(line);
 
         if keywords_active {
-            if (in_function_block || in_group_block) && brace_depth == 0 {
+            if in_subshell_block && paren_depth == 0 {
+                in_subshell_block = false;
+                // Only execute if we're not inside any other control structure
+                if !in_for_block
+                    && !in_while_block
+                    && !in_until_block
+                    && !in_function_block
+                    && !in_group_block
+                    && !in_case_block
+                    && !in_if_block
+                {
+                    execute_line(&current_block, shell_state);
+                    current_block.clear();
+
+                    if shell_state.exit_requested {
+                        break;
+                    }
+                }
+            } else if (in_function_block || in_group_block) && brace_depth == 0 {
                 in_function_block = false;
                 in_group_block = false;
                 execute_line(&current_block, shell_state);
@@ -441,6 +530,7 @@ pub fn execute_script(
                 && !in_for_block
                 && !in_while_block
                 && !in_until_block
+                && !in_subshell_block
             {
                 if let Some(delimiter) = line_contains_heredoc(&current_block, shell_state) {
                     i += 1;
