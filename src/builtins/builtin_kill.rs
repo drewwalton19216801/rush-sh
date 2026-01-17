@@ -232,7 +232,7 @@ impl Builtin for KillBuiltin {
                     return 1;
                 }
                 match args[arg_index].parse::<i32>() {
-                    Ok(num) if (1..=31).contains(&num) => signal = num,
+                    Ok(num) if num >= 0 => signal = num,
                     _ => {
                         let _ = writeln!(output_writer, "kill: {}: invalid signal specification", args[arg_index]);
                         return 1;
