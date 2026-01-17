@@ -402,3 +402,311 @@ fn test_job_builtin_vs_external() {
     
     assert_eq!(job_table.get_all_jobs().len(), 2);
 }
+
+// ============================================================================
+// Pipeline Job Status Tracking Tests
+// ============================================================================
+
+#[test]
+fn test_pipeline_job_single_process_backward_compatibility() {
+    // Single process jobs should work exactly as before
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
+    job_table.add_job(job);
+    
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Update the single PID to Done
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().exit_code, Some(0));
+}
+
+#[test]
+fn test_pipeline_job_two_processes_both_exit() {
+    // Test a simple two-process pipeline where both processes exit
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 5 | sleep 10 &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // First process exits
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    
+    // Job should still be Running because second process hasn't exited
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    assert!(job_table.get_job(1).unwrap().is_active());
+    
+    // Second process exits
+    job_table.update_job_status(1235, JobStatus::Done(0));
+    
+    // Now the job should be Done
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+    assert!(!job_table.get_job(1).unwrap().is_active());
+    assert_eq!(job_table.get_job(1).unwrap().exit_code, Some(0));
+}
+
+#[test]
+fn test_pipeline_job_first_exits_before_last() {
+    // Test pipeline where first process exits before last
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "cat file | grep pattern | wc -l &".to_string(),
+                       vec![1234, 1235, 1236], false);
+    job_table.add_job(job);
+    
+    // First process exits
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Second process exits
+    job_table.update_job_status(1235, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Third process exits
+    job_table.update_job_status(1236, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+}
+
+#[test]
+fn test_pipeline_job_last_exits_before_first() {
+    // Test pipeline where last process exits before first
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 10 | sleep 5 &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    // Last process exits first
+    job_table.update_job_status(1235, JobStatus::Done(0));
+    
+    // Job should still be Running
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    assert!(job_table.get_job(1).unwrap().is_active());
+    
+    // First process exits
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    
+    // Now the job should be Done
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+    assert!(!job_table.get_job(1).unwrap().is_active());
+}
+
+#[test]
+fn test_pipeline_job_exit_code_from_last_process() {
+    // POSIX behavior: pipeline exit code is the exit code of the last command
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "false | true &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    // First process exits with error
+    job_table.update_job_status(1234, JobStatus::Done(1));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Second process exits successfully
+    job_table.update_job_status(1235, JobStatus::Done(0));
+    
+    // Job exit code should be from the last process (0, not 1)
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().exit_code, Some(0));
+}
+
+#[test]
+fn test_pipeline_job_exit_code_last_process_fails() {
+    // Test that last process exit code is used even when it fails
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "true | false &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    // First process exits successfully
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Second process exits with error
+    job_table.update_job_status(1235, JobStatus::Done(1));
+    
+    // Job exit code should be from the last process (1, not 0)
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(1));
+    assert_eq!(job_table.get_job(1).unwrap().exit_code, Some(1));
+}
+
+#[test]
+fn test_pipeline_job_with_stopped_process() {
+    // Test pipeline where one process is stopped but another is still running
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 10 | sleep 20 &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    // First process is stopped (SIGTSTP), but second is still running
+    job_table.update_job_status(1234, JobStatus::Stopped);
+    
+    // Job should still be Running because second process is running
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    assert!(job_table.get_job(1).unwrap().is_active());
+    
+    // Now stop the second process too
+    job_table.update_job_status(1235, JobStatus::Stopped);
+    
+    // Now the job should be Stopped (all processes stopped)
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Stopped);
+    assert!(job_table.get_job(1).unwrap().is_active());
+}
+
+#[test]
+fn test_pipeline_job_stopped_then_resumed() {
+    // Test pipeline where a process is stopped and then resumed
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 10 | sleep 20 &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    // First process is stopped, but second is still running
+    job_table.update_job_status(1234, JobStatus::Stopped);
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // First process is resumed
+    job_table.update_job_status(1234, JobStatus::Running);
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Both processes exit
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1235, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+}
+
+#[test]
+fn test_pipeline_job_mixed_stopped_and_done() {
+    // Test pipeline where some processes are stopped and others are done
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 10 | sleep 20 | sleep 30 &".to_string(),
+                       vec![1234, 1235, 1236], false);
+    job_table.add_job(job);
+    
+    // First process exits
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Second process is stopped, but third is still running
+    job_table.update_job_status(1235, JobStatus::Stopped);
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    // Third process exits
+    job_table.update_job_status(1236, JobStatus::Done(0));
+    
+    // Now job should be Stopped (first is done, second is stopped, third is done)
+    // Since not all are done and at least one is stopped, job is Stopped
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Stopped);
+}
+
+#[test]
+fn test_pipeline_job_update_nonexistent_pid() {
+    // Test that updating a PID not in the job returns false
+    let mut job_table = JobTable::new();
+    
+    let job = Job::new(1, Some(1234), "sleep 10 | sleep 20 &".to_string(), vec![1234, 1235], false);
+    job_table.add_job(job);
+    
+    // Try to update a PID that doesn't belong to this job
+    let updated = job_table.update_job_status(9999, JobStatus::Done(0));
+    assert!(!updated);
+    
+    // Job status should be unchanged
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+}
+
+#[test]
+fn test_pipeline_job_large_pipeline() {
+    // Test a larger pipeline with 5 processes
+    let mut job_table = JobTable::new();
+    
+    let pids = vec![1234, 1235, 1236, 1237, 1238];
+    let job = Job::new(1, Some(1234), "cmd1 | cmd2 | cmd3 | cmd4 | cmd5 &".to_string(),
+                       pids.clone(), false);
+    job_table.add_job(job);
+    
+    // Exit processes in random order
+    job_table.update_job_status(1236, JobStatus::Done(0)); // 3rd
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1234, JobStatus::Done(0)); // 1st
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1238, JobStatus::Done(0)); // 5th (last)
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1237, JobStatus::Done(0)); // 4th
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1235, JobStatus::Done(0)); // 2nd (final)
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+}
+
+#[test]
+fn test_pipeline_job_multiple_pipelines() {
+    // Test multiple pipeline jobs running concurrently
+    let mut job_table = JobTable::new();
+    
+    let job1 = Job::new(1, Some(1234), "sleep 5 | sleep 10 &".to_string(), vec![1234, 1235], false);
+    let job2 = Job::new(2, Some(1236), "cat | grep | wc &".to_string(), vec![1236, 1237, 1238], false);
+    
+    job_table.add_job(job1);
+    job_table.add_job(job2);
+    
+    // Complete first job
+    job_table.update_job_status(1234, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Running);
+    assert_eq!(job_table.get_job(2).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1235, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(1).unwrap().status, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(2).unwrap().status, JobStatus::Running);
+    
+    // Complete second job
+    job_table.update_job_status(1236, JobStatus::Done(0));
+    job_table.update_job_status(1237, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(2).unwrap().status, JobStatus::Running);
+    
+    job_table.update_job_status(1238, JobStatus::Done(0));
+    assert_eq!(job_table.get_job(2).unwrap().status, JobStatus::Done(0));
+}
+
+#[test]
+fn test_pipeline_job_update_pid_status_directly() {
+    // Test the update_pid_status method directly on a Job
+    let mut job = Job::new(1, Some(1234), "sleep 5 | sleep 10 &".to_string(), vec![1234, 1235], false);
+    
+    assert_eq!(job.status, JobStatus::Running);
+    
+    // Update first PID
+    assert!(job.update_pid_status(1234, JobStatus::Done(0)));
+    assert_eq!(job.status, JobStatus::Running);
+    
+    // Update second PID
+    assert!(job.update_pid_status(1235, JobStatus::Done(0)));
+    assert_eq!(job.status, JobStatus::Done(0));
+    
+    // Try to update non-existent PID
+    assert!(!job.update_pid_status(9999, JobStatus::Done(0)));
+}
+
+#[test]
+fn test_pipeline_job_builtin_no_pids() {
+    // Test that builtin jobs (no PIDs) still work correctly
+    let mut job = Job::new(1, None, "sleep 10 &".to_string(), vec![], true);
+    
+    assert_eq!(job.status, JobStatus::Running);
+    
+    // Update status directly (not via PID)
+    job.update_status(JobStatus::Done(0));
+    assert_eq!(job.status, JobStatus::Done(0));
+    assert_eq!(job.exit_code, Some(0));
+}

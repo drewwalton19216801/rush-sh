@@ -57,6 +57,9 @@ pub struct Job {
     /// Whether this job is a builtin command (affects job control)
     #[allow(dead_code)]
     pub is_builtin: bool,
+    /// Per-PID status tracking for pipeline jobs
+    /// Maps each PID to its individual status
+    pid_status: HashMap<u32, JobStatus>,
 }
 
 impl Job {
@@ -81,6 +84,12 @@ impl Job {
     /// assert_eq!(job.status, JobStatus::Running);
     /// ```
     pub fn new(job_id: usize, pgid: Option<u32>, command: String, pids: Vec<u32>, is_builtin: bool) -> Self {
+        // Initialize per-PID status tracking - all PIDs start as Running
+        let mut pid_status = HashMap::new();
+        for &pid in &pids {
+            pid_status.insert(pid, JobStatus::Running);
+        }
+        
         Self {
             job_id,
             pgid,
@@ -89,6 +98,7 @@ impl Job {
             status: JobStatus::Running,
             exit_code: None,
             is_builtin,
+            pid_status,
         }
     }
 
@@ -112,6 +122,113 @@ impl Job {
         self.status = status.clone();
         if let JobStatus::Done(code) = status {
             self.exit_code = Some(code);
+        }
+    }
+
+    /// Updates the status of a specific PID in the job
+    ///
+    /// For pipeline jobs, this tracks the status of each individual process.
+    /// The overall job status is computed by aggregating all PID states:
+    /// - If any PID is Running, the job is Running
+    /// - If all PIDs are Done, the job is Done (with the exit code of the last PID)
+    /// - If all PIDs are either Stopped or Done, and at least one is Stopped, the job is Stopped
+    ///
+    /// # Arguments
+    ///
+    /// * `pid` - The process ID to update
+    /// * `status` - The new status for this PID
+    ///
+    /// # Returns
+    ///
+    /// `true` if the PID was found and updated, `false` otherwise
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rush_sh::state::{Job, JobStatus};
+    ///
+    /// let mut job = Job::new(1, Some(1234), "sleep 5 | sleep 10 &".to_string(), vec![1234, 1235], false);
+    ///
+    /// // Update first PID to Done
+    /// assert!(job.update_pid_status(1234, JobStatus::Done(0)));
+    /// assert_eq!(job.status, JobStatus::Running); // Still running because second PID is running
+    ///
+    /// // Update second PID to Done
+    /// assert!(job.update_pid_status(1235, JobStatus::Done(0)));
+    /// assert_eq!(job.status, JobStatus::Done(0)); // Now the entire job is done
+    /// ```
+    pub fn update_pid_status(&mut self, pid: u32, status: JobStatus) -> bool {
+        // Check if this PID belongs to this job
+        if !self.pids.contains(&pid) {
+            return false;
+        }
+        
+        // Update the individual PID status
+        self.pid_status.insert(pid, status.clone());
+        
+        // Recompute the overall job status based on all PID states
+        self.recompute_job_status();
+        
+        true
+    }
+
+    /// Recomputes the overall job status based on individual PID states
+    ///
+    /// This is called after updating any PID status to ensure the job's
+    /// overall status accurately reflects the state of all processes.
+    fn recompute_job_status(&mut self) {
+        if self.pids.is_empty() {
+            // No PIDs means this is likely a builtin - keep current status
+            return;
+        }
+        
+        let mut all_done = true;
+        let mut any_running = false;
+        let mut any_stopped = false;
+        let mut last_exit_code = 0;
+        
+        // Check the status of each PID
+        for &pid in &self.pids {
+            match self.pid_status.get(&pid) {
+                Some(JobStatus::Running) => {
+                    any_running = true;
+                    all_done = false;
+                }
+                Some(JobStatus::Stopped) => {
+                    any_stopped = true;
+                    all_done = false;
+                }
+                Some(JobStatus::Done(code)) => {
+                    // Track the exit code of the last process in the pipeline
+                    // (POSIX behavior: pipeline exit code is the last command's exit code)
+                    last_exit_code = *code;
+                }
+                None => {
+                    // PID not yet tracked, assume it's still running
+                    any_running = true;
+                    all_done = false;
+                }
+            }
+        }
+        
+        // Determine overall job status based on aggregated PID states
+        if any_running {
+            self.status = JobStatus::Running;
+            self.exit_code = None;
+        } else if all_done {
+            // All PIDs have exited - job is done
+            // Use the exit code from the last PID in the pipeline
+            if let Some(&last_pid) = self.pids.last() {
+                if let Some(JobStatus::Done(code)) = self.pid_status.get(&last_pid) {
+                    last_exit_code = *code;
+                }
+            }
+            self.status = JobStatus::Done(last_exit_code);
+            self.exit_code = Some(last_exit_code);
+        } else if any_stopped {
+            // At least one process is stopped, none are running
+            self.status = JobStatus::Stopped;
+            self.exit_code = None;
         }
     }
 
@@ -418,8 +535,7 @@ impl JobTable {
     /// ```
     pub fn update_job_status(&mut self, pid: u32, status: JobStatus) -> bool {
         if let Some(job) = self.find_job_by_pid_mut(pid) {
-            job.update_status(status);
-            true
+            job.update_pid_status(pid, status)
         } else {
             false
         }
