@@ -77,8 +77,10 @@ echo "   Setting umask to 022 in parent shell"
 umask 022
 echo "   Parent umask: $(umask)"
 echo "   Creating subshell and changing umask to 077"
-echo "   (Note: Multi-line subshells have a known parsing issue)"
-( umask 077 ; echo "   Subshell umask: $(umask)" )
+( 
+    umask 077 ; 
+    echo "   Subshell umask: $(umask)"
+)
 echo "   Parent umask after subshell: $(umask)"
 echo "   (umask changes in subshells don't affect parent)"
 echo ""
