@@ -66,6 +66,7 @@ mod builtin_trap;
 mod builtin_type;
 mod builtin_unalias;
 mod builtin_unset;
+mod builtin_wait;
 
 pub trait Builtin {
     fn name(&self) -> &'static str;
@@ -123,6 +124,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_continue::ContinueBuiltin),
         Box::new(builtin_colon::ColonBuiltin),
         Box::new(builtin_jobs::JobsBuiltin),
+        Box::new(builtin_wait::WaitBuiltin),
     ]
 }
 
@@ -453,6 +455,7 @@ mod tests {
         assert!(commands.contains(&":".to_string()));
         assert!(commands.contains(&"times".to_string()));
         assert!(commands.contains(&"jobs".to_string()));
-        assert_eq!(commands.len(), 30);
+        assert!(commands.contains(&"wait".to_string()));
+        assert_eq!(commands.len(), 31);
     }
 }
