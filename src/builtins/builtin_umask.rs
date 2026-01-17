@@ -275,6 +275,41 @@ mod tests {
     // Mutex to serialize tests that modify environment variables
     static ENV_LOCK: Mutex<()> = Mutex::new(());
 
+    /// Helper function to run tests with umask lock and automatic restoration
+    ///
+    /// This function:
+    /// 1. Acquires the UMASK_LOCK mutex
+    /// 2. Saves the current process umask
+    /// 3. Runs the provided closure
+    /// 4. Restores the saved umask (even on panic)
+    /// 5. Releases the lock automatically
+    fn with_umask_lock<F, R>(f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let _lock = UMASK_LOCK.lock().unwrap();
+        
+        // Save current umask by setting it to 0 and capturing the old value
+        let saved_umask = unsafe { libc::umask(0) };
+        
+        // Restore the umask immediately so we have the original value
+        unsafe { libc::umask(saved_umask); }
+        
+        // Use a guard to ensure umask is restored even on panic
+        struct UmaskGuard(libc::mode_t);
+        impl Drop for UmaskGuard {
+            fn drop(&mut self) {
+                unsafe {
+                    libc::umask(self.0);
+                }
+            }
+        }
+        let _guard = UmaskGuard(saved_umask);
+        
+        // Run the test closure
+        f()
+    }
+
     #[test]
     fn test_umask_display_numeric() {
         let _lock = ENV_LOCK.lock().unwrap();
@@ -317,59 +352,62 @@ mod tests {
 
     #[test]
     fn test_umask_set_octal() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "027".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "027".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o027);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o027);
+        });
     }
 
     #[test]
     fn test_umask_set_octal_with_leading_zero() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "0027".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "0027".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o027);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o027);
+        });
     }
 
     #[test]
     fn test_umask_set_symbolic() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "u=rwx,g=rx,o=".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "u=rwx,g=rx,o=".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o027);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o027);
+        });
     }
 
     #[test]
@@ -412,23 +450,24 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_with_s_flag() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "-S".to_string(), "022".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "-S".to_string(), "022".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o022);
-        let output_str = String::from_utf8(output).unwrap();
-        assert_eq!(output_str.trim(), "u=rwx,g=rx,o=rx");
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o022);
+            let output_str = String::from_utf8(output).unwrap();
+            assert_eq!(output_str.trim(), "u=rwx,g=rx,o=rx");
+        });
     }
 
     #[test]
@@ -514,40 +553,42 @@ mod tests {
 
     #[test]
     fn test_umask_set_zero() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "0".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "0".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o000);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o000);
+        });
     }
 
     #[test]
     fn test_umask_set_max() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "777".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "777".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o777);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o777);
+        });
     }
 
     #[test]
@@ -571,80 +612,84 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_all_permissions() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "a=rwx".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "a=rwx".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o000);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o000);
+        });
     }
 
     #[test]
     fn test_umask_symbolic_no_permissions() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "a=".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "a=".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o777);
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o777);
+        });
     }
 
     #[test]
     fn test_umask_symbolic_add_permission() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "g+w".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
-        shell_state.umask = 0o027; // g has rx, not w
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "g+w".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
+            shell_state.umask = 0o027; // g has rx, not w
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o007); // g now has rwx
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o007); // g now has rwx
+        });
     }
 
     #[test]
     fn test_umask_symbolic_remove_permission() {
-        let _umask_lock = UMASK_LOCK.lock().unwrap();
-        let _env_lock = ENV_LOCK.lock().unwrap();
-        let cmd = ShellCommand {
-            args: vec!["umask".to_string(), "g-r".to_string()],
-            redirections: Vec::new(),
-            compound: None,
-        };
-        let mut shell_state = ShellState::new();
-        shell_state.umask = 0o022; // g has rx
+        with_umask_lock(|| {
+            let _env_lock = ENV_LOCK.lock().unwrap();
+            let cmd = ShellCommand {
+                args: vec!["umask".to_string(), "g-r".to_string()],
+                redirections: Vec::new(),
+                compound: None,
+            };
+            let mut shell_state = ShellState::new();
+            shell_state.umask = 0o022; // g has rx
 
-        let builtin = UmaskBuiltin;
-        let mut output = Vec::new();
-        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+            let builtin = UmaskBuiltin;
+            let mut output = Vec::new();
+            let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 0);
-        assert_eq!(shell_state.umask, 0o062); // g now has only x
+            assert_eq!(exit_code, 0);
+            assert_eq!(shell_state.umask, 0o062); // g now has only x
+        });
     }
 
     #[test]
