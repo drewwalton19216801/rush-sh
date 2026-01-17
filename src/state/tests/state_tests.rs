@@ -2,6 +2,10 @@
 
 use crate::state::ShellState;
 use std::env;
+use std::sync::Mutex;
+
+// Mutex to serialize tests that modify environment variables
+static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_shell_state_basic() {
@@ -68,7 +72,15 @@ fn test_get_prompt() {
 
 #[test]
 fn test_condensed_cwd_environment_variable() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    
+    // Save original state
+    let original_rush_condensed = env::var("RUSH_CONDENSED").ok();
+    
     // Test default behavior (should be true for backward compatibility)
+    unsafe {
+        env::remove_var("RUSH_CONDENSED");
+    }
     let state = ShellState::new();
     assert!(state.condensed_cwd);
 
@@ -86,9 +98,13 @@ fn test_condensed_cwd_environment_variable() {
     let state = ShellState::new();
     assert!(!state.condensed_cwd);
 
-    // Clean up
+    // Restore original state
     unsafe {
-        env::remove_var("RUSH_CONDENSED");
+        if let Some(val) = original_rush_condensed {
+            env::set_var("RUSH_CONDENSED", val);
+        } else {
+            env::remove_var("RUSH_CONDENSED");
+        }
     }
 }
 
@@ -103,6 +119,16 @@ fn test_get_full_cwd() {
 
 #[test]
 fn test_prompt_with_condensed_setting() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    
+    // Save original state
+    let original_rush_condensed = env::var("RUSH_CONDENSED").ok();
+    
+    // Ensure RUSH_CONDENSED is not set so we get the default behavior
+    unsafe {
+        env::remove_var("RUSH_CONDENSED");
+    }
+    
     let mut state = ShellState::new();
 
     // Test with condensed enabled (default)
@@ -118,6 +144,15 @@ fn test_prompt_with_condensed_setting() {
     // Both should end with "$ " (or "# " for root)
     assert!(prompt_condensed.ends_with("$ ") || prompt_condensed.ends_with("# "));
     assert!(prompt_full.ends_with("$ ") || prompt_full.ends_with("# "));
+    
+    // Restore original state
+    unsafe {
+        if let Some(val) = original_rush_condensed {
+            env::set_var("RUSH_CONDENSED", val);
+        } else {
+            env::remove_var("RUSH_CONDENSED");
+        }
+    }
 }
 
 #[test]
