@@ -16,7 +16,7 @@
 
 - **Compliance Level**: ~96% POSIX compliant
 - **Test Coverage**: 499+ test functions across all components
-- **Built-in Commands**: 32 implemented commands
+- **Built-in Commands**: 33 implemented commands
 - **Core Features**: Full variable expansion, arithmetic evaluation, control structures, functions with return, shell options, job control
 - **Architecture**: Modular design with separate lexer, parser, executor, and expansion engines
 
@@ -107,7 +107,7 @@ src/
 ├── script_engine.rs     # Script execution engine
 ├── builtins.rs          # Builtin dispatcher
 ├── builtins/            # Individual builtin commands
-│   ├── builtin_*.rs     # 32 builtin implementations
+│   ├── builtin_*.rs     # 33 builtin implementations
 │   ├── builtin_bg.rs    # Background job control
 │   ├── builtin_fg.rs    # Foreground job control
 │   ├── builtin_jobs.rs  # Job listing
@@ -656,7 +656,7 @@ impl ShellState {
 
 ### High Priority (Core POSIX Features)
 
-1. **Missing Built-ins**: `eval`, `exec`, `readonly`, `umask`
+1. **Missing Built-ins**: `eval`, `exec`, `readonly`
 
 ### Medium Priority
 

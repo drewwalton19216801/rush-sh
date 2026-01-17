@@ -150,19 +150,19 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 - ✅ shift (implemented)
 - ✅ times (implemented)
 - ✅ trap (implemented)
-- ❌ umask (not implemented)
+- ✅ umask (implemented)
 - ✅ unset (implemented)
 - ✅ wait (implemented)
 
 ### Current Built-in Status
 
-**Implemented (32):**
+**Implemented (33):**
 
-- : (colon), alias, bg, break, cd, continue, declare, dirs, env, exit, export, fg, help, jobs, kill, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, times, trap, type, unalias, unset, wait
+- : (colon), alias, bg, break, cd, continue, declare, dirs, env, exit, export, fg, help, jobs, kill, popd, pushd, pwd, return, set, set_color_scheme, set_colors, set_condensed, shift, source, test, times, trap, type, umask, unalias, unset, wait
 
 **Missing POSIX Built-ins:**
 
-- **Special Built-ins**: eval, exec, readonly, umask
+- **Special Built-ins**: eval, exec, readonly
 - **Note**: Job control built-ins (bg, fg, jobs, kill, wait) are now implemented
 
 ## 4. Regular Built-in Utilities
@@ -242,7 +242,6 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
     - `eval` (evaluate string as shell command)
     - `exec` (replace shell with command)
     - `readonly` (mark variables as read-only)
-    - `umask` (set file creation mask)
 
 ### Medium Priority
 
@@ -291,7 +290,7 @@ This document outlines the current progress toward full POSIX sh (IEEE Std 1003.
 
 - **Basic Execution**: 95% ✅
 - **Control Structures**: 95% ✅ (if/elif/else, case with glob patterns, for/while/until loops, functions with return, subshells, command grouping implemented)
-- **Built-in Commands**: 89% ✅ (32 built-ins implemented out of 36 POSIX required, including critical `set`, `times`, and job control builtins)
+- **Built-in Commands**: 92% ✅ (33 built-ins implemented out of 36 POSIX required, including critical `set`, `times`, `umask`, and job control builtins)
 - **Expansions**: 98% ✅ (Parameter expansion with indirect expansion, arithmetic expansion, and brace expansion fully implemented)
 - **Redirections**: 95% ✅ (Full I/O redirection, here-documents, here-strings, and file descriptor operations implemented)
 - **Job Control**: 100% ✅ (complete implementation with bg, fg, jobs, kill, wait, &, $!, and smart jobspec matching)
