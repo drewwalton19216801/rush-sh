@@ -48,11 +48,6 @@ impl super::Builtin for UmaskBuiltin {
         // Check for mask operand
         if arg_index < args.len() {
             // Setting umask
-            if symbolic_display {
-                let _ = writeln!(output_writer, "umask: -S cannot be used with mask operand");
-                return 1;
-            }
-
             let mask_str = &args[arg_index];
 
             // Try parsing as octal first
@@ -79,7 +74,12 @@ impl super::Builtin for UmaskBuiltin {
             shell_state.umask = new_mask;
             set_process_umask(new_mask);
 
-            0
+            // Display in symbolic format if -S was specified
+            if symbolic_display {
+                display_umask_symbolic(new_mask, output_writer)
+            } else {
+                0
+            }
         } else {
             // Displaying umask
             if symbolic_display {
@@ -271,9 +271,13 @@ mod tests {
 
     // Mutex to serialize tests that modify the process umask (global state)
     static UMASK_LOCK: Mutex<()> = Mutex::new(());
+    
+    // Mutex to serialize tests that modify environment variables
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_umask_display_numeric() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string()],
             redirections: Vec::new(),
@@ -293,6 +297,7 @@ mod tests {
 
     #[test]
     fn test_umask_display_symbolic() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "-S".to_string()],
             redirections: Vec::new(),
@@ -312,7 +317,8 @@ mod tests {
 
     #[test]
     fn test_umask_set_octal() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "027".to_string()],
             redirections: Vec::new(),
@@ -330,7 +336,8 @@ mod tests {
 
     #[test]
     fn test_umask_set_octal_with_leading_zero() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "0027".to_string()],
             redirections: Vec::new(),
@@ -348,7 +355,8 @@ mod tests {
 
     #[test]
     fn test_umask_set_symbolic() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "u=rwx,g=rx,o=".to_string()],
             redirections: Vec::new(),
@@ -366,6 +374,7 @@ mod tests {
 
     #[test]
     fn test_umask_invalid_octal() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "999".to_string()],
             redirections: Vec::new(),
@@ -384,6 +393,7 @@ mod tests {
 
     #[test]
     fn test_umask_invalid_option() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "-X".to_string()],
             redirections: Vec::new(),
@@ -401,7 +411,9 @@ mod tests {
     }
 
     #[test]
-    fn test_umask_symbolic_with_s_flag_error() {
+    fn test_umask_symbolic_with_s_flag() {
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "-S".to_string(), "022".to_string()],
             redirections: Vec::new(),
@@ -413,13 +425,15 @@ mod tests {
         let mut output = Vec::new();
         let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
 
-        assert_eq!(exit_code, 1);
+        assert_eq!(exit_code, 0);
+        assert_eq!(shell_state.umask, 0o022);
         let output_str = String::from_utf8(output).unwrap();
-        assert!(output_str.contains("-S cannot be used with mask operand"));
+        assert_eq!(output_str.trim(), "u=rwx,g=rx,o=rx");
     }
 
     #[test]
     fn test_umask_various_values() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let test_cases = vec![
             (0o000, "0000", "u=rwx,g=rwx,o=rwx"),
             (0o022, "0022", "u=rwx,g=rx,o=rx"),
@@ -500,7 +514,8 @@ mod tests {
 
     #[test]
     fn test_umask_set_zero() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "0".to_string()],
             redirections: Vec::new(),
@@ -518,7 +533,8 @@ mod tests {
 
     #[test]
     fn test_umask_set_max() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "777".to_string()],
             redirections: Vec::new(),
@@ -536,6 +552,7 @@ mod tests {
 
     #[test]
     fn test_umask_invalid_octal_too_large() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "1000".to_string()],
             redirections: Vec::new(),
@@ -554,7 +571,8 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_all_permissions() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "a=rwx".to_string()],
             redirections: Vec::new(),
@@ -572,7 +590,8 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_no_permissions() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "a=".to_string()],
             redirections: Vec::new(),
@@ -590,7 +609,8 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_add_permission() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "g+w".to_string()],
             redirections: Vec::new(),
@@ -609,7 +629,8 @@ mod tests {
 
     #[test]
     fn test_umask_symbolic_remove_permission() {
-        let _lock = UMASK_LOCK.lock().unwrap();
+        let _umask_lock = UMASK_LOCK.lock().unwrap();
+        let _env_lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "g-r".to_string()],
             redirections: Vec::new(),
@@ -628,6 +649,7 @@ mod tests {
 
     #[test]
     fn test_umask_invalid_symbolic_mode() {
+        let _lock = ENV_LOCK.lock().unwrap();
         let cmd = ShellCommand {
             args: vec!["umask".to_string(), "u=invalid".to_string()],
             redirections: Vec::new(),
@@ -712,3 +734,4 @@ mod tests {
         assert_eq!(result, 0o725);
     }
 }
+
