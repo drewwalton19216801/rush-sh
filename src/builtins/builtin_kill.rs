@@ -201,12 +201,17 @@ impl Builtin for KillBuiltin {
         let mut signal = libc::SIGTERM; // Default signal
         let mut arg_index = 1;
         let mut targets = Vec::new();
+        let mut signal_specified_with_option = false; // Track if signal was specified with -s or -n
 
         // Parse options and signal specification
         while arg_index < args.len() {
             let arg = &args[arg_index];
 
-            if arg == "-l" {
+            if arg == "--" {
+                // End of options marker - remaining arguments are targets
+                arg_index += 1;
+                break;
+            } else if arg == "-l" {
                 // List signals
                 return Self::list_signals(output_writer);
             } else if arg == "-s" {
@@ -217,7 +222,10 @@ impl Builtin for KillBuiltin {
                     return 1;
                 }
                 match Self::parse_signal(&args[arg_index]) {
-                    Ok(sig) => signal = sig,
+                    Ok(sig) => {
+                        signal = sig;
+                        signal_specified_with_option = true;
+                    }
                     Err(e) => {
                         let _ = writeln!(output_writer, "{}", e);
                         return 1;
@@ -232,18 +240,24 @@ impl Builtin for KillBuiltin {
                     return 1;
                 }
                 match args[arg_index].parse::<i32>() {
-                    Ok(num) if num >= 0 => signal = num,
+                    Ok(num) if num >= 0 => {
+                        signal = num;
+                        signal_specified_with_option = true;
+                    }
                     _ => {
                         let _ = writeln!(output_writer, "kill: {}: invalid signal specification", args[arg_index]);
                         return 1;
                     }
                 }
                 arg_index += 1;
-            } else if arg.starts_with('-') && arg.len() > 1 {
-                // Signal specified with -SIGNAME or -NUM format
+            } else if !signal_specified_with_option && arg.starts_with('-') && arg.len() > 1 {
+                // Signal specified with -SIGNAME or -NUM format (only if not already specified with -s/-n)
                 let sig_spec = &arg[1..];
                 match Self::parse_signal(sig_spec) {
-                    Ok(sig) => signal = sig,
+                    Ok(sig) => {
+                        signal = sig;
+                        signal_specified_with_option = true;
+                    }
                     Err(e) => {
                         let _ = writeln!(output_writer, "{}", e);
                         return 1;
@@ -295,9 +309,13 @@ impl Builtin for KillBuiltin {
 mod tests {
     use super::*;
     use crate::state::Job;
+    
+    #[cfg(test)]
+    use rush_sh::test_sync::JOB_CONTROL_LOCK;
 
     #[test]
     fn test_kill_no_arguments() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -317,6 +335,7 @@ mod tests {
 
     #[test]
     fn test_kill_list_signals() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -366,6 +385,7 @@ mod tests {
 
     #[test]
     fn test_kill_with_signal_name() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -386,6 +406,7 @@ mod tests {
 
     #[test]
     fn test_kill_invalid_pid() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -405,6 +426,7 @@ mod tests {
 
     #[test]
     fn test_kill_jobspec_no_jobs() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -424,6 +446,7 @@ mod tests {
 
     #[test]
     fn test_kill_jobspec_current() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a job with the current process PID (so we can test without actually killing)
@@ -447,6 +470,7 @@ mod tests {
 
     #[test]
     fn test_kill_multiple_targets() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -468,6 +492,7 @@ mod tests {
 
     #[test]
     fn test_kill_with_dash_signal() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -489,6 +514,7 @@ mod tests {
 
     #[test]
     fn test_kill_with_dash_number() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -508,6 +534,7 @@ mod tests {
 
     #[test]
     fn test_kill_with_n_option() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -527,6 +554,7 @@ mod tests {
 
     #[test]
     fn test_kill_missing_signal_argument() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -546,6 +574,7 @@ mod tests {
 
     #[test]
     fn test_kill_no_targets_after_signal() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -565,6 +594,7 @@ mod tests {
 
     #[test]
     fn test_parse_jobspec_current() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
@@ -578,6 +608,7 @@ mod tests {
 
     #[test]
     fn test_parse_jobspec_previous() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         let job1 = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         let job2 = Job::new(2, Some(1235), "sleep 20 &".to_string(), vec![1235], false);
@@ -590,6 +621,7 @@ mod tests {
 
     #[test]
     fn test_parse_jobspec_by_number() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         let job = Job::new(5, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
@@ -600,6 +632,7 @@ mod tests {
 
     #[test]
     fn test_parse_jobspec_by_prefix() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
@@ -610,6 +643,7 @@ mod tests {
 
     #[test]
     fn test_parse_jobspec_by_contains() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         let job = Job::new(1, Some(1234), "grep pattern file &".to_string(), vec![1234], false);
         shell_state.job_table.borrow_mut().add_job(job);
@@ -620,6 +654,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_for_job() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
         let job = Job::new(1, Some(1234), "sleep 10 &".to_string(), vec![1234, 1235], false);
         shell_state.job_table.borrow_mut().add_job(job);
@@ -634,6 +669,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_for_pid() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
 
         let result = KillBuiltin::get_target_pids("1234", &shell_state);
@@ -645,6 +681,7 @@ mod tests {
 
     #[test]
     fn test_kill_job_with_multiple_pids() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         
         // Add a job with multiple PIDs (use invalid PIDs so we don't actually kill anything)
@@ -669,6 +706,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_negative_pid() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
 
         // Test negative PID (process group)
@@ -681,6 +719,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_zero() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
 
         // Test PID 0 (current process group)
@@ -693,6 +732,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_minus_one() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
 
         // Test PID -1 (all processes)
@@ -705,6 +745,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_positive_pid() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
 
         // Test positive PID (single process)
@@ -738,14 +779,9 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    // IGNORED: Command-line parsing issue prevents negative PIDs from working properly
-    // The kill builtin cannot handle negative PIDs as arguments because they are interpreted
-    // as signal specifications (e.g., -999999 is parsed as signal 999999, not PID -999999).
-    // This test is kept but ignored until the command-line parsing is refactored to support
-    // the `--` separator or special handling for negative numbers. See TODO.md for details.
     #[test]
-    #[ignore]
     fn test_kill_negative_pid_process_group() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -768,6 +804,7 @@ mod tests {
 
     #[test]
     fn test_kill_zero_current_process_group() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -787,6 +824,7 @@ mod tests {
 
     #[test]
     fn test_kill_minus_one_all_processes() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -813,11 +851,9 @@ mod tests {
         assert_eq!(result.unwrap(), 0);
     }
 
-    // IGNORED: Command-line parsing issue prevents negative PIDs from working properly
-    // See comment on test_kill_negative_pid_process_group above and TODO.md for details.
     #[test]
-    #[ignore]
     fn test_kill_multiple_negative_pids() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
@@ -841,12 +877,13 @@ mod tests {
 
     #[test]
     fn test_kill_mixed_positive_and_negative_pids() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let mut shell_state = ShellState::new();
         let mut output = Vec::new();
 
-        // Mix of positive PID and negative PID (process group)
+        // Mix of positive PID and negative PID (process group) - use -- for negative PID
         let cmd = ShellCommand {
-            args: vec!["kill".to_string(), "999998".to_string(), "-999999".to_string()],
+            args: vec!["kill".to_string(), "--".to_string(), "999998".to_string(), "-999999".to_string()],
             redirections: Vec::new(),
             compound: None,
         };
@@ -862,6 +899,7 @@ mod tests {
 
     #[test]
     fn test_get_target_pids_preserves_sign_for_large_negative() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
         let shell_state = ShellState::new();
 
         // Test large negative PID
@@ -870,5 +908,159 @@ mod tests {
         let pids = result.unwrap();
         assert_eq!(pids.len(), 1);
         assert_eq!(pids[0], -32768);
+    }
+
+    #[test]
+    fn test_kill_double_dash_separator() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Use -- to separate options from arguments
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-s".to_string(), "TERM".to_string(), "--".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail because process group doesn't exist
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("No such process group") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_double_dash_with_default_signal() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Use -- with default signal (TERM)
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "--".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail because process group doesn't exist
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("No such process group") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_negative_pid_without_double_dash() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Without --, negative numbers are treated as signal specifications
+        // -999999 is not a valid signal, so it should fail with invalid signal error
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail with invalid signal specification
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("invalid signal specification") || output_str.contains("usage"));
+    }
+
+    #[test]
+    fn test_kill_ambiguous_negative_number_as_signal() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // -9 should be interpreted as signal 9 (SIGKILL), not PID -9
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-9".to_string(), "999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail because PID doesn't exist
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("No such process") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_negative_pid_after_explicit_signal() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // After explicit signal with -s, negative numbers should be PIDs
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-s".to_string(), "TERM".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail because process group doesn't exist
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("No such process group") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_double_dash_multiple_negative_pids() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // Multiple negative PIDs after --
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "--".to_string(), "-999998".to_string(), "-999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        // Should fail for both process groups
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("process group") || output_str.contains("999998") || output_str.contains("999999"));
+    }
+
+    #[test]
+    fn test_kill_invalid_signal_with_negative_number() {
+        let _lock = JOB_CONTROL_LOCK.lock().unwrap();
+        let mut shell_state = ShellState::new();
+        let mut output = Vec::new();
+
+        // -INVALID should fail as invalid signal, not be treated as negative PID
+        let cmd = ShellCommand {
+            args: vec!["kill".to_string(), "-INVALID".to_string(), "999999".to_string()],
+            redirections: Vec::new(),
+            compound: None,
+        };
+
+        let builtin = KillBuiltin;
+        let exit_code = builtin.run(&cmd, &mut shell_state, &mut output);
+
+        assert_eq!(exit_code, 1);
+        let output_str = String::from_utf8(output).unwrap();
+        assert!(output_str.contains("invalid signal specification"));
     }
 }

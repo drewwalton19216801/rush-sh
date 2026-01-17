@@ -400,6 +400,7 @@ dependencies = [
  "glob",
  "lazy_static",
  "libc",
+ "rush-sh",
  "rustyline",
  "signal-hook 0.4.1",
 ]
