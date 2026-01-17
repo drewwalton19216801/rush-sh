@@ -78,19 +78,19 @@ fn main() {
                     println!("^C"); // Show the interrupt indicator
 
                     // Enqueue signal for trap execution
-                    state::enqueue_signal("INT", 2);
+                    state::enqueue_signal("INT", SIGINT);
                 }
                 SIGTERM => {
                     // SIGTERM should cause graceful shutdown
                     SHUTDOWN.store(true, Ordering::Relaxed);
 
                     // Enqueue signal for trap execution
-                    state::enqueue_signal("TERM", 15);
+                    state::enqueue_signal("TERM", SIGTERM);
                 }
                 SIGCHLD => {
                     // SIGCHLD indicates a child process state change
                     // Enqueue signal for job status updates
-                    state::enqueue_signal("CHLD", 17);
+                    state::enqueue_signal("CHLD", SIGCHLD);
                 }
                 _ => {}
             }
