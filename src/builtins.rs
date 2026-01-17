@@ -49,6 +49,7 @@ mod builtin_env;
 mod builtin_exit;
 mod builtin_export;
 mod builtin_help;
+mod builtin_jobs;
 mod builtin_popd;
 mod builtin_pushd;
 mod builtin_pwd;
@@ -121,6 +122,7 @@ fn get_builtins() -> Vec<Box<dyn Builtin>> {
         Box::new(builtin_break::BreakBuiltin),
         Box::new(builtin_continue::ContinueBuiltin),
         Box::new(builtin_colon::ColonBuiltin),
+        Box::new(builtin_jobs::JobsBuiltin),
     ]
 }
 
@@ -450,6 +452,7 @@ mod tests {
         assert!(commands.contains(&"set".to_string()));
         assert!(commands.contains(&":".to_string()));
         assert!(commands.contains(&"times".to_string()));
-        assert_eq!(commands.len(), 29);
+        assert!(commands.contains(&"jobs".to_string()));
+        assert_eq!(commands.len(), 30);
     }
 }
