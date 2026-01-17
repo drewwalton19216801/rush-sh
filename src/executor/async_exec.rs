@@ -368,10 +368,13 @@ fn execute_builtin_in_background_pipeline(
 
             // If stdout was redirected, close the pipe write end to prevent blocking downstream
             if let Some(pipe_fd) = pipe_write_fd {
-                // Check if fd 1 was redirected (either to a file or closed)
+                // Check if fd 1 was redirected by comparing the actual backing FD
                 let fd_table = shell_state.fd_table.borrow();
-                let stdout_redirected = fd_table.is_open(1) || fd_table.is_closed(1);
+                let current_stdout_fd = fd_table.get_raw_fd(1);
                 drop(fd_table);
+                
+                // If fd 1 no longer points to pipe_fd (redirected or closed), close the pipe
+                let stdout_redirected = current_stdout_fd != Some(pipe_fd);
                 
                 if stdout_redirected {
                     // Close the pipe write end since stdout is no longer using it
@@ -490,10 +493,13 @@ fn execute_compound_in_background_pipeline(
 
             // If stdout was redirected, close the pipe write end to prevent blocking downstream
             if let Some(pipe_fd) = pipe_write_fd {
-                // Check if fd 1 was redirected (either to a file or closed)
+                // Check if fd 1 was redirected by comparing the actual backing FD
                 let fd_table = shell_state.fd_table.borrow();
-                let stdout_redirected = fd_table.is_open(1) || fd_table.is_closed(1);
+                let current_stdout_fd = fd_table.get_raw_fd(1);
                 drop(fd_table);
+                
+                // If fd 1 no longer points to pipe_fd (redirected or closed), close the pipe
+                let stdout_redirected = current_stdout_fd != Some(pipe_fd);
                 
                 if stdout_redirected {
                     // Close the pipe write end since stdout is no longer using it
