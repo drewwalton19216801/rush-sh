@@ -1,4 +1,4 @@
-#!/usr/bin/env rush
+#!/usr/bin/env rush-sh
 # Job Control Demonstration Script
 # This script demonstrates all job control features in Rush shell
 
